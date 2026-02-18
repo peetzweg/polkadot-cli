@@ -62,6 +62,10 @@ dot chain add westend --light-client
 # List configured chains
 dot chain list
 
+# Re-fetch metadata after a runtime upgrade
+dot chain update          # updates default chain
+dot chain update kusama   # updates a specific chain
+
 # Set default chain
 dot chain default kusama
 

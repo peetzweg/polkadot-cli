@@ -4,6 +4,7 @@ import {
   saveConfig,
   removeChainData,
 } from "../config/store.ts";
+import { resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
 import { fetchMetadataFromChain } from "../core/metadata.ts";
 import { printHeading, BOLD, CYAN, RESET, DIM } from "../core/output.ts";
@@ -13,6 +14,7 @@ ${BOLD}Usage:${RESET}
   $ dot chain add <name> --rpc <url>    Add a chain via WebSocket RPC
   $ dot chain add <name> --light-client Add a chain via Smoldot light client
   $ dot chain remove <name>             Remove a chain
+  $ dot chain update [name]             Re-fetch metadata (default chain if omitted)
   $ dot chain list                      List configured chains
   $ dot chain default <name>            Set the default chain
 
@@ -21,12 +23,14 @@ ${BOLD}Examples:${RESET}
   $ dot chain add westend --light-client
   $ dot chain default kusama
   $ dot chain list
+  $ dot chain update
+  $ dot chain update kusama
   $ dot chain remove kusama
 `.trimStart();
 
 export function registerChainCommands(cli: CAC) {
   cli
-    .command("chain [action] [name]", "Manage chains (add, remove, list, default)")
+    .command("chain [action] [name]", "Manage chains (add, remove, update, list, default)")
     .action(
       async (
         action: string | undefined,
@@ -44,6 +48,8 @@ export function registerChainCommands(cli: CAC) {
             return chainRemove(name);
           case "list":
             return chainList();
+          case "update":
+            return chainUpdate(name, opts);
           case "default":
             return chainDefault(name);
           default:
@@ -134,6 +140,25 @@ async function chainList() {
     console.log(`  ${CYAN}${name}${RESET}${marker}  ${provider}`);
   }
   console.log();
+}
+
+async function chainUpdate(
+  name: string | undefined,
+  opts: { rpc?: string },
+) {
+  const config = await loadConfig();
+  const { name: chainName, chain: chainConfig } = resolveChain(config, name);
+
+  console.log(`Connecting to ${chainName}...`);
+  const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
+
+  try {
+    console.log("Fetching metadata...");
+    await fetchMetadataFromChain(clientHandle, chainName);
+    console.log(`Metadata for "${chainName}" updated.`);
+  } finally {
+    clientHandle.destroy();
+  }
 }
 
 async function chainDefault(name: string | undefined) {

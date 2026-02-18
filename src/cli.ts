@@ -21,7 +21,7 @@ registerQueryCommand(cli);
 registerConstCommand(cli);
 
 cli.help();
-cli.version("0.1.1");
+cli.version("0.1.2");
 
 function handleError(err: unknown): never {
   if (err instanceof CliError) {
@@ -39,9 +39,9 @@ function handleError(err: unknown): never {
 process.on("unhandledRejection", handleError);
 
 try {
-  const parsed = cli.parse();
-  // Show help when invoked with no command
-  if (parsed.args.length === 0 && !parsed.options.help && !parsed.options.version) {
+  cli.parse();
+  // Show help when invoked with no command (e.g. just `dot`)
+  if (!(cli as any).matchedCommandName && !cli.options.help && !cli.options.version) {
     cli.outputHelp();
   }
 } catch (err) {
