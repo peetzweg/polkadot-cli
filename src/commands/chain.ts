@@ -78,21 +78,23 @@ async function chainAdd(
     process.exit(1);
   }
 
-  const config = await loadConfig();
-
-  config.chains[name] = {
+  const chainConfig = {
     rpc: opts.rpc ?? "",
     ...(opts.lightClient ? { lightClient: true } : {}),
   };
 
-  await saveConfig(config);
-
   console.log(`Connecting to ${name}...`);
-  const clientHandle = await createChainClient(name, config.chains[name]!, opts.rpc);
+  const clientHandle = await createChainClient(name, chainConfig, opts.rpc);
 
   try {
     console.log("Fetching metadata...");
     await fetchMetadataFromChain(clientHandle, name);
+
+    // Only save config after successful connection + metadata fetch
+    const config = await loadConfig();
+    config.chains[name] = chainConfig;
+    await saveConfig(config);
+
     console.log(`Chain "${name}" added successfully.`);
   } finally {
     clientHandle.destroy();

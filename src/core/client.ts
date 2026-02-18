@@ -18,12 +18,25 @@ export interface ClientHandle {
   destroy: () => void;
 }
 
+// Suppress noisy "Unable to connect" retry logs from the WS provider.
+// The ws-provider uses console.error internally for connection failures.
+function suppressWsNoise(): () => void {
+  const orig = console.error;
+  console.error = (...args: unknown[]) => {
+    if (typeof args[0] === "string" && args[0].includes("Unable to connect")) return;
+    orig(...args);
+  };
+  return () => { console.error = orig; };
+}
+
 export async function createChainClient(
   chainName: string,
   chainConfig: ChainConfig,
   rpcOverride?: string,
 ): Promise<ClientHandle> {
   const useLight = !rpcOverride && chainConfig.lightClient;
+
+  const restoreConsole = suppressWsNoise();
 
   let provider;
 
@@ -32,11 +45,14 @@ export async function createChainClient(
   } else {
     const rpc = rpcOverride ?? chainConfig.rpc;
     if (!rpc) {
+      restoreConsole();
       throw new ConnectionError(
         `No RPC endpoint configured for chain "${chainName}". Use --rpc or configure one with: dot chain add ${chainName} --rpc <url>`,
       );
     }
-    provider = withPolkadotSdkCompat(getWsProvider(rpc));
+    provider = withPolkadotSdkCompat(
+      getWsProvider(rpc, { timeout: 10_000 }),
+    );
   }
 
   const client = createClient(provider, {
@@ -48,7 +64,10 @@ export async function createChainClient(
 
   return {
     client,
-    destroy: () => client.destroy(),
+    destroy: () => {
+      client.destroy();
+      restoreConsole();
+    },
   };
 }
 

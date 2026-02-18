@@ -4,8 +4,10 @@ import {
 } from "@polkadot-api/substrate-bindings";
 import { getLookupFn, getDynamicBuilder } from "@polkadot-api/metadata-builders";
 import { loadMetadata, saveMetadata } from "../config/store.ts";
-import { MetadataError } from "../utils/errors.ts";
+import { ConnectionError, MetadataError } from "../utils/errors.ts";
 import type { ClientHandle } from "./client.ts";
+
+const METADATA_TIMEOUT_MS = 15_000;
 
 export interface PalletInfo {
   name: string;
@@ -52,10 +54,30 @@ export async function fetchMetadataFromChain(
   chainName: string,
 ): Promise<Uint8Array> {
   const { client } = clientHandle;
-  const hex = await client._request<string>("state_getMetadata", []);
-  const bytes = hexToBytes(hex);
-  await saveMetadata(chainName, bytes);
-  return bytes;
+
+  try {
+    const hex = await Promise.race([
+      client._request<string>("state_getMetadata", []),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new ConnectionError(
+            `Timed out fetching metadata for "${chainName}" after ${METADATA_TIMEOUT_MS / 1000}s. ` +
+              "Check that the RPC endpoint is correct and reachable.",
+          )),
+          METADATA_TIMEOUT_MS,
+        ),
+      ),
+    ]);
+    const bytes = hexToBytes(hex);
+    await saveMetadata(chainName, bytes);
+    return bytes;
+  } catch (err) {
+    if (err instanceof ConnectionError) throw err;
+    throw new ConnectionError(
+      `Failed to fetch metadata for "${chainName}": ${err instanceof Error ? err.message : err}. ` +
+        "Check that the RPC endpoint is correct and reachable.",
+    );
+  }
 }
 
 export async function getOrFetchMetadata(
