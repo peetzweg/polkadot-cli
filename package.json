@@ -1,6 +1,6 @@
 {
   "name": "polkadot-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI tool for querying Polkadot-ecosystem on-chain state",
   "type": "module",
   "bin": {
