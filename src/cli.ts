@@ -39,7 +39,11 @@ function handleError(err: unknown): never {
 process.on("unhandledRejection", handleError);
 
 try {
-  cli.parse();
+  const parsed = cli.parse();
+  // Show help when invoked with no command
+  if (parsed.args.length === 0 && !parsed.options.help && !parsed.options.version) {
+    cli.outputHelp();
+  }
 } catch (err) {
   handleError(err);
 }

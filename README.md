@@ -7,7 +7,7 @@ Ships with Polkadot as the default chain. Add any Substrate-based chain by point
 ## Install
 
 ```bash
-npm install -g polkadot-cli
+npm install -g polkadot-cli@latest
 ```
 
 This installs the `dot` command globally.
