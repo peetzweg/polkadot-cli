@@ -4,7 +4,7 @@
   "description": "CLI tool for querying Polkadot-ecosystem on-chain state",
   "type": "module",
   "bin": {
-    "dot": "./dist/cli.mjs"
+    "dot": "dist/cli.mjs"
   },
   "files": [
     "dist"
@@ -29,7 +29,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/peetzweg/polkadot-cli"
+    "url": "git+https://github.com/peetzweg/polkadot-cli.git"
   },
   "dependencies": {
     "cac": "^6.7.14",
