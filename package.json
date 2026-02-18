@@ -1,0 +1,45 @@
+{
+  "name": "polkadot-cli",
+  "version": "0.1.0",
+  "description": "CLI tool for querying Polkadot-ecosystem on-chain state",
+  "type": "module",
+  "bin": {
+    "dot": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "bun src/cli.ts",
+    "build": "bun build src/cli.ts --outfile dist/cli.mjs --target node --packages external && bun run build:shebang",
+    "build:shebang": "bun -e \"const f='dist/cli.mjs'; const s=await Bun.file(f).text(); await Bun.write(f, s.replace('#!/usr/bin/env bun', '#!/usr/bin/env node').replace('// @bun\\n',''))\"",
+    "prepublishOnly": "bun run build",
+    "test": "bun test",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset publish"
+  },
+  "license": "MIT",
+  "keywords": [
+    "polkadot",
+    "substrate",
+    "blockchain",
+    "cli",
+    "web3"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/peetzweg/polkadot-cli"
+  },
+  "dependencies": {
+    "cac": "^6.7.14",
+    "polkadot-api": "^1.23.3",
+    "@polkadot-api/metadata-builders": "^0.13.9",
+    "@polkadot-api/substrate-bindings": "^0.17.0",
+    "@polkadot-api/view-builder": "^0.4.17"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.4",
+    "@types/bun": "latest"
+  }
+}
