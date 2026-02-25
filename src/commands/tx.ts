@@ -1,5 +1,7 @@
 import type { CAC } from "cac";
 import { Binary } from "polkadot-api";
+import { getViewBuilder } from "@polkadot-api/view-builder";
+import type { Decoded } from "@polkadot-api/view-builder";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
 import {
@@ -38,7 +40,7 @@ export function registerTxCommand(cli: CAC) {
       ) => {
         if (!target || !opts.from) {
           console.log(
-            "Usage: dot tx <Pallet.Call> [...args] --from <account> [--dry-run]",
+            "Usage: dot tx <Pallet.Call|0xCallHex> [...args] --from <account> [--dry-run]",
           );
           console.log("");
           console.log("Examples:");
@@ -48,15 +50,19 @@ export function registerTxCommand(cli: CAC) {
           console.log(
             "  $ dot tx System.remark 0xdeadbeef --from alice --dry-run",
           );
+          console.log(
+            "  $ dot tx 0x0001076465616462656566 --from alice",
+          );
           return;
         }
+
+        const isRawCall = /^0x[0-9a-fA-F]+$/.test(target);
 
         const config = await loadConfig();
         const { name: chainName, chain: chainConfig } = resolveChain(
           config,
           opts.chain,
         );
-        const { pallet, item: callName } = parseTarget(target);
 
         const signer = await resolveAccountSigner(opts.from);
 
@@ -68,36 +74,6 @@ export function registerTxCommand(cli: CAC) {
 
         try {
           const meta = await getOrFetchMetadata(chainName, clientHandle);
-
-          // Validate pallet
-          const palletNames = getPalletNames(meta);
-          const palletInfo = findPallet(meta, pallet);
-          if (!palletInfo) {
-            throw new Error(suggestMessage("pallet", pallet, palletNames));
-          }
-
-          // Validate call
-          const callInfo = palletInfo.calls.find(
-            (c) => c.name.toLowerCase() === callName.toLowerCase(),
-          );
-          if (!callInfo) {
-            const callNames = palletInfo.calls.map((c) => c.name);
-            throw new Error(
-              suggestMessage(
-                `call in ${palletInfo.name}`,
-                callName,
-                callNames,
-              ),
-            );
-          }
-
-          // Parse args against metadata
-          const callData = parseCallArgs(
-            meta,
-            palletInfo.name,
-            callInfo.name,
-            args,
-          );
 
           // Build custom signed extensions for non-standard chains
           const userExtOverrides = parseExtOption(opts.ext);
@@ -111,17 +87,69 @@ export function registerTxCommand(cli: CAC) {
               : undefined;
 
           const unsafeApi = clientHandle.client.getUnsafeApi();
-          const tx = (unsafeApi as any).tx[palletInfo.name][callInfo.name](
-            callData,
-          );
 
-          const encodedCall = await tx.getEncodedData();
-          const callHex = encodedCall.asHex();
+          let tx: any;
+          let callHex: string;
+
+          if (isRawCall) {
+            if (args.length > 0) {
+              throw new Error(
+                "Extra arguments are not allowed when submitting a raw call hex.\n" +
+                  "Usage: dot tx 0x<call_hex> --from <account>",
+              );
+            }
+            const callBinary = Binary.fromHex(target as `0x${string}`);
+            tx = await (unsafeApi as any).txFromCallData(callBinary);
+            callHex = target;
+          } else {
+            const { pallet, item: callName } = parseTarget(target);
+
+            // Validate pallet
+            const palletNames = getPalletNames(meta);
+            const palletInfo = findPallet(meta, pallet);
+            if (!palletInfo) {
+              throw new Error(suggestMessage("pallet", pallet, palletNames));
+            }
+
+            // Validate call
+            const callInfo = palletInfo.calls.find(
+              (c) => c.name.toLowerCase() === callName.toLowerCase(),
+            );
+            if (!callInfo) {
+              const callNames = palletInfo.calls.map((c) => c.name);
+              throw new Error(
+                suggestMessage(
+                  `call in ${palletInfo.name}`,
+                  callName,
+                  callNames,
+                ),
+              );
+            }
+
+            // Parse args against metadata
+            const callData = parseCallArgs(
+              meta,
+              palletInfo.name,
+              callInfo.name,
+              args,
+            );
+
+            tx = (unsafeApi as any).tx[palletInfo.name][callInfo.name](
+              callData,
+            );
+
+            const encodedCall = await tx.getEncodedData();
+            callHex = encodedCall.asHex();
+          }
+
+          // Decode for display (works for both paths)
+          const decodedStr = decodeCall(meta, callHex);
 
           if (opts.dryRun) {
             const signerAddress = toSs58(signer.publicKey);
-            console.log(`  ${BOLD}From:${RESET} ${opts.from} (${signerAddress})`);
-            console.log(`  ${BOLD}Call:${RESET} ${callHex}`);
+            console.log(`  ${BOLD}From:${RESET}   ${opts.from} (${signerAddress})`);
+            console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
+            console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
 
             try {
               const fees = await tx.getEstimatedFees(
@@ -143,6 +171,7 @@ export function registerTxCommand(cli: CAC) {
 
           console.log();
           console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
+          console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
           console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
           if (result.block) {
             console.log(
@@ -180,6 +209,96 @@ export function registerTxCommand(cli: CAC) {
         }
       },
     );
+}
+
+function decodeCall(meta: MetadataBundle, callHex: string): string {
+  try {
+    const viewBuilder = getViewBuilder(meta.lookup);
+    const decoded = viewBuilder.callDecoder(callHex);
+    const palletName = decoded.pallet.value.name;
+    const callName = decoded.call.value.name;
+    const argsStr = formatDecodedArgs(decoded.args.value);
+    return `${palletName}.${callName}${argsStr}`;
+  } catch {
+    return "(unable to decode)";
+  }
+}
+
+function formatDecodedArgs(decoded: { codec: string; value: any }): string {
+  return formatDecoded(decoded as Decoded);
+}
+
+function formatDecoded(d: Decoded): string {
+  switch (d.codec) {
+    case "_void":
+      return "";
+    case "bool":
+      return d.value.toString();
+    case "str":
+    case "char":
+      return d.value;
+    case "u8":
+    case "u16":
+    case "u32":
+    case "i8":
+    case "i16":
+    case "i32":
+    case "compactNumber":
+      return d.value.toString();
+    case "u64":
+    case "u128":
+    case "u256":
+    case "i64":
+    case "i128":
+    case "i256":
+    case "compactBn":
+      return d.value.toString();
+    case "bitSequence":
+      return `0x${Buffer.from(d.value.bytes).toString("hex")}`;
+    case "AccountId":
+      return d.value.address;
+    case "ethAccount":
+      return d.value;
+    case "Bytes":
+      return d.value;
+    case "BytesArray":
+      return d.value;
+    case "Enum": {
+      const inner = formatDecoded(d.value.value);
+      if (!inner) return d.value.type;
+      return `${d.value.type}(${inner})`;
+    }
+    case "Struct": {
+      const entries = Object.entries(d.value as Record<string, Decoded>);
+      if (entries.length === 0) return " {}";
+      const fields = entries
+        .map(([k, v]) => `${k}: ${formatDecoded(v)}`)
+        .join(", ");
+      return ` { ${fields} }`;
+    }
+    case "Tuple": {
+      const items = (d.value as Decoded[]).map(formatDecoded).join(", ");
+      return `(${items})`;
+    }
+    case "Option": {
+      if (d.value.codec === "_void") return "None";
+      return formatDecoded(d.value);
+    }
+    case "Result": {
+      if (d.value.success) {
+        return `Ok(${formatDecoded(d.value.value)})`;
+      }
+      return `Err(${formatDecoded(d.value.value)})`;
+    }
+    case "Sequence":
+    case "Array": {
+      const items = (d.value as Decoded[]).map(formatDecoded);
+      if (items.length === 0) return "[]";
+      return `[${items.join(", ")}]`;
+    }
+    default:
+      return String((d as any).value ?? "");
+  }
 }
 
 function formatEventValue(v: unknown): string {
