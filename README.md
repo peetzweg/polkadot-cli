@@ -75,7 +75,7 @@ dot account remove my-validator
 
 ### Submit extrinsics
 
-Build, sign, and submit transactions. Arguments are parsed from metadata — the CLI knows the expected types for each call.
+Build, sign, and submit transactions. Pass a `Pallet.Call` with arguments, or a raw SCALE-encoded call hex (e.g. from a multisig proposal or governance). Both forms display a decoded human-readable representation of the call.
 
 ```bash
 # Simple remark
@@ -86,6 +86,9 @@ dot tx Balances.transferKeepAlive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694
 
 # Estimate fees without submitting
 dot tx Balances.transferKeepAlive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000000 --from alice --dry-run
+
+# Submit a raw SCALE-encoded call (e.g. from a multisig proposal or another tool)
+dot tx 0x0503008eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48 --from alice
 
 # Batch multiple transfers with Utility.batchAll
 dot tx Utility.batchAll '[{"type":"Balances","value":{"type":"transfer_keep_alive","value":{"dest":"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty","value":1000000000000}}},{"type":"Balances","value":{"type":"transfer_keep_alive","value":{"dest":"5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y","value":2000000000000}}}]' --from alice
