@@ -25,7 +25,7 @@ registerAccountCommands(cli);
 registerTxCommand(cli);
 
 cli.help();
-cli.version("0.1.2");
+cli.version("0.2.0");
 
 function handleError(err: unknown): never {
   if (err instanceof CliError) {
