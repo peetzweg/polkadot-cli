@@ -164,6 +164,20 @@ export function findPallet(
   );
 }
 
+export interface SignedExtensionInfo {
+  identifier: string;
+  type: number;
+  additionalSigned: number;
+}
+
+export function getSignedExtensions(meta: MetadataBundle): SignedExtensionInfo[] {
+  const byVersion = meta.unified.extrinsic.signedExtensions;
+  // Use the first (and typically only) version key
+  const versionKeys = Object.keys(byVersion);
+  if (versionKeys.length === 0) return [];
+  return byVersion[Number(versionKeys[0])] ?? [];
+}
+
 export function getPalletNames(meta: MetadataBundle): string[] {
   return meta.unified.pallets.map((p) => p.name);
 }

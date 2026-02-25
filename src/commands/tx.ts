@@ -4,6 +4,7 @@ import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
 import {
   getOrFetchMetadata,
+  getSignedExtensions,
   findPallet,
   getPalletNames,
   describeType,
@@ -20,6 +21,8 @@ export function registerTxCommand(cli: CAC) {
     .command("tx [target] [...args]", "Submit an extrinsic (e.g. Balances.transferKeepAlive <dest> <amount>)")
     .option("--from <name>", "Account to sign with (required)")
     .option("--dry-run", "Estimate fees without submitting")
+    .option("--ext <json>", "Custom signed extension values as JSON, e.g. '{\"ExtName\":{\"value\":...}}'")
+
     .action(
       async (
         target: string | undefined,
@@ -30,6 +33,7 @@ export function registerTxCommand(cli: CAC) {
           from?: string;
           dryRun?: boolean;
           output?: string;
+          ext?: string;
         },
       ) => {
         if (!target || !opts.from) {
@@ -95,17 +99,35 @@ export function registerTxCommand(cli: CAC) {
             args,
           );
 
+          // Build custom signed extensions for non-standard chains
+          const userExtOverrides = parseExtOption(opts.ext);
+          const customSignedExtensions = buildCustomSignedExtensions(
+            meta,
+            userExtOverrides,
+          );
+          const txOptions =
+            Object.keys(customSignedExtensions).length > 0
+              ? { customSignedExtensions }
+              : undefined;
+
           const unsafeApi = clientHandle.client.getUnsafeApi();
           const tx = (unsafeApi as any).tx[palletInfo.name][callInfo.name](
             callData,
           );
 
+          const encodedCall = await tx.getEncodedData();
+          const callHex = encodedCall.asHex();
+
           if (opts.dryRun) {
             const signerAddress = toSs58(signer.publicKey);
             console.log(`  ${BOLD}From:${RESET} ${opts.from} (${signerAddress})`);
+            console.log(`  ${BOLD}Call:${RESET} ${callHex}`);
 
             try {
-              const fees = await tx.getEstimatedFees(signer.publicKey);
+              const fees = await tx.getEstimatedFees(
+                signer.publicKey,
+                txOptions,
+              );
               console.log(`  ${BOLD}Estimated fees:${RESET} ${fees}`);
             } catch (err: any) {
               console.log(
@@ -117,9 +139,10 @@ export function registerTxCommand(cli: CAC) {
           }
 
           console.log("Signing and submitting...");
-          const result = await tx.signAndSubmit(signer);
+          const result = await tx.signAndSubmit(signer, txOptions);
 
           console.log();
+          console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
           console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
           if (result.block) {
             console.log(
@@ -382,4 +405,94 @@ function parsePrimitive(
     default:
       return parseValue(arg) as any;
   }
+}
+
+// --- Custom signed extensions support ---
+
+/** Extensions that polkadot-api handles internally */
+const PAPI_BUILTIN_EXTENSIONS = new Set([
+  "CheckNonZeroSender",
+  "CheckSpecVersion",
+  "CheckTxVersion",
+  "CheckGenesis",
+  "CheckMortality",
+  "CheckNonce",
+  "CheckWeight",
+  "ChargeTransactionPayment",
+  "ChargeAssetTxPayment",
+  "CheckMetadataHash",
+  "StorageWeightReclaim",
+  "PrevalidateAttests",
+]);
+
+function parseExtOption(
+  ext: string | undefined,
+): Record<string, any> {
+  if (!ext) return {};
+  try {
+    const parsed = JSON.parse(ext);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("--ext must be a JSON object, e.g. '{\"ExtName\":{\"value\":...}}'");
+    }
+    return parsed;
+  } catch (err: any) {
+    if (err.message?.startsWith("--ext")) throw err;
+    throw new Error(
+      `Failed to parse --ext JSON: ${err.message}\n` +
+        "Expected format: '{\"ExtName\":{\"value\":...}}'",
+    );
+  }
+}
+
+/** Sentinel value: type could not be auto-defaulted */
+const NO_DEFAULT = Symbol("no-default");
+
+function buildCustomSignedExtensions(
+  meta: MetadataBundle,
+  userOverrides: Record<string, any>,
+): Record<string, { value?: any; additionalSigned?: any }> {
+  const result: Record<string, { value?: any; additionalSigned?: any }> = {};
+  const extensions = getSignedExtensions(meta);
+
+  for (const ext of extensions) {
+    if (PAPI_BUILTIN_EXTENSIONS.has(ext.identifier)) continue;
+
+    // User override takes priority
+    if (ext.identifier in userOverrides) {
+      result[ext.identifier] = userOverrides[ext.identifier];
+      continue;
+    }
+
+    // Auto-default based on type structure
+    const valueEntry = meta.lookup(ext.type);
+    const addEntry = meta.lookup(ext.additionalSigned);
+
+    const value = autoDefaultForType(valueEntry);
+    const add = autoDefaultForType(addEntry);
+
+    if (value !== NO_DEFAULT || add !== NO_DEFAULT) {
+      result[ext.identifier] = {
+        ...(value !== NO_DEFAULT ? { value } : {}),
+        ...(add !== NO_DEFAULT ? { additionalSigned: add } : {}),
+      };
+    }
+    // If neither can be auto-defaulted, skip — polkadot-api will error
+    // with a clear message about the missing extension
+  }
+  return result;
+}
+
+function autoDefaultForType(entry: any): any {
+  if (entry.type === "void") return new Uint8Array([]);
+  // Option<T> → undefined tells polkadot-api to encode as None (0x00)
+  if (entry.type === "option") return undefined;
+  if (entry.type === "enum") {
+    // Look for a "Disabled" variant (e.g. VerifyMultiSignature)
+    const variants = entry.value as Record<string, any>;
+    if ("Disabled" in variants) {
+      return { type: "Disabled", value: undefined };
+    }
+  }
+  // Cannot auto-default
+  return NO_DEFAULT;
 }
