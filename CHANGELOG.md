@@ -1,5 +1,12 @@
 # polkadot-cli
 
+## 0.2.1
+
+### Patch Changes
+
+- Fix `Vec<u8>` args (e.g. `System.remark`) to use `Binary` as polkadot-api expects
+- Auto-wrap SS58 addresses into `MultiAddress.Id` for transfer calls
+
 ## 0.2.0
 
 ### Minor Changes
