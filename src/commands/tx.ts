@@ -1,0 +1,365 @@
+import type { CAC } from "cac";
+import { loadConfig, resolveChain } from "../config/store.ts";
+import { createChainClient } from "../core/client.ts";
+import {
+  getOrFetchMetadata,
+  findPallet,
+  getPalletNames,
+  describeType,
+} from "../core/metadata.ts";
+import type { MetadataBundle, Lookup } from "../core/metadata.ts";
+import { resolveAccountSigner, toSs58 } from "../core/accounts.ts";
+import { parseTarget } from "../utils/parse-target.ts";
+import { parseValue } from "../utils/parse-value.ts";
+import { suggestMessage } from "../utils/fuzzy-match.ts";
+import { BOLD, CYAN, DIM, GREEN, RESET, YELLOW } from "../core/output.ts";
+
+export function registerTxCommand(cli: CAC) {
+  cli
+    .command("tx [target] [...args]", "Submit an extrinsic (e.g. Balances.transferKeepAlive <dest> <amount>)")
+    .option("--from <name>", "Account to sign with (required)")
+    .option("--dry-run", "Estimate fees without submitting")
+    .action(
+      async (
+        target: string | undefined,
+        args: string[],
+        opts: {
+          chain?: string;
+          rpc?: string;
+          from?: string;
+          dryRun?: boolean;
+          output?: string;
+        },
+      ) => {
+        if (!target || !opts.from) {
+          console.log(
+            "Usage: dot tx <Pallet.Call> [...args] --from <account> [--dry-run]",
+          );
+          console.log("");
+          console.log("Examples:");
+          console.log(
+            "  $ dot tx Balances.transferKeepAlive 5FHn... 1000000000000 --from alice",
+          );
+          console.log(
+            "  $ dot tx System.remark 0xdeadbeef --from alice --dry-run",
+          );
+          return;
+        }
+
+        const config = await loadConfig();
+        const { name: chainName, chain: chainConfig } = resolveChain(
+          config,
+          opts.chain,
+        );
+        const { pallet, item: callName } = parseTarget(target);
+
+        const signer = await resolveAccountSigner(opts.from);
+
+        const clientHandle = await createChainClient(
+          chainName,
+          chainConfig,
+          opts.rpc,
+        );
+
+        try {
+          const meta = await getOrFetchMetadata(chainName, clientHandle);
+
+          // Validate pallet
+          const palletNames = getPalletNames(meta);
+          const palletInfo = findPallet(meta, pallet);
+          if (!palletInfo) {
+            throw new Error(suggestMessage("pallet", pallet, palletNames));
+          }
+
+          // Validate call
+          const callInfo = palletInfo.calls.find(
+            (c) => c.name.toLowerCase() === callName.toLowerCase(),
+          );
+          if (!callInfo) {
+            const callNames = palletInfo.calls.map((c) => c.name);
+            throw new Error(
+              suggestMessage(
+                `call in ${palletInfo.name}`,
+                callName,
+                callNames,
+              ),
+            );
+          }
+
+          // Parse args against metadata
+          const callData = parseCallArgs(
+            meta,
+            palletInfo.name,
+            callInfo.name,
+            args,
+          );
+
+          const unsafeApi = clientHandle.client.getUnsafeApi();
+          const tx = (unsafeApi as any).tx[palletInfo.name][callInfo.name](
+            callData,
+          );
+
+          if (opts.dryRun) {
+            const signerAddress = toSs58(signer.publicKey);
+            console.log(`  ${BOLD}From:${RESET} ${opts.from} (${signerAddress})`);
+
+            try {
+              const fees = await tx.getEstimatedFees(signer.publicKey);
+              console.log(`  ${BOLD}Estimated fees:${RESET} ${fees}`);
+            } catch (err: any) {
+              console.log(
+                `  ${BOLD}Estimated fees:${RESET} ${YELLOW}unable to estimate${RESET}`,
+              );
+              console.log(`  ${DIM}${err.message ?? err}${RESET}`);
+            }
+            return;
+          }
+
+          console.log("Signing and submitting...");
+          const result = await tx.signAndSubmit(signer);
+
+          console.log();
+          console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
+          if (result.block) {
+            console.log(
+              `  ${BOLD}Block:${RESET}  #${result.block.number} (${result.block.hash})`,
+            );
+          }
+
+          if (result.dispatchError) {
+            console.log(`  ${BOLD}Status:${RESET} ${YELLOW}dispatch error${RESET}`);
+            console.log(
+              `  ${BOLD}Error:${RESET}  ${result.dispatchError.type}${result.dispatchError.value ? ": " + JSON.stringify(result.dispatchError.value) : ""}`,
+            );
+          } else {
+            console.log(`  ${BOLD}Status:${RESET} ${GREEN}ok${RESET}`);
+          }
+
+          if (result.events && result.events.length > 0) {
+            console.log(`  ${BOLD}Events:${RESET}`);
+            for (const event of result.events) {
+              const name = `${CYAN}${event.type}${RESET}.${CYAN}${event.value?.type ?? ""}${RESET}`;
+              const payload = event.value?.value;
+              if (payload && typeof payload === "object") {
+                const fields = Object.entries(payload)
+                  .map(([k, v]) => `${k}: ${formatEventValue(v)}`)
+                  .join(", ");
+                console.log(`    ${name} { ${fields} }`);
+              } else {
+                console.log(`    ${name}`);
+              }
+            }
+          }
+          console.log();
+        } finally {
+          clientHandle.destroy();
+        }
+      },
+    );
+}
+
+function formatEventValue(v: unknown): string {
+  if (typeof v === "bigint") return v.toString();
+  if (typeof v === "string") return v;
+  if (typeof v === "number") return v.toString();
+  if (typeof v === "boolean") return v.toString();
+  if (v === null || v === undefined) return "null";
+  return JSON.stringify(v, (_k, val) =>
+    typeof val === "bigint" ? val.toString() : val,
+  );
+}
+
+function parseCallArgs(
+  meta: MetadataBundle,
+  palletName: string,
+  callName: string,
+  args: string[],
+): unknown {
+  // Look up the calls enum to find the variant's inner type
+  const palletMeta = meta.unified.pallets.find(
+    (p) => p.name === palletName,
+  );
+  if (!palletMeta?.calls) return undefined;
+
+  const callsEntry = meta.lookup(palletMeta.calls.type);
+  if (callsEntry.type !== "enum") return undefined;
+
+  const variant = (callsEntry.value as Record<string, any>)[callName];
+  if (!variant) return undefined;
+
+  // Determine the fields based on variant type
+  if (variant.type === "void") {
+    if (args.length > 0) {
+      throw new Error(`${palletName}.${callName} takes no arguments, but ${args.length} provided.`);
+    }
+    return undefined;
+  }
+
+  if (variant.type === "struct") {
+    return parseStructArgs(meta.lookup, variant.value, args, `${palletName}.${callName}`);
+  }
+
+  if (variant.type === "lookupEntry") {
+    const inner = variant.value;
+    if (inner.type === "struct") {
+      return parseStructArgs(meta.lookup, inner.value, args, `${palletName}.${callName}`);
+    }
+    if (inner.type === "void") return undefined;
+    // Single arg
+    if (args.length !== 1) {
+      throw new Error(
+        `${palletName}.${callName} takes 1 argument (${describeType(meta.lookup, inner.id)}), but ${args.length} provided.`,
+      );
+    }
+    return parseTypedArg(meta.lookup, inner, args[0]);
+  }
+
+  if (variant.type === "tuple") {
+    const entries = variant.value as any[];
+    if (args.length !== entries.length) {
+      throw new Error(
+        `${palletName}.${callName} takes ${entries.length} arguments, but ${args.length} provided.`,
+      );
+    }
+    return entries.map((entry: any, i: number) => parseTypedArg(meta.lookup, entry, args[i]));
+  }
+
+  // Fallback: parse all args generically
+  return args.length === 0 ? undefined : args.map(parseValue);
+}
+
+function parseStructArgs(
+  lookup: Lookup,
+  fields: Record<string, any>,
+  args: string[],
+  callLabel: string,
+): Record<string, unknown> {
+  const fieldNames = Object.keys(fields);
+  if (args.length !== fieldNames.length) {
+    const expected = fieldNames
+      .map((name) => `${name}: ${describeType(lookup, fields[name].id)}`)
+      .join(", ");
+    throw new Error(
+      `${callLabel} takes ${fieldNames.length} argument(s): ${expected}\n` +
+        `  Got ${args.length} argument(s).`,
+    );
+  }
+  const result: Record<string, unknown> = {};
+  for (let i = 0; i < fieldNames.length; i++) {
+    const name = fieldNames[i];
+    const entry = fields[name];
+    result[name] = parseTypedArg(lookup, entry, args[i]);
+  }
+  return result;
+}
+
+function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
+  switch (entry.type) {
+    case "primitive":
+      return parsePrimitive(entry.value, arg);
+
+    case "compact":
+      return entry.isBig ? BigInt(arg) : parseInt(arg, 10);
+
+    case "AccountId32":
+    case "AccountId20":
+      return arg; // polkadot-api handles SS58 decoding
+
+    case "option": {
+      if (arg === "null" || arg === "undefined" || arg === "none") {
+        return undefined;
+      }
+      return parseTypedArg(lookup, entry.value, arg);
+    }
+
+    case "enum": {
+      // Try JSON parse for complex enums like MultiAddress
+      if (arg.startsWith("{")) {
+        try {
+          return JSON.parse(arg);
+        } catch {
+          // fall through
+        }
+      }
+      // Simple variant name (e.g., "Id" for MultiAddress)
+      const variants = Object.keys(entry.value);
+      const matched = variants.find(
+        (v) => v.toLowerCase() === arg.toLowerCase(),
+      );
+      if (matched) {
+        const variant = entry.value[matched];
+        if (variant.type === "void") {
+          return { type: matched };
+        }
+      }
+      return parseValue(arg);
+    }
+
+    case "sequence":
+    case "array":
+      // Try JSON array
+      if (arg.startsWith("[")) {
+        try {
+          return JSON.parse(arg);
+        } catch {
+          // fall through
+        }
+      }
+      // Hex bytes
+      if (/^0x[0-9a-fA-F]*$/.test(arg)) return arg;
+      return parseValue(arg);
+
+    case "struct":
+      // Must be JSON
+      if (arg.startsWith("{")) {
+        try {
+          return JSON.parse(arg);
+        } catch {
+          // fall through
+        }
+      }
+      return parseValue(arg);
+
+    case "tuple":
+      if (arg.startsWith("[")) {
+        try {
+          return JSON.parse(arg);
+        } catch {
+          // fall through
+        }
+      }
+      return parseValue(arg);
+
+    default:
+      return parseValue(arg);
+  }
+}
+
+function parsePrimitive(
+  prim: string,
+  arg: string,
+): string | number | bigint | boolean {
+  switch (prim) {
+    case "bool":
+      return arg === "true";
+    case "char":
+    case "str":
+      return arg;
+    case "u8":
+    case "u16":
+    case "u32":
+    case "i8":
+    case "i16":
+    case "i32":
+      return parseInt(arg, 10);
+    case "u64":
+    case "u128":
+    case "u256":
+    case "i64":
+    case "i128":
+    case "i256":
+      return BigInt(arg);
+    default:
+      return parseValue(arg) as any;
+  }
+}

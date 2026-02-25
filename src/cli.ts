@@ -4,6 +4,8 @@ import { registerChainCommands } from "./commands/chain.ts";
 import { registerInspectCommand } from "./commands/inspect.ts";
 import { registerQueryCommand } from "./commands/query.ts";
 import { registerConstCommand } from "./commands/const.ts";
+import { registerAccountCommands } from "./commands/account.ts";
+import { registerTxCommand } from "./commands/tx.ts";
 import { CliError } from "./utils/errors.ts";
 
 const cli = cac("dot");
@@ -19,6 +21,8 @@ registerChainCommands(cli);
 registerInspectCommand(cli);
 registerQueryCommand(cli);
 registerConstCommand(cli);
+registerAccountCommands(cli);
+registerTxCommand(cli);
 
 cli.help();
 cli.version("0.1.2");

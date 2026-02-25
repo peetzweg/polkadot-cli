@@ -9,6 +9,7 @@ import {
 import { printResult, DIM, RESET, YELLOW } from "../core/output.ts";
 import { parseTarget } from "../utils/parse-target.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
+import { parseValue } from "../utils/parse-value.ts";
 
 const DEFAULT_LIMIT = 100;
 
@@ -77,7 +78,7 @@ export function registerQueryCommand(cli: CAC) {
             storageItem.name
           ];
 
-          const parsedKeys = keys.map(parseKeyArg);
+          const parsedKeys = keys.map(parseValue);
           const format = opts.output ?? "pretty";
 
           if (storageItem.type === "map" && parsedKeys.length === 0) {
@@ -112,26 +113,4 @@ export function registerQueryCommand(cli: CAC) {
         }
       },
     );
-}
-
-function parseKeyArg(arg: string): unknown {
-  // Try number
-  if (/^\d+$/.test(arg)) return parseInt(arg, 10);
-  // Try bigint for very large numbers
-  if (/^\d{16,}$/.test(arg)) return BigInt(arg);
-  // Hex
-  if (/^0x[0-9a-fA-F]+$/.test(arg)) return arg;
-  // Boolean
-  if (arg === "true") return true;
-  if (arg === "false") return false;
-  // JSON
-  if (arg.startsWith("{") || arg.startsWith("[")) {
-    try {
-      return JSON.parse(arg);
-    } catch {
-      // fall through
-    }
-  }
-  // String (addresses, etc.)
-  return arg;
 }

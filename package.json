@@ -32,11 +32,13 @@
     "url": "git+https://github.com/peetzweg/polkadot-cli.git"
   },
   "dependencies": {
-    "cac": "^6.7.14",
-    "polkadot-api": "^1.23.3",
     "@polkadot-api/metadata-builders": "^0.13.9",
     "@polkadot-api/substrate-bindings": "^0.17.0",
-    "@polkadot-api/view-builder": "^0.4.17"
+    "@polkadot-api/view-builder": "^0.4.17",
+    "@polkadot-labs/hdkd": "^0.0.26",
+    "@polkadot-labs/hdkd-helpers": "^0.0.27",
+    "cac": "^6.7.14",
+    "polkadot-api": "^1.23.3"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.4",

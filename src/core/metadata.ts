@@ -15,6 +15,7 @@ export interface PalletInfo {
   docs: string[];
   storage: StorageItemInfo[];
   constants: ConstantInfo[];
+  calls: CallInfo[];
 }
 
 export interface StorageItemInfo {
@@ -29,6 +30,12 @@ export interface ConstantInfo {
   name: string;
   docs: string[];
   typeId: number;
+}
+
+export interface CallInfo {
+  name: string;
+  docs: string[];
+  typeId: number | null; // lookup ID for the call variant's inner type
 }
 
 export type UnifiedMeta = ReturnType<typeof unifyMetadata>;
@@ -116,7 +123,35 @@ export function listPallets(meta: MetadataBundle): PalletInfo[] {
       docs: c.docs ?? [],
       typeId: c.type,
     })),
+    calls: extractCalls(meta, p.calls),
   }));
+}
+
+function extractCalls(
+  meta: MetadataBundle,
+  callsRef: { type: number } | undefined,
+): CallInfo[] {
+  if (!callsRef) return [];
+  try {
+    const entry = meta.lookup(callsRef.type);
+    if (entry.type !== "enum") return [];
+    return Object.entries(entry.value as Record<string, any>).map(
+      ([name, variant]) => ({
+        name,
+        docs: (variant as any).docs ?? [],
+        typeId: resolveCallTypeId(variant),
+      }),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function resolveCallTypeId(variant: any): number | null {
+  if (variant.type === "lookupEntry") return variant.value?.id ?? null;
+  if (variant.type === "struct") return null; // inline struct, no single typeId
+  if (variant.type === "void" || variant.type === "empty") return null;
+  return null;
 }
 
 export function findPallet(
