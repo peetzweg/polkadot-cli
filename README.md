@@ -1,6 +1,6 @@
 # polkadot-cli
 
-A command-line tool for querying Polkadot-ecosystem on-chain state. Query storage, look up constants, and inspect chain metadata — all from your terminal.
+A command-line tool for interacting with Polkadot-ecosystem chains. Query storage, look up constants, inspect metadata, manage accounts, and submit extrinsics — all from your terminal.
 
 Ships with Polkadot as the default chain. Add any Substrate-based chain by pointing to its RPC endpoint.
 
@@ -52,6 +52,45 @@ dot inspect System
 dot inspect System.Account
 ```
 
+### Manage accounts
+
+Dev accounts (Alice, Bob, Charlie, Dave, Eve, Ferdie) are always available for testnets. Create or import your own accounts for any chain.
+
+```bash
+# List all accounts (dev + stored)
+dot account list
+
+# Create a new account (generates a mnemonic)
+dot account create my-validator
+
+# Import from a BIP39 mnemonic
+dot account import treasury --secret "word1 word2 ... word12"
+
+# Import from a hex seed
+dot account import raw-key --secret 0xabcdef...
+
+# Remove an account
+dot account remove my-validator
+```
+
+### Submit extrinsics
+
+Build, sign, and submit transactions. Arguments are parsed from metadata — the CLI knows the expected types for each call.
+
+```bash
+# Simple remark
+dot tx System.remark 0xdeadbeef --from alice
+
+# Transfer (amount in plancks)
+dot tx Balances.transferKeepAlive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000000 --from alice
+
+# Estimate fees without submitting
+dot tx Balances.transferKeepAlive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000000 --from alice --dry-run
+
+# Batch multiple transfers with Utility.batchAll
+dot tx Utility.batchAll '[{"type":"Balances","value":{"type":"transfer_keep_alive","value":{"dest":"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty","value":1000000000000}}},{"type":"Balances","value":{"type":"transfer_keep_alive","value":{"dest":"5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y","value":2000000000000}}}]' --from alice
+```
+
 ### Manage chains
 
 ```bash
@@ -90,6 +129,7 @@ Config and metadata caches live in `~/.polkadot/`:
 ```
 ~/.polkadot/
 ├── config.json          # chains and default chain
+├── accounts.json        # stored accounts (secrets encrypted at rest — coming soon)
 └── chains/
     └── polkadot/
         └── metadata.bin # cached SCALE-encoded metadata
