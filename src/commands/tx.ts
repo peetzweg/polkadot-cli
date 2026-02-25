@@ -1,4 +1,5 @@
 import type { CAC } from "cac";
+import { Binary } from "polkadot-api";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
 import {
@@ -281,8 +282,20 @@ function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
           // fall through
         }
       }
-      // Simple variant name (e.g., "Id" for MultiAddress)
+
+      // Auto-wrap MultiAddress-like enums: if "Id" variant has AccountId32
+      // inner type and the arg looks like an SS58 address, wrap automatically
       const variants = Object.keys(entry.value);
+      if (variants.includes("Id")) {
+        const idVariant = entry.value["Id"];
+        const innerType =
+          idVariant.type === "lookupEntry" ? idVariant.value : idVariant;
+        if (innerType.type === "AccountId32" && !arg.startsWith("{")) {
+          return { type: "Id", value: arg };
+        }
+      }
+
+      // Simple variant name (e.g., "Id" for MultiAddress)
       const matched = variants.find(
         (v) => v.toLowerCase() === arg.toLowerCase(),
       );
@@ -296,7 +309,13 @@ function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
     }
 
     case "sequence":
-    case "array":
+    case "array": {
+      // Vec<u8> / [u8; N] -> Binary
+      const inner = entry.value;
+      if (inner.type === "primitive" && inner.value === "u8") {
+        if (/^0x[0-9a-fA-F]*$/.test(arg)) return Binary.fromHex(arg as any);
+        return Binary.fromText(arg);
+      }
       // Try JSON array
       if (arg.startsWith("[")) {
         try {
@@ -306,8 +325,9 @@ function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
         }
       }
       // Hex bytes
-      if (/^0x[0-9a-fA-F]*$/.test(arg)) return arg;
+      if (/^0x[0-9a-fA-F]*$/.test(arg)) return Binary.fromHex(arg as any);
       return parseValue(arg);
+    }
 
     case "struct":
       // Must be JSON
