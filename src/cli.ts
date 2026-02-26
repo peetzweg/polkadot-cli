@@ -7,6 +7,7 @@ import { registerConstCommand } from "./commands/const.ts";
 import { registerAccountCommands } from "./commands/account.ts";
 import { registerTxCommand } from "./commands/tx.ts";
 import { CliError } from "./utils/errors.ts";
+import { version } from "../package.json";
 
 const cli = cac("dot");
 
@@ -25,7 +26,7 @@ registerAccountCommands(cli);
 registerTxCommand(cli);
 
 cli.help();
-cli.version("0.4.0");
+cli.version(version);
 
 function handleError(err: unknown): never {
   if (err instanceof CliError) {
