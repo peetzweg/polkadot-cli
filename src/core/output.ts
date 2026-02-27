@@ -70,4 +70,40 @@ export function printDocs(docs: string[]): void {
   }
 }
 
-export { BOLD, CYAN, DIM, GREEN, MAGENTA, RESET, YELLOW };
+const CHECK_MARK = "✓";
+
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+class Spinner {
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private frame = 0;
+
+  start(msg: string): void {
+    this.stop();
+    if (!isTTY) {
+      console.log(msg);
+      return;
+    }
+    process.stdout.write(`${SPINNER_FRAMES[0]} ${msg}`);
+    this.timer = setInterval(() => {
+      this.frame = (this.frame + 1) % SPINNER_FRAMES.length;
+      process.stdout.write(`\r\x1b[K${SPINNER_FRAMES[this.frame]} ${msg}`);
+    }, 80);
+  }
+
+  stop(): void {
+    if (this.timer !== null) {
+      clearInterval(this.timer);
+      this.timer = null;
+      this.frame = 0;
+      if (isTTY) process.stdout.write("\r\x1b[K");
+    }
+  }
+
+  succeed(msg: string): void {
+    this.stop();
+    console.log(`${GREEN}${CHECK_MARK}${RESET} ${msg}`);
+  }
+}
+
+export { BOLD, CHECK_MARK, CYAN, DIM, GREEN, isTTY, MAGENTA, RESET, Spinner, YELLOW };

@@ -16,7 +16,8 @@ import { resolveAccountSigner, toSs58 } from "../core/accounts.ts";
 import { parseTarget } from "../utils/parse-target.ts";
 import { parseValue } from "../utils/parse-value.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
-import { BOLD, CYAN, DIM, GREEN, RESET, YELLOW } from "../core/output.ts";
+import { BOLD, CYAN, DIM, GREEN, RESET, Spinner, YELLOW } from "../core/output.ts";
+import type { TxEvent, TxFinalized } from "polkadot-api";
 
 export function registerTxCommand(cli: CAC) {
   cli
@@ -166,26 +167,25 @@ export function registerTxCommand(cli: CAC) {
             return;
           }
 
-          console.log("Signing and submitting...");
-          const result = await tx.signAndSubmit(signer, txOptions);
+          const result = await watchTransaction(
+            tx.signSubmitAndWatch(signer, txOptions),
+          );
 
           console.log();
           console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
           console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
           console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
-          if (result.block) {
-            console.log(
-              `  ${BOLD}Block:${RESET}  #${result.block.number} (${result.block.hash})`,
-            );
-          }
+          console.log(
+            `  ${BOLD}Block:${RESET}  #${result.block.number} (${result.block.hash})`,
+          );
 
-          if (result.dispatchError) {
+          if (result.ok) {
+            console.log(`  ${BOLD}Status:${RESET} ${GREEN}ok${RESET}`);
+          } else {
             console.log(`  ${BOLD}Status:${RESET} ${YELLOW}dispatch error${RESET}`);
             console.log(
               `  ${BOLD}Error:${RESET}  ${result.dispatchError.type}${result.dispatchError.value ? ": " + JSON.stringify(result.dispatchError.value) : ""}`,
             );
-          } else {
-            console.log(`  ${BOLD}Status:${RESET} ${GREEN}ok${RESET}`);
           }
 
           if (result.events && result.events.length > 0) {
@@ -614,4 +614,46 @@ function autoDefaultForType(entry: any): any {
   }
   // Cannot auto-default
   return NO_DEFAULT;
+}
+
+// --- Progressive transaction tracking ---
+
+function watchTransaction(
+  observable: import("rxjs").Observable<TxEvent>,
+): Promise<TxFinalized> {
+  const spinner = new Spinner();
+  return new Promise<TxFinalized>((resolve, reject) => {
+    spinner.start("Signing...");
+    observable.subscribe({
+      next(event: TxEvent) {
+        switch (event.type) {
+          case "signed":
+            spinner.succeed("Signed");
+            console.log(`  ${BOLD}Tx:${RESET}     ${event.txHash}`);
+            spinner.start("Broadcasting...");
+            break;
+          case "broadcasted":
+            spinner.succeed("Broadcasted");
+            spinner.start("In best block...");
+            break;
+          case "txBestBlocksState":
+            if (event.found) {
+              spinner.succeed(`In best block #${event.block.number}`);
+              spinner.start("Finalizing...");
+            } else {
+              spinner.start("In best block...");
+            }
+            break;
+          case "finalized":
+            spinner.stop();
+            resolve(event);
+            break;
+        }
+      },
+      error(err: unknown) {
+        spinner.stop();
+        reject(err);
+      },
+    });
+  });
 }
