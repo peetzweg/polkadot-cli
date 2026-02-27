@@ -17,6 +17,7 @@ import { parseTarget } from "../utils/parse-target.ts";
 import { parseValue } from "../utils/parse-value.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { BOLD, CYAN, DIM, GREEN, RESET, Spinner, YELLOW } from "../core/output.ts";
+import { pjsAppsLink, papiLink } from "../core/explorers.ts";
 import type { TxEvent, TxFinalized } from "polkadot-api";
 
 export function registerTxCommand(cli: CAC) {
@@ -202,6 +203,14 @@ export function registerTxCommand(cli: CAC) {
                 console.log(`    ${name}`);
               }
             }
+          }
+
+          const rpcUrl = opts.rpc ?? chainConfig.rpc;
+          if (rpcUrl) {
+            const blockHash = result.block.hash;
+            console.log(`  ${BOLD}Explorer:${RESET}`);
+            console.log(`    ${DIM}PolkadotJS${RESET}  ${pjsAppsLink(rpcUrl, blockHash)}`);
+            console.log(`    ${DIM}PAPI${RESET}        ${papiLink(rpcUrl, blockHash)}`);
           }
           console.log();
         } finally {
