@@ -40,14 +40,16 @@ function handleError(err: unknown): never {
   process.exit(1);
 }
 
-// Handle async errors from command actions
-process.on("unhandledRejection", handleError);
-
 try {
-  cli.parse();
-  // Show help when invoked with no command (e.g. just `dot`)
+  cli.parse(process.argv, { run: false });
+
   if (!(cli as any).matchedCommandName && !cli.options.help && !cli.options.version) {
     cli.outputHelp();
+  } else {
+    const result = (cli as any).runMatchedCommand();
+    if (result && typeof result.then === "function") {
+      result.then(() => process.exit(0), handleError);
+    }
   }
 } catch (err) {
   handleError(err);
