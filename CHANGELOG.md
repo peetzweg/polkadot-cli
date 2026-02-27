@@ -1,5 +1,18 @@
 # polkadot-cli
 
+## 0.5.0
+
+### Minor Changes
+
+- 927068d: Show PolkadotJS Apps and PAPI Explorer links in the transaction summary after finalization
+- f89ed8b: Show progressive transaction status with an animated spinner (signed → broadcasted → in best block → finalized) instead of a static "Signing and submitting..." message
+
+### Patch Changes
+
+- 04c86b1: Centralize process.exit(0) in cli.ts so commands exit immediately after completion instead of hanging on polkadot-api timers
+- f555e58: Reorder README sections, document --ext flag and output display, add CI and release GitHub Actions workflows
+- f555e58: Read CLI version from package.json instead of a hardcoded string to prevent version drift
+
 ## 0.4.0
 
 ### Minor Changes
