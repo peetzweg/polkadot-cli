@@ -1,0 +1,13 @@
+baseURL = "https://peetzweg.github.io/polkadot-cli/"
+languageCode = "en-us"
+title = "polkadot-cli"
+
+staticDir = ["static", "assets"]
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.tableOfContents]
+    startLevel = 2
+    endLevel = 3

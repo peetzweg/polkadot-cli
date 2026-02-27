@@ -40,11 +40,36 @@ jobs:
           script: |
             const packages = JSON.parse('${{ steps.changesets.outputs.publishedPackages }}');
             for (const pkg of packages) {
-              await github.rest.repos.createRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag_name: `v${pkg.version}`,
-                name: `v${pkg.version}`,
-                generate_release_notes: true,
-              });
+              const tag = `v${pkg.version}`;
+              try {
+                await github.rest.repos.createRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_name: tag,
+                  name: tag,
+                  generate_release_notes: true,
+                });
+              } catch (err) {
+                if (err.status === 422) {
+                  const { data: releases } = await github.rest.repos.listReleases({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    per_page: 10,
+                  });
+                  const existing = releases.find(r => r.tag_name === tag);
+                  if (existing) {
+                    await github.rest.repos.updateRelease({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      release_id: existing.id,
+                      tag_name: tag,
+                      name: tag,
+                      generate_release_notes: true,
+                    });
+                    console.log(`Updated existing release for ${tag}`);
+                  }
+                } else {
+                  throw err;
+                }
+              }
             }

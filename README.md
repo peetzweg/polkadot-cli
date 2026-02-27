@@ -149,6 +149,21 @@ dot tx System.remark 0xdeadbeef --from alice --ext '{"MyExtension":{"value":"...
 | `--output json` | Raw JSON output (default: pretty) |
 | `--limit <n>` | Max entries for map queries (0 = unlimited, default: 100) |
 
+## How it compares
+
+| | polkadot-cli | @polkadot/api-cli | subxt-cli | Pop CLI |
+|---|---|---|---|---|
+| **Query storage** | SS58 keys, map iteration | yes (full `--ws` URL required) | yes (keys as SCALE tuples, no SS58) | — |
+| **Read constants** | yes | yes | yes | — |
+| **Submit extrinsics** | yes, with dry-run | yes (via `--seed`) | — | ink! contract calls only |
+| **Inspect metadata** | yes | — | yes (excellent browser) | — |
+| **Chain presets** | built-in aliases (`--chain kusama`) | — (manual `--ws` every call) | — | parachain templates |
+| **Tx tracking + explorer links** | spinner progress, block + explorer link | basic events | — | — |
+
+polkadot-cli aims to be the single tool for day-to-day chain interaction: storage reads, constant lookups, transaction submission, and metadata browsing with a polished terminal UX. @polkadot/api-cli covers similar ground but is in maintenance mode and requires verbose flags. subxt-cli has an excellent metadata explorer but cannot sign or submit transactions. Pop CLI targets a different workflow — scaffolding parachains and deploying ink! contracts rather than end-user chain queries.
+
+Outside Polkadot, the closest comparable in terms of interactive UX is [near-cli-rs](https://github.com/near/near-cli-rs) (NEAR).
+
 ## Configuration
 
 Config and metadata caches live in `~/.polkadot/`:
