@@ -6,6 +6,7 @@ import { registerQueryCommand } from "./commands/query.ts";
 import { registerConstCommand } from "./commands/const.ts";
 import { registerAccountCommands } from "./commands/account.ts";
 import { registerTxCommand } from "./commands/tx.ts";
+import { registerHashCommand } from "./commands/hash.ts";
 import { CliError } from "./utils/errors.ts";
 import { version } from "../package.json";
 
@@ -24,6 +25,7 @@ registerQueryCommand(cli);
 registerConstCommand(cli);
 registerAccountCommands(cli);
 registerTxCommand(cli);
+registerHashCommand(cli);
 
 cli.help();
 cli.version(version);

@@ -1,6 +1,6 @@
 # polkadot-cli
 
-A command-line tool for interacting with Polkadot-ecosystem chains. Manage chains and accounts, query storage, look up constants, inspect metadata, and submit extrinsics — all from your terminal. [View on GitHub](https://github.com/peetzweg/polkadot-cli).
+A command-line tool for interacting with Polkadot-ecosystem chains. Manage chains and accounts, query storage, look up constants, inspect metadata, submit extrinsics, and compute hashes — all from your terminal. [View on GitHub](https://github.com/peetzweg/polkadot-cli).
 
 ## Install
 
@@ -218,6 +218,52 @@ For manual override, use `--ext` with a JSON object:
 dot tx System.remark 0xdeadbeef --from alice \
   --ext '{"MyExtension":{"value":"..."}}'
 ```
+
+## Hash
+
+Compute cryptographic hashes commonly used in Substrate. Runs offline — no chain connection required.
+
+### Supported algorithms
+
+| Algorithm | Output | Description |
+|-----------|--------|-------------|
+| `blake2b256` | 32 bytes | BLAKE2b with 256-bit output |
+| `blake2b128` | 16 bytes | BLAKE2b with 128-bit output |
+| `keccak256` | 32 bytes | Keccak-256 (Ethereum-compatible) |
+| `sha256` | 32 bytes | SHA-256 |
+
+### Hash inline data
+
+Pass hex-encoded bytes (with `0x` prefix) or plain text (UTF-8 encoded):
+
+```
+dot hash blake2b256 0xdeadbeef
+dot hash sha256 hello
+```
+
+### Hash a file
+
+Read raw file contents and hash them:
+
+```
+dot hash keccak256 --file ./data.bin
+```
+
+### Hash from stdin
+
+Pipe data into the hash command:
+
+```
+echo -n "hello" | dot hash sha256 --stdin
+```
+
+### JSON output
+
+```
+dot hash blake2b256 0xdeadbeef --output json
+```
+
+Run `dot hash` with no arguments to see all available algorithms and examples.
 
 ## Global Options
 

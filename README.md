@@ -1,6 +1,6 @@
 # polkadot-cli
 
-A command-line tool for interacting with Polkadot-ecosystem chains. Manage chains and accounts, query storage, look up constants, inspect metadata, and submit extrinsics — all from your terminal.
+A command-line tool for interacting with Polkadot-ecosystem chains. Manage chains and accounts, query storage, look up constants, inspect metadata, submit extrinsics, and compute hashes — all from your terminal.
 
 Ships with Polkadot as the default chain. Add any Substrate-based chain by pointing to its RPC endpoint.
 
@@ -138,6 +138,29 @@ For manual override, use `--ext` with a JSON object:
 ```bash
 dot tx System.remark 0xdeadbeef --from alice --ext '{"MyExtension":{"value":"..."}}'
 ```
+
+### Compute hashes
+
+Compute cryptographic hashes commonly used in Substrate. Supports BLAKE2b-256, BLAKE2b-128, Keccak-256, and SHA-256.
+
+```bash
+# Hash hex-encoded data
+dot hash blake2b256 0xdeadbeef
+
+# Hash plain text (UTF-8 encoded)
+dot hash sha256 hello
+
+# Hash file contents
+dot hash keccak256 --file ./data.bin
+
+# Read from stdin
+echo -n "hello" | dot hash sha256 --stdin
+
+# JSON output
+dot hash blake2b256 0xdeadbeef --output json
+```
+
+Run `dot hash` with no arguments to see all available algorithms.
 
 ### Global options
 
