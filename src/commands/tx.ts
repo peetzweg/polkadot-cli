@@ -405,6 +405,107 @@ function parseStructArgs(
   return result;
 }
 
+/**
+ * Recursively normalize a JSON value to match polkadot-api's metadata types.
+ *
+ * polkadot-api unwraps single-element fixed arrays (e.g. `[Junction; 1]` becomes
+ * just `Junction`). XCM types like `Junctions::X1` are defined as `X1([Junction; 1])`
+ * in the spec, so users naturally pass `{"type":"X1","value":[{...}]}`. This function
+ * detects that mismatch — enum variant inner is NOT array/sequence but the provided
+ * value IS a single-element array — and unwraps it.
+ */
+function normalizeValue(lookup: Lookup, entry: any, value: unknown): unknown {
+  let resolved = entry;
+  while (resolved.type === "lookupEntry") {
+    resolved = resolved.value;
+  }
+
+  switch (resolved.type) {
+    case "enum": {
+      if (
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        "type" in value
+      ) {
+        const enumValue = value as { type: string; value?: unknown };
+        const variant = (resolved.value as Record<string, any>)[enumValue.type];
+        if (variant) {
+          let innerEntry = variant;
+          while (innerEntry.type === "lookupEntry") {
+            innerEntry = innerEntry.value;
+          }
+
+          let normalizedInner = enumValue.value;
+
+          // Unwrap single-element array when inner type is not array/sequence
+          if (
+            innerEntry.type !== "array" &&
+            innerEntry.type !== "sequence" &&
+            innerEntry.type !== "void" &&
+            Array.isArray(normalizedInner) &&
+            normalizedInner.length === 1
+          ) {
+            normalizedInner = normalizedInner[0];
+          }
+
+          if (normalizedInner !== undefined && innerEntry.type !== "void") {
+            normalizedInner = normalizeValue(lookup, innerEntry, normalizedInner);
+          }
+
+          return { type: enumValue.type, value: normalizedInner };
+        }
+      }
+      return value;
+    }
+
+    case "struct": {
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+        const fields = resolved.value as Record<string, any>;
+        const result: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+          if (key in fields) {
+            result[key] = normalizeValue(lookup, fields[key], val);
+          } else {
+            result[key] = val;
+          }
+        }
+        return result;
+      }
+      return value;
+    }
+
+    case "array":
+    case "sequence": {
+      if (Array.isArray(value)) {
+        const innerEntry = resolved.value;
+        return value.map((item) => normalizeValue(lookup, innerEntry, item));
+      }
+      return value;
+    }
+
+    case "tuple": {
+      if (Array.isArray(value)) {
+        const entries = resolved.value as any[];
+        return value.map((item, i) =>
+          i < entries.length ? normalizeValue(lookup, entries[i], item) : item,
+        );
+      }
+      return value;
+    }
+
+    case "option": {
+      if (value !== null && value !== undefined) {
+        return normalizeValue(lookup, resolved.value, value);
+      }
+      return value;
+    }
+
+    default:
+      return value;
+  }
+}
+
 function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
   switch (entry.type) {
     case "primitive":
@@ -428,7 +529,7 @@ function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
       // Try JSON parse for complex enums like MultiAddress
       if (arg.startsWith("{")) {
         try {
-          return JSON.parse(arg);
+          return normalizeValue(lookup, entry, JSON.parse(arg));
         } catch {
           // fall through
         }
@@ -470,7 +571,7 @@ function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
       // Try JSON array
       if (arg.startsWith("[")) {
         try {
-          return JSON.parse(arg);
+          return normalizeValue(lookup, entry, JSON.parse(arg));
         } catch {
           // fall through
         }
@@ -484,7 +585,7 @@ function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
       // Must be JSON
       if (arg.startsWith("{")) {
         try {
-          return JSON.parse(arg);
+          return normalizeValue(lookup, entry, JSON.parse(arg));
         } catch {
           // fall through
         }
@@ -494,7 +595,7 @@ function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
     case "tuple":
       if (arg.startsWith("[")) {
         try {
-          return JSON.parse(arg);
+          return normalizeValue(lookup, entry, JSON.parse(arg));
         } catch {
           // fall through
         }
