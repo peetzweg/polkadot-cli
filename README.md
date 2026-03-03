@@ -115,6 +115,21 @@ dot tx 0x0503008eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48 
 dot tx Utility.batchAll '[{"type":"Balances","value":{"type":"transfer_keep_alive","value":{"dest":"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty","value":1000000000000}}},{"type":"Balances","value":{"type":"transfer_keep_alive","value":{"dest":"5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y","value":2000000000000}}}]' --from alice
 ```
 
+#### Encode call data
+
+Encode a call to hex without signing or submitting. Useful for preparing calls to pass to `Sudo.sudo`, multisig proposals, or governance. Works offline from cached metadata and does not require `--from`.
+
+```bash
+# Encode a remark call
+dot tx System.remark 0xdeadbeef --encode
+
+# Encode a transfer (use the hex output in a batch or sudo call)
+dot tx Balances.transfer_keep_alive 5FHneW46... 1000000000000 --encode
+
+# Use encoded output with Sudo.sudo
+dot tx Sudo.sudo $(dot tx System.remark 0xcafe --encode) --from alice
+```
+
 Both dry-run and submission display the encoded call hex and a decoded human-readable form:
 
 ```

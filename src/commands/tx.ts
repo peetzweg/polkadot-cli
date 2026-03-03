@@ -3,7 +3,7 @@ import { Binary } from "polkadot-api";
 import { getViewBuilder } from "@polkadot-api/view-builder";
 import type { Decoded } from "@polkadot-api/view-builder";
 import { loadConfig, resolveChain } from "../config/store.ts";
-import { createChainClient } from "../core/client.ts";
+import { createChainClient, type ClientHandle } from "../core/client.ts";
 import {
   getOrFetchMetadata,
   getSignedExtensions,
@@ -25,6 +25,7 @@ export function registerTxCommand(cli: CAC) {
     .command("tx [target] [...args]", "Submit an extrinsic (e.g. Balances.transferKeepAlive <dest> <amount>)")
     .option("--from <name>", "Account to sign with (required)")
     .option("--dry-run", "Estimate fees without submitting")
+    .option("--encode", "Encode call to hex without signing or submitting")
     .option("--ext <json>", "Custom signed extension values as JSON, e.g. '{\"ExtName\":{\"value\":...}}'")
 
     .action(
@@ -36,13 +37,14 @@ export function registerTxCommand(cli: CAC) {
           rpc?: string;
           from?: string;
           dryRun?: boolean;
+          encode?: boolean;
           output?: string;
           ext?: string;
         },
       ) => {
-        if (!target || !opts.from) {
+        if (!target) {
           console.log(
-            "Usage: dot tx <Pallet.Call|0xCallHex> [...args] --from <account> [--dry-run]",
+            "Usage: dot tx <Pallet.Call|0xCallHex> [...args] --from <account> [--dry-run] [--encode]",
           );
           console.log("");
           console.log("Examples:");
@@ -55,10 +57,29 @@ export function registerTxCommand(cli: CAC) {
           console.log(
             "  $ dot tx 0x0001076465616462656566 --from alice",
           );
+          console.log(
+            "  $ dot tx Assets.force_create 4 owner true 10 --encode --chain people",
+          );
           return;
         }
 
+        if (!opts.from && !opts.encode) {
+          throw new Error(
+            "--from is required (or use --encode to output hex without signing)",
+          );
+        }
+
+        if (opts.encode && opts.dryRun) {
+          throw new Error("--encode and --dry-run are mutually exclusive");
+        }
+
         const isRawCall = /^0x[0-9a-fA-F]+$/.test(target);
+
+        if (opts.encode && isRawCall) {
+          throw new Error(
+            "--encode cannot be used with raw call hex (already encoded)",
+          );
+        }
 
         const config = await loadConfig();
         const { name: chainName, chain: chainConfig } = resolveChain(
@@ -66,29 +87,55 @@ export function registerTxCommand(cli: CAC) {
           opts.chain,
         );
 
-        const signer = await resolveAccountSigner(opts.from);
+        const signer = opts.encode
+          ? undefined
+          : await resolveAccountSigner(opts.from!);
 
-        const clientHandle = await createChainClient(
-          chainName,
-          chainConfig,
-          opts.rpc,
-        );
+        let clientHandle: ClientHandle | undefined;
+
+        if (!opts.encode) {
+          clientHandle = await createChainClient(
+            chainName,
+            chainConfig,
+            opts.rpc,
+          );
+        }
 
         try {
-          const meta = await getOrFetchMetadata(chainName, clientHandle);
+          let meta: MetadataBundle;
+          if (clientHandle) {
+            meta = await getOrFetchMetadata(chainName, clientHandle);
+          } else {
+            try {
+              meta = await getOrFetchMetadata(chainName);
+            } catch {
+              clientHandle = await createChainClient(
+                chainName,
+                chainConfig,
+                opts.rpc,
+              );
+              meta = await getOrFetchMetadata(chainName, clientHandle);
+            }
+          }
 
           // Build custom signed extensions for non-standard chains
-          const userExtOverrides = parseExtOption(opts.ext);
-          const customSignedExtensions = buildCustomSignedExtensions(
-            meta,
-            userExtOverrides,
-          );
-          const txOptions =
-            Object.keys(customSignedExtensions).length > 0
-              ? { customSignedExtensions }
-              : undefined;
+          let unsafeApi: any;
+          let txOptions:
+            | { customSignedExtensions: Record<string, any> }
+            | undefined;
 
-          const unsafeApi = clientHandle.client.getUnsafeApi();
+          if (!opts.encode) {
+            const userExtOverrides = parseExtOption(opts.ext);
+            const customSignedExtensions = buildCustomSignedExtensions(
+              meta,
+              userExtOverrides,
+            );
+            txOptions =
+              Object.keys(customSignedExtensions).length > 0
+                ? { customSignedExtensions }
+                : undefined;
+            unsafeApi = clientHandle!.client.getUnsafeApi();
+          }
 
           let tx: any;
           let callHex: string;
@@ -136,6 +183,21 @@ export function registerTxCommand(cli: CAC) {
               args,
             );
 
+            if (opts.encode) {
+              const { codec, location } = meta.builder.buildCall(
+                palletInfo.name,
+                callInfo.name,
+              );
+              const encodedArgs = codec.enc(callData);
+              const fullCall = new Uint8Array([
+                location[0],
+                location[1],
+                ...encodedArgs,
+              ]);
+              console.log(Binary.fromBytes(fullCall).asHex());
+              return;
+            }
+
             tx = (unsafeApi as any).tx[palletInfo.name][callInfo.name](
               callData,
             );
@@ -148,14 +210,14 @@ export function registerTxCommand(cli: CAC) {
           const decodedStr = decodeCall(meta, callHex);
 
           if (opts.dryRun) {
-            const signerAddress = toSs58(signer.publicKey);
+            const signerAddress = toSs58(signer!.publicKey);
             console.log(`  ${BOLD}From:${RESET}   ${opts.from} (${signerAddress})`);
             console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
             console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
 
             try {
               const fees = await tx.getEstimatedFees(
-                signer.publicKey,
+                signer!.publicKey,
                 txOptions,
               );
               console.log(`  ${BOLD}Estimated fees:${RESET} ${fees}`);
@@ -214,7 +276,7 @@ export function registerTxCommand(cli: CAC) {
           }
           console.log();
         } finally {
-          clientHandle.destroy();
+          clientHandle?.destroy();
         }
       },
     );
@@ -348,13 +410,13 @@ function parseCallArgs(
   }
 
   if (variant.type === "struct") {
-    return parseStructArgs(meta.lookup, variant.value, args, `${palletName}.${callName}`);
+    return parseStructArgs(meta, variant.value, args, `${palletName}.${callName}`);
   }
 
   if (variant.type === "lookupEntry") {
     const inner = variant.value;
     if (inner.type === "struct") {
-      return parseStructArgs(meta.lookup, inner.value, args, `${palletName}.${callName}`);
+      return parseStructArgs(meta, inner.value, args, `${palletName}.${callName}`);
     }
     if (inner.type === "void") return undefined;
     // Single arg
@@ -363,7 +425,7 @@ function parseCallArgs(
         `${palletName}.${callName} takes 1 argument (${describeType(meta.lookup, inner.id)}), but ${args.length} provided.`,
       );
     }
-    return parseTypedArg(meta.lookup, inner, args[0]);
+    return parseTypedArg(meta, inner, args[0]);
   }
 
   if (variant.type === "tuple") {
@@ -373,7 +435,7 @@ function parseCallArgs(
         `${palletName}.${callName} takes ${entries.length} arguments, but ${args.length} provided.`,
       );
     }
-    return entries.map((entry: any, i: number) => parseTypedArg(meta.lookup, entry, args[i]));
+    return entries.map((entry: any, i: number) => parseTypedArg(meta, entry, args[i]));
   }
 
   // Fallback: parse all args generically
@@ -381,7 +443,7 @@ function parseCallArgs(
 }
 
 function parseStructArgs(
-  lookup: Lookup,
+  meta: MetadataBundle,
   fields: Record<string, any>,
   args: string[],
   callLabel: string,
@@ -389,7 +451,7 @@ function parseStructArgs(
   const fieldNames = Object.keys(fields);
   if (args.length !== fieldNames.length) {
     const expected = fieldNames
-      .map((name) => `${name}: ${describeType(lookup, fields[name].id)}`)
+      .map((name) => `${name}: ${describeType(meta.lookup, fields[name].id)}`)
       .join(", ");
     throw new Error(
       `${callLabel} takes ${fieldNames.length} argument(s): ${expected}\n` +
@@ -400,7 +462,7 @@ function parseStructArgs(
   for (let i = 0; i < fieldNames.length; i++) {
     const name = fieldNames[i];
     const entry = fields[name];
-    result[name] = parseTypedArg(lookup, entry, args[i]);
+    result[name] = parseTypedArg(meta, entry, args[i]);
   }
   return result;
 }
@@ -506,7 +568,7 @@ function normalizeValue(lookup: Lookup, entry: any, value: unknown): unknown {
   }
 }
 
-function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
+function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): unknown {
   switch (entry.type) {
     case "primitive":
       return parsePrimitive(entry.value, arg);
@@ -522,14 +584,24 @@ function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
       if (arg === "null" || arg === "undefined" || arg === "none") {
         return undefined;
       }
-      return parseTypedArg(lookup, entry.value, arg);
+      return parseTypedArg(meta, entry.value, arg);
     }
 
     case "enum": {
+      // Hex-encoded RuntimeCall (e.g. from --encode output used with Sudo.sudo)
+      if (
+        /^0x[0-9a-fA-F]+$/.test(arg) &&
+        meta.lookup.call != null &&
+        entry.id === meta.lookup.call
+      ) {
+        const callCodec = meta.builder.buildDefinition(meta.lookup.call);
+        return callCodec.dec(Binary.fromHex(arg as `0x${string}`).asBytes());
+      }
+
       // Try JSON parse for complex enums like MultiAddress
       if (arg.startsWith("{")) {
         try {
-          return normalizeValue(lookup, entry, JSON.parse(arg));
+          return normalizeValue(meta.lookup, entry, JSON.parse(arg));
         } catch {
           // fall through
         }
@@ -571,7 +643,7 @@ function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
       // Try JSON array
       if (arg.startsWith("[")) {
         try {
-          return normalizeValue(lookup, entry, JSON.parse(arg));
+          return normalizeValue(meta.lookup, entry, JSON.parse(arg));
         } catch {
           // fall through
         }
@@ -585,7 +657,7 @@ function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
       // Must be JSON
       if (arg.startsWith("{")) {
         try {
-          return normalizeValue(lookup, entry, JSON.parse(arg));
+          return normalizeValue(meta.lookup, entry, JSON.parse(arg));
         } catch {
           // fall through
         }
@@ -595,7 +667,7 @@ function parseTypedArg(lookup: Lookup, entry: any, arg: string): unknown {
     case "tuple":
       if (arg.startsWith("[")) {
         try {
-          return normalizeValue(lookup, entry, JSON.parse(arg));
+          return normalizeValue(meta.lookup, entry, JSON.parse(arg));
         } catch {
           // fall through
         }
@@ -767,3 +839,5 @@ function watchTransaction(
     });
   });
 }
+
+export { parseCallArgs, parseTypedArg, parseStructArgs, normalizeValue, parsePrimitive };

@@ -192,6 +192,23 @@ dot tx Utility.batchAll '[
 ]' --from alice
 ```
 
+### Encode call data
+
+Encode a call to hex without signing or submitting. This is useful for preparing calls to pass to `Sudo.sudo`, multisig proposals, governance preimages, or any workflow that needs raw call bytes. Works offline from cached metadata and does not require `--from`.
+
+```
+# Encode a remark
+dot tx System.remark 0xdeadbeef --encode
+
+# Encode a transfer
+dot tx Balances.transfer_keep_alive 5FHneW46... 1000000000000 --encode
+
+# Compose: encode a call, then wrap it with Sudo.sudo
+dot tx Sudo.sudo $(dot tx System.remark 0xcafe --encode) --from alice
+```
+
+`--encode` and `--dry-run` are mutually exclusive. `--encode` cannot be used with raw call hex (it is already encoded).
+
 ### Transaction output
 
 Both dry-run and submission display the encoded call hex and a decoded human-readable form:
