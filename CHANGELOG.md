@@ -1,5 +1,12 @@
 # polkadot-cli
 
+## 0.6.2
+
+### Patch Changes
+
+- a95d1eb: Exit with non-zero code when a transaction has a dispatch error (e.g. `Balances.InsufficientBalance`). Module errors are now formatted as `PalletName.ErrorVariant` instead of raw JSON. The full transaction output (events, explorer links) is still printed before the error.
+- 254e693: Show finalized block number as a checkmark in the transaction progress spinner instead of a separate Block line in the summary output
+
 ## 0.6.1
 
 ### Patch Changes
