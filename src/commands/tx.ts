@@ -189,7 +189,6 @@ export function registerTxCommand(cli: CAC) {
           console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
           console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
           console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
-          console.log(`  ${BOLD}Block:${RESET}  #${result.block.number} (${result.block.hash})`);
 
           if (result.ok) {
             console.log(`  ${BOLD}Status:${RESET} ${GREEN}ok${RESET}`);
@@ -804,7 +803,7 @@ function watchTransaction(observable: import("rxjs").Observable<TxEvent>): Promi
             }
             break;
           case "finalized":
-            spinner.stop();
+            spinner.succeed(`Finalized in block #${event.block.number}`);
             resolve(event);
             break;
         }

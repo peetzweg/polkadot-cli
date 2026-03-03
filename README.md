@@ -144,7 +144,6 @@ Both dry-run and submission display the encoded call hex and a decoded human-rea
   Call:   0x0001076465616462656566
   Decode: System.remark(remark: 0xdeadbeef)
   Tx:     0xabc123...
-  Block:  #12345678 (0xdef...)
   Status: ok
 ```
 
