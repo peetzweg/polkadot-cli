@@ -280,13 +280,14 @@ describe("normalizeValue", () => {
     expect(result).toEqual({ type: "Thing", value: 42 });
   });
 
-  test("option with null passes through", () => {
+  test("option with null/undefined normalizes to undefined", () => {
     const mockEntry = {
       type: "option",
       value: { type: "primitive", value: "u32" },
     };
-    expect(normalizeValue(meta.lookup, mockEntry, null)).toBe(null);
-    expect(normalizeValue(meta.lookup, mockEntry, undefined)).toBe(undefined);
+    // polkadot-api uses undefined for Option::None; JSON null must also map to undefined
+    expect(normalizeValue(meta.lookup, mockEntry, null)).toBeUndefined();
+    expect(normalizeValue(meta.lookup, mockEntry, undefined)).toBeUndefined();
   });
 
   test("leaves void enum variant value alone", () => {
@@ -315,6 +316,101 @@ describe("normalizeValue", () => {
     const input = { type: "X1", value: [7] };
     const result = normalizeValue(meta.lookup, mockEntry, input) as any;
     expect(result).toEqual({ type: "X1", value: 7 });
+  });
+
+  test("converts hex string to Binary for [u8; N] byte arrays", () => {
+    const mockEntry = {
+      type: "array",
+      value: { type: "primitive", value: "u8" },
+      len: 32,
+    };
+    const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+    const result = normalizeValue(meta.lookup, mockEntry, hex);
+    expect(result).toBeInstanceOf(Binary);
+    expect((result as Binary).asHex()).toBe(hex);
+  });
+
+  test("converts text string to Binary for Vec<u8> byte sequences", () => {
+    const mockEntry = {
+      type: "sequence",
+      value: { type: "primitive", value: "u8" },
+    };
+    const result = normalizeValue(meta.lookup, mockEntry, "hello");
+    expect(result).toBeInstanceOf(Binary);
+    expect((result as Binary).asText()).toBe("hello");
+  });
+
+  test("converts hex string to Binary for [u8; N] through lookupEntry indirection", () => {
+    const mockEntry = {
+      type: "array",
+      value: { type: "lookupEntry", value: { type: "primitive", value: "u8" } },
+      len: 4,
+    };
+    const result = normalizeValue(meta.lookup, mockEntry, "0xdeadbeef");
+    expect(result).toBeInstanceOf(Binary);
+    expect((result as Binary).asHex()).toBe("0xdeadbeef");
+  });
+
+  test("converts nested byte arrays inside structs", () => {
+    const mockEntry = {
+      type: "struct",
+      value: {
+        id: { type: "array", value: { type: "primitive", value: "u8" }, len: 32 },
+      },
+    };
+    const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+    const result = normalizeValue(meta.lookup, mockEntry, { id: hex }) as any;
+    expect(result.id).toBeInstanceOf(Binary);
+    expect((result.id as Binary).asHex()).toBe(hex);
+  });
+
+  test("converts nested byte arrays inside enum variants", () => {
+    const mockEntry = {
+      type: "enum",
+      value: {
+        AccountId32: {
+          type: "struct",
+          value: {
+            id: { type: "array", value: { type: "primitive", value: "u8" }, len: 32 },
+          },
+        },
+      },
+    };
+    const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+    const input = { type: "AccountId32", value: { id: hex } };
+    const result = normalizeValue(meta.lookup, mockEntry, input) as any;
+    expect(result.value.id).toBeInstanceOf(Binary);
+    expect((result.value.id as Binary).asHex()).toBe(hex);
+  });
+
+  test("converts string to bigint for u128 primitives in JSON", () => {
+    const mockEntry = { type: "primitive", value: "u128" };
+    const result = normalizeValue(meta.lookup, mockEntry, "100000000000000000");
+    expect(result).toBe(100000000000000000n);
+  });
+
+  test("converts string to number for u32 primitives in JSON", () => {
+    const mockEntry = { type: "primitive", value: "u32" };
+    const result = normalizeValue(meta.lookup, mockEntry, "42");
+    expect(result).toBe(42);
+  });
+
+  test("converts string to bigint for compact types in JSON", () => {
+    const mockEntry = { type: "compact", isBig: true };
+    const result = normalizeValue(meta.lookup, mockEntry, "100000000000000000");
+    expect(result).toBe(100000000000000000n);
+  });
+
+  test("converts string to number for small compact types in JSON", () => {
+    const mockEntry = { type: "compact", isBig: false };
+    const result = normalizeValue(meta.lookup, mockEntry, "42");
+    expect(result).toBe(42);
+  });
+
+  test("leaves non-string values alone for primitives", () => {
+    const mockEntry = { type: "primitive", value: "u128" };
+    expect(normalizeValue(meta.lookup, mockEntry, 42n)).toBe(42n);
+    expect(normalizeValue(meta.lookup, mockEntry, 42)).toBe(42);
   });
 });
 
@@ -407,5 +503,69 @@ describe("dot tx CLI integration", () => {
     const { stderr, exitCode } = await runCli(["tx", "System.remark", "--encode"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("takes 1 argument");
+  });
+
+  test("--encode XcmPallet.teleport_assets with nested AccountId32 hex bytes (V5)", async () => {
+    const dest =
+      '{"type":"V5","value":{"parents":0,"interior":{"type":"X1","value":[{"type":"Parachain","value":1000}]}}}';
+    const beneficiary =
+      '{"type":"V5","value":{"parents":0,"interior":{"type":"X1","value":[{"type":"AccountId32","value":{"network":null,"id":"0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"}}]}}}';
+    const assets =
+      '{"type":"V5","value":[{"id":{"parents":0,"interior":{"type":"Here"}},"fun":{"type":"Fungible","value":1000000000000}}]}';
+    const { stdout, exitCode, stderr } = await runCli([
+      "tx",
+      "XcmPallet.teleport_assets",
+      dest,
+      beneficiary,
+      assets,
+      "0",
+      "--encode",
+    ]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/^0x[0-9a-f]+$/);
+  });
+
+  test("--encode XcmPallet.teleport_assets with quoted large Fungible value", async () => {
+    const dest =
+      '{"type":"V5","value":{"parents":0,"interior":{"type":"X1","value":[{"type":"Parachain","value":1000}]}}}';
+    const beneficiary =
+      '{"type":"V5","value":{"parents":0,"interior":{"type":"X1","value":[{"type":"AccountId32","value":{"network":null,"id":"0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"}}]}}}';
+    // String value for Fungible exceeding MAX_SAFE_INTEGER — tests primitive coercion
+    const assets =
+      '{"type":"V5","value":[{"id":{"parents":0,"interior":{"type":"Here"}},"fun":{"type":"Fungible","value":"100000000000000000"}}]}';
+    const { stdout, exitCode, stderr } = await runCli([
+      "tx",
+      "XcmPallet.teleport_assets",
+      dest,
+      beneficiary,
+      assets,
+      "0",
+      "--encode",
+    ]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/^0x[0-9a-f]+$/);
+  });
+
+  test("--encode XcmPallet.teleport_assets with V3 format", async () => {
+    const dest =
+      '{"type":"V3","value":{"parents":0,"interior":{"type":"X1","value":[{"type":"Parachain","value":1000}]}}}';
+    const beneficiary =
+      '{"type":"V3","value":{"parents":0,"interior":{"type":"X1","value":[{"type":"AccountId32","value":{"network":null,"id":"0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"}}]}}}';
+    const assets =
+      '{"type":"V3","value":[{"id":{"type":"Concrete","value":{"parents":0,"interior":{"type":"Here"}}},"fun":{"type":"Fungible","value":1000000000000}}]}';
+    const { stdout, exitCode, stderr } = await runCli([
+      "tx",
+      "XcmPallet.teleport_assets",
+      dest,
+      beneficiary,
+      assets,
+      "0",
+      "--encode",
+    ]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/^0x[0-9a-f]+$/);
   });
 });

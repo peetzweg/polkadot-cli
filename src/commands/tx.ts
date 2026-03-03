@@ -167,6 +167,7 @@ export function registerTxCommand(cli: CAC) {
 
           if (opts.dryRun) {
             const signerAddress = toSs58(signer!.publicKey);
+            console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
             console.log(`  ${BOLD}From:${RESET}   ${opts.from} (${signerAddress})`);
             console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
             console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
@@ -184,6 +185,7 @@ export function registerTxCommand(cli: CAC) {
           const result = await watchTransaction(tx.signSubmitAndWatch(signer, txOptions));
 
           console.log();
+          console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
           console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
           console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
           console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
@@ -475,6 +477,20 @@ function normalizeValue(lookup: Lookup, entry: any, value: unknown): unknown {
 
     case "array":
     case "sequence": {
+      // Convert hex/text strings to Binary for byte arrays (Vec<u8>, [u8; N])
+      let innerResolved = resolved.value;
+      while (innerResolved.type === "lookupEntry") {
+        innerResolved = innerResolved.value;
+      }
+      if (
+        innerResolved.type === "primitive" &&
+        innerResolved.value === "u8" &&
+        typeof value === "string"
+      ) {
+        if (/^0x[0-9a-fA-F]*$/.test(value)) return Binary.fromHex(value as `0x${string}`);
+        return Binary.fromText(value);
+      }
+
       if (Array.isArray(value)) {
         const innerEntry = resolved.value;
         return value.map((item) => normalizeValue(lookup, innerEntry, item));
@@ -495,6 +511,41 @@ function normalizeValue(lookup: Lookup, entry: any, value: unknown): unknown {
     case "option": {
       if (value !== null && value !== undefined) {
         return normalizeValue(lookup, resolved.value, value);
+      }
+      // polkadot-api uses undefined (not null) for Option::None
+      return undefined;
+    }
+
+    case "primitive": {
+      // Convert string values from JSON to proper primitive types
+      if (typeof value === "string") {
+        const prim = resolved.value as string;
+        switch (prim) {
+          case "bool":
+            return value === "true";
+          case "u64":
+          case "u128":
+          case "u256":
+          case "i64":
+          case "i128":
+          case "i256":
+            return BigInt(value);
+          case "u8":
+          case "u16":
+          case "u32":
+          case "i8":
+          case "i16":
+          case "i32":
+            return parseInt(value, 10);
+        }
+      }
+      return value;
+    }
+
+    case "compact": {
+      // Convert string values from JSON to proper compact types
+      if (typeof value === "string") {
+        return resolved.isBig ? BigInt(value) : parseInt(value, 10);
       }
       return value;
     }
