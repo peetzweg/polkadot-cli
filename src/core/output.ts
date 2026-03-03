@@ -3,6 +3,7 @@ const isTTY = process.stdout.isTTY ?? false;
 const RESET = isTTY ? "\x1b[0m" : "";
 const CYAN = isTTY ? "\x1b[36m" : "";
 const GREEN = isTTY ? "\x1b[32m" : "";
+const RED = isTTY ? "\x1b[31m" : "";
 const YELLOW = isTTY ? "\x1b[33m" : "";
 const MAGENTA = isTTY ? "\x1b[35m" : "";
 const DIM = isTTY ? "\x1b[2m" : "";
@@ -98,4 +99,4 @@ class Spinner {
   }
 }
 
-export { BOLD, CHECK_MARK, CYAN, DIM, GREEN, isTTY, MAGENTA, RESET, Spinner, YELLOW };
+export { BOLD, CHECK_MARK, CYAN, DIM, GREEN, isTTY, MAGENTA, RED, RESET, Spinner, YELLOW };

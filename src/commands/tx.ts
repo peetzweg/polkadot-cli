@@ -15,7 +15,8 @@ import {
   getPalletNames,
   getSignedExtensions,
 } from "../core/metadata.ts";
-import { BOLD, CYAN, DIM, GREEN, RESET, Spinner, YELLOW } from "../core/output.ts";
+import { BOLD, CYAN, DIM, GREEN, RED, RESET, Spinner, YELLOW } from "../core/output.ts";
+import { CliError } from "../utils/errors.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseTarget } from "../utils/parse-target.ts";
 import { parseValue } from "../utils/parse-value.ts";
@@ -190,13 +191,13 @@ export function registerTxCommand(cli: CAC) {
           console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
           console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
 
+          let dispatchErrorMsg: string | undefined;
           if (result.ok) {
             console.log(`  ${BOLD}Status:${RESET} ${GREEN}ok${RESET}`);
           } else {
-            console.log(`  ${BOLD}Status:${RESET} ${YELLOW}dispatch error${RESET}`);
-            console.log(
-              `  ${BOLD}Error:${RESET}  ${result.dispatchError.type}${result.dispatchError.value ? `: ${JSON.stringify(result.dispatchError.value)}` : ""}`,
-            );
+            dispatchErrorMsg = formatDispatchError(result.dispatchError);
+            console.log(`  ${BOLD}Status:${RESET} ${RED}dispatch error${RESET}`);
+            console.log(`  ${BOLD}Error:${RESET}  ${dispatchErrorMsg}`);
           }
 
           if (result.events && result.events.length > 0) {
@@ -223,11 +224,33 @@ export function registerTxCommand(cli: CAC) {
             console.log(`    ${DIM}PAPI${RESET}        ${papiLink(rpcUrl, blockHash)}`);
           }
           console.log();
+
+          if (!result.ok) {
+            throw new CliError(`Transaction dispatch error: ${dispatchErrorMsg}`);
+          }
         } finally {
           clientHandle?.destroy();
         }
       },
     );
+}
+
+function formatDispatchError(err: { type: string; value?: unknown }): string {
+  if (err.type === "Module" && err.value && typeof err.value === "object") {
+    const mod = err.value as { type?: string; value?: unknown };
+    if (mod.type) {
+      const inner = mod.value as { type?: string } | undefined;
+      if (inner && typeof inner === "object" && inner.type) {
+        return `${mod.type}.${inner.type}`;
+      }
+      return mod.type;
+    }
+  }
+  if (err.value !== undefined && err.value !== null) {
+    const val = typeof err.value === "string" ? err.value : JSON.stringify(err.value);
+    return `${err.type}: ${val}`;
+  }
+  return err.type;
 }
 
 function decodeCall(meta: MetadataBundle, callHex: string): string {
@@ -816,4 +839,11 @@ function watchTransaction(observable: import("rxjs").Observable<TxEvent>): Promi
   });
 }
 
-export { parseCallArgs, parseTypedArg, parseStructArgs, normalizeValue, parsePrimitive };
+export {
+  formatDispatchError,
+  parseCallArgs,
+  parseTypedArg,
+  parseStructArgs,
+  normalizeValue,
+  parsePrimitive,
+};

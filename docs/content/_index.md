@@ -220,6 +220,19 @@ Both dry-run and submission display the encoded call hex and a decoded human-rea
   Status: ok
 ```
 
+### Exit codes
+
+The CLI exits with code **1** when a finalized transaction has a dispatch error (e.g. insufficient balance, bad origin). The full transaction output (events, explorer links) is still printed before the error so you can debug the failure. Module errors are formatted as `PalletName.ErrorVariant` (e.g. `Balances.InsufficientBalance`).
+
+```
+dot tx Balances.transferKeepAlive 5FHneW46... 999999999999999999 --from alice
+# ... events and explorer links ...
+# Error: Transaction dispatch error: Balances.InsufficientBalance
+echo $?  # 1
+```
+
+This makes it easy to detect on-chain failures in scripts and CI pipelines.
+
 ### Custom signed extensions
 
 Chains with non-standard signed extensions (e.g. `people-preview`) are auto-handled:

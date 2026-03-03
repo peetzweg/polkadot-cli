@@ -2,7 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { Binary } from "polkadot-api";
 import { getTestMetadata } from "./__fixtures__/load-metadata.ts";
 import { runCli } from "./__fixtures__/run-cli.ts";
-import { normalizeValue, parseCallArgs, parsePrimitive, parseTypedArg } from "./tx.ts";
+import {
+  formatDispatchError,
+  normalizeValue,
+  parseCallArgs,
+  parsePrimitive,
+  parseTypedArg,
+} from "./tx.ts";
 
 const meta = getTestMetadata();
 
@@ -411,6 +417,44 @@ describe("normalizeValue", () => {
     const mockEntry = { type: "primitive", value: "u128" };
     expect(normalizeValue(meta.lookup, mockEntry, 42n)).toBe(42n);
     expect(normalizeValue(meta.lookup, mockEntry, 42)).toBe(42);
+  });
+});
+
+describe("formatDispatchError", () => {
+  test("Module error formats as PalletName.ErrorVariant", () => {
+    const err = {
+      type: "Module",
+      value: { type: "Balances", value: { type: "InsufficientBalance" } },
+    };
+    expect(formatDispatchError(err)).toBe("Balances.InsufficientBalance");
+  });
+
+  test("Module error with pallet only (no inner variant)", () => {
+    const err = {
+      type: "Module",
+      value: { type: "Balances" },
+    };
+    expect(formatDispatchError(err)).toBe("Balances");
+  });
+
+  test("non-Module error with no value", () => {
+    const err = { type: "BadOrigin" };
+    expect(formatDispatchError(err)).toBe("BadOrigin");
+  });
+
+  test("non-Module error with string value", () => {
+    const err = { type: "Token", value: "FundsUnavailable" };
+    expect(formatDispatchError(err)).toBe("Token: FundsUnavailable");
+  });
+
+  test("non-Module error with object value", () => {
+    const err = { type: "Token", value: { reason: "frozen" } };
+    expect(formatDispatchError(err)).toBe('Token: {"reason":"frozen"}');
+  });
+
+  test("Module error with non-object value falls back to type: value", () => {
+    const err = { type: "Module", value: "unexpected" };
+    expect(formatDispatchError(err)).toBe("Module: unexpected");
   });
 });
 
