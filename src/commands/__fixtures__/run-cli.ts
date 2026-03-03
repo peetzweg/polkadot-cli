@@ -1,14 +1,8 @@
-import {
-  mkdtempSync,
-  writeFileSync,
-  mkdirSync,
-  copyFileSync,
-  rmSync,
-} from "node:fs";
-import { join, dirname } from "node:path";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import type { StoredAccount } from "../../config/accounts-types.ts";
-import type { Config, ChainConfig } from "../../config/types.ts";
+import type { Config } from "../../config/types.ts";
 
 const FIXTURE_METADATA = join(import.meta.dir, "polkadot-metadata.bin");
 const CLI_PATH = join(import.meta.dir, "../../cli.ts");
@@ -23,10 +17,7 @@ export interface RunCliOptions {
   stdin?: string | Uint8Array;
 }
 
-function deepMergeConfig(
-  base: Config,
-  override: Partial<Config>,
-): Config {
+function deepMergeConfig(base: Config, override: Partial<Config>): Config {
   const merged: Config = {
     defaultChain: override.defaultChain ?? base.defaultChain,
     chains: { ...base.chains },
@@ -53,9 +44,7 @@ export async function runCli(
     defaultChain: "polkadot",
     chains: { polkadot: { rpc: "wss://rpc.polkadot.io" } },
   };
-  const finalConfig = options?.config
-    ? deepMergeConfig(baseConfig, options.config)
-    : baseConfig;
+  const finalConfig = options?.config ? deepMergeConfig(baseConfig, options.config) : baseConfig;
 
   // Create chain dirs for any additional chains with metadata
   for (const chainName of Object.keys(finalConfig.chains)) {
@@ -65,16 +54,10 @@ export async function runCli(
     }
   }
 
-  writeFileSync(
-    join(dotDir, "config.json"),
-    JSON.stringify(finalConfig),
-  );
+  writeFileSync(join(dotDir, "config.json"), JSON.stringify(finalConfig));
 
   if (options?.accounts) {
-    writeFileSync(
-      join(dotDir, "accounts.json"),
-      JSON.stringify({ accounts: options.accounts }),
-    );
+    writeFileSync(join(dotDir, "accounts.json"), JSON.stringify({ accounts: options.accounts }));
   }
 
   if (options?.files) {
@@ -100,13 +83,14 @@ export async function runCli(
     };
 
     if (options?.stdin != null) {
-      spawnOpts.stdin = new Blob([options.stdin]);
+      const input = options.stdin;
+      spawnOpts.stdin = new Blob([typeof input === "string" ? input : new Uint8Array(input)]);
     }
 
     const proc = Bun.spawn(["bun", CLI_PATH, ...resolvedArgs], spawnOpts);
     const [stdout, stderr] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
+      new Response(proc.stdout as ReadableStream).text(),
+      new Response(proc.stderr as ReadableStream).text(),
     ]);
     const exitCode = await proc.exited;
     return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };

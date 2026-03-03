@@ -1,32 +1,38 @@
-import type { CAC } from "cac";
-import { Binary } from "polkadot-api";
-import { getViewBuilder } from "@polkadot-api/view-builder";
 import type { Decoded } from "@polkadot-api/view-builder";
+import { getViewBuilder } from "@polkadot-api/view-builder";
+import type { CAC } from "cac";
+import type { TxEvent, TxFinalized } from "polkadot-api";
+import { Binary } from "polkadot-api";
 import { loadConfig, resolveChain } from "../config/store.ts";
-import { createChainClient, type ClientHandle } from "../core/client.ts";
-import {
-  getOrFetchMetadata,
-  getSignedExtensions,
-  findPallet,
-  getPalletNames,
-  describeType,
-} from "../core/metadata.ts";
-import type { MetadataBundle, Lookup } from "../core/metadata.ts";
 import { resolveAccountSigner, toSs58 } from "../core/accounts.ts";
+import { type ClientHandle, createChainClient } from "../core/client.ts";
+import { papiLink, pjsAppsLink } from "../core/explorers.ts";
+import type { Lookup, MetadataBundle } from "../core/metadata.ts";
+import {
+  describeType,
+  findPallet,
+  getOrFetchMetadata,
+  getPalletNames,
+  getSignedExtensions,
+} from "../core/metadata.ts";
+import { BOLD, CYAN, DIM, GREEN, RESET, Spinner, YELLOW } from "../core/output.ts";
+import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseTarget } from "../utils/parse-target.ts";
 import { parseValue } from "../utils/parse-value.ts";
-import { suggestMessage } from "../utils/fuzzy-match.ts";
-import { BOLD, CYAN, DIM, GREEN, RESET, Spinner, YELLOW } from "../core/output.ts";
-import { pjsAppsLink, papiLink } from "../core/explorers.ts";
-import type { TxEvent, TxFinalized } from "polkadot-api";
 
 export function registerTxCommand(cli: CAC) {
   cli
-    .command("tx [target] [...args]", "Submit an extrinsic (e.g. Balances.transferKeepAlive <dest> <amount>)")
+    .command(
+      "tx [target] [...args]",
+      "Submit an extrinsic (e.g. Balances.transferKeepAlive <dest> <amount>)",
+    )
     .option("--from <name>", "Account to sign with (required)")
     .option("--dry-run", "Estimate fees without submitting")
     .option("--encode", "Encode call to hex without signing or submitting")
-    .option("--ext <json>", "Custom signed extension values as JSON, e.g. '{\"ExtName\":{\"value\":...}}'")
+    .option(
+      "--ext <json>",
+      'Custom signed extension values as JSON, e.g. \'{"ExtName":{"value":...}}\'',
+    )
 
     .action(
       async (
@@ -48,25 +54,15 @@ export function registerTxCommand(cli: CAC) {
           );
           console.log("");
           console.log("Examples:");
-          console.log(
-            "  $ dot tx Balances.transferKeepAlive 5FHn... 1000000000000 --from alice",
-          );
-          console.log(
-            "  $ dot tx System.remark 0xdeadbeef --from alice --dry-run",
-          );
-          console.log(
-            "  $ dot tx 0x0001076465616462656566 --from alice",
-          );
-          console.log(
-            "  $ dot tx Assets.force_create 4 owner true 10 --encode --chain people",
-          );
+          console.log("  $ dot tx Balances.transferKeepAlive 5FHn... 1000000000000 --from alice");
+          console.log("  $ dot tx System.remark 0xdeadbeef --from alice --dry-run");
+          console.log("  $ dot tx 0x0001076465616462656566 --from alice");
+          console.log("  $ dot tx Assets.force_create 4 owner true 10 --encode --chain people");
           return;
         }
 
         if (!opts.from && !opts.encode) {
-          throw new Error(
-            "--from is required (or use --encode to output hex without signing)",
-          );
+          throw new Error("--from is required (or use --encode to output hex without signing)");
         }
 
         if (opts.encode && opts.dryRun) {
@@ -76,29 +72,18 @@ export function registerTxCommand(cli: CAC) {
         const isRawCall = /^0x[0-9a-fA-F]+$/.test(target);
 
         if (opts.encode && isRawCall) {
-          throw new Error(
-            "--encode cannot be used with raw call hex (already encoded)",
-          );
+          throw new Error("--encode cannot be used with raw call hex (already encoded)");
         }
 
         const config = await loadConfig();
-        const { name: chainName, chain: chainConfig } = resolveChain(
-          config,
-          opts.chain,
-        );
+        const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
 
-        const signer = opts.encode
-          ? undefined
-          : await resolveAccountSigner(opts.from!);
+        const signer = opts.encode ? undefined : await resolveAccountSigner(opts.from!);
 
         let clientHandle: ClientHandle | undefined;
 
         if (!opts.encode) {
-          clientHandle = await createChainClient(
-            chainName,
-            chainConfig,
-            opts.rpc,
-          );
+          clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
         }
 
         try {
@@ -109,32 +94,23 @@ export function registerTxCommand(cli: CAC) {
             try {
               meta = await getOrFetchMetadata(chainName);
             } catch {
-              clientHandle = await createChainClient(
-                chainName,
-                chainConfig,
-                opts.rpc,
-              );
+              clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
               meta = await getOrFetchMetadata(chainName, clientHandle);
             }
           }
 
           // Build custom signed extensions for non-standard chains
           let unsafeApi: any;
-          let txOptions:
-            | { customSignedExtensions: Record<string, any> }
-            | undefined;
+          let txOptions: { customSignedExtensions: Record<string, any> } | undefined;
 
           if (!opts.encode) {
             const userExtOverrides = parseExtOption(opts.ext);
-            const customSignedExtensions = buildCustomSignedExtensions(
-              meta,
-              userExtOverrides,
-            );
+            const customSignedExtensions = buildCustomSignedExtensions(meta, userExtOverrides);
             txOptions =
               Object.keys(customSignedExtensions).length > 0
                 ? { customSignedExtensions }
                 : undefined;
-            unsafeApi = clientHandle!.client.getUnsafeApi();
+            unsafeApi = clientHandle?.client.getUnsafeApi();
           }
 
           let tx: any;
@@ -166,41 +142,21 @@ export function registerTxCommand(cli: CAC) {
             );
             if (!callInfo) {
               const callNames = palletInfo.calls.map((c) => c.name);
-              throw new Error(
-                suggestMessage(
-                  `call in ${palletInfo.name}`,
-                  callName,
-                  callNames,
-                ),
-              );
+              throw new Error(suggestMessage(`call in ${palletInfo.name}`, callName, callNames));
             }
 
             // Parse args against metadata
-            const callData = parseCallArgs(
-              meta,
-              palletInfo.name,
-              callInfo.name,
-              args,
-            );
+            const callData = parseCallArgs(meta, palletInfo.name, callInfo.name, args);
 
             if (opts.encode) {
-              const { codec, location } = meta.builder.buildCall(
-                palletInfo.name,
-                callInfo.name,
-              );
+              const { codec, location } = meta.builder.buildCall(palletInfo.name, callInfo.name);
               const encodedArgs = codec.enc(callData);
-              const fullCall = new Uint8Array([
-                location[0],
-                location[1],
-                ...encodedArgs,
-              ]);
+              const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
               console.log(Binary.fromBytes(fullCall).asHex());
               return;
             }
 
-            tx = (unsafeApi as any).tx[palletInfo.name][callInfo.name](
-              callData,
-            );
+            tx = (unsafeApi as any).tx[palletInfo.name][callInfo.name](callData);
 
             const encodedCall = await tx.getEncodedData();
             callHex = encodedCall.asHex();
@@ -216,38 +172,29 @@ export function registerTxCommand(cli: CAC) {
             console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
 
             try {
-              const fees = await tx.getEstimatedFees(
-                signer!.publicKey,
-                txOptions,
-              );
+              const fees = await tx.getEstimatedFees(signer?.publicKey, txOptions);
               console.log(`  ${BOLD}Estimated fees:${RESET} ${fees}`);
             } catch (err: any) {
-              console.log(
-                `  ${BOLD}Estimated fees:${RESET} ${YELLOW}unable to estimate${RESET}`,
-              );
+              console.log(`  ${BOLD}Estimated fees:${RESET} ${YELLOW}unable to estimate${RESET}`);
               console.log(`  ${DIM}${err.message ?? err}${RESET}`);
             }
             return;
           }
 
-          const result = await watchTransaction(
-            tx.signSubmitAndWatch(signer, txOptions),
-          );
+          const result = await watchTransaction(tx.signSubmitAndWatch(signer, txOptions));
 
           console.log();
           console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
           console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
           console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
-          console.log(
-            `  ${BOLD}Block:${RESET}  #${result.block.number} (${result.block.hash})`,
-          );
+          console.log(`  ${BOLD}Block:${RESET}  #${result.block.number} (${result.block.hash})`);
 
           if (result.ok) {
             console.log(`  ${BOLD}Status:${RESET} ${GREEN}ok${RESET}`);
           } else {
             console.log(`  ${BOLD}Status:${RESET} ${YELLOW}dispatch error${RESET}`);
             console.log(
-              `  ${BOLD}Error:${RESET}  ${result.dispatchError.type}${result.dispatchError.value ? ": " + JSON.stringify(result.dispatchError.value) : ""}`,
+              `  ${BOLD}Error:${RESET}  ${result.dispatchError.type}${result.dispatchError.value ? `: ${JSON.stringify(result.dispatchError.value)}` : ""}`,
             );
           }
 
@@ -342,9 +289,7 @@ function formatDecoded(d: Decoded): string {
     case "Struct": {
       const entries = Object.entries(d.value as Record<string, Decoded>);
       if (entries.length === 0) return " {}";
-      const fields = entries
-        .map(([k, v]) => `${k}: ${formatDecoded(v)}`)
-        .join(", ");
+      const fields = entries.map(([k, v]) => `${k}: ${formatDecoded(v)}`).join(", ");
       return ` { ${fields} }`;
     }
     case "Tuple": {
@@ -378,9 +323,7 @@ function formatEventValue(v: unknown): string {
   if (typeof v === "number") return v.toString();
   if (typeof v === "boolean") return v.toString();
   if (v === null || v === undefined) return "null";
-  return JSON.stringify(v, (_k, val) =>
-    typeof val === "bigint" ? val.toString() : val,
-  );
+  return JSON.stringify(v, (_k, val) => (typeof val === "bigint" ? val.toString() : val));
 }
 
 function parseCallArgs(
@@ -390,9 +333,7 @@ function parseCallArgs(
   args: string[],
 ): unknown {
   // Look up the calls enum to find the variant's inner type
-  const palletMeta = meta.unified.pallets.find(
-    (p) => p.name === palletName,
-  );
+  const palletMeta = meta.unified.pallets.find((p) => p.name === palletName);
   if (!palletMeta?.calls) return undefined;
 
   const callsEntry = meta.lookup(palletMeta.calls.type);
@@ -425,7 +366,7 @@ function parseCallArgs(
         `${palletName}.${callName} takes 1 argument (${describeType(meta.lookup, inner.id)}), but ${args.length} provided.`,
       );
     }
-    return parseTypedArg(meta, inner, args[0]);
+    return parseTypedArg(meta, inner, args[0]!);
   }
 
   if (variant.type === "tuple") {
@@ -435,7 +376,7 @@ function parseCallArgs(
         `${palletName}.${callName} takes ${entries.length} arguments, but ${args.length} provided.`,
       );
     }
-    return entries.map((entry: any, i: number) => parseTypedArg(meta, entry, args[i]));
+    return entries.map((entry: any, i: number) => parseTypedArg(meta, entry, args[i]!));
   }
 
   // Fallback: parse all args generically
@@ -460,9 +401,9 @@ function parseStructArgs(
   }
   const result: Record<string, unknown> = {};
   for (let i = 0; i < fieldNames.length; i++) {
-    const name = fieldNames[i];
+    const name = fieldNames[i]!;
     const entry = fields[name];
-    result[name] = parseTypedArg(meta, entry, args[i]);
+    result[name] = parseTypedArg(meta, entry, args[i]!);
   }
   return result;
 }
@@ -484,12 +425,7 @@ function normalizeValue(lookup: Lookup, entry: any, value: unknown): unknown {
 
   switch (resolved.type) {
     case "enum": {
-      if (
-        value !== null &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        "type" in value
-      ) {
+      if (value !== null && typeof value === "object" && !Array.isArray(value) && "type" in value) {
         const enumValue = value as { type: string; value?: unknown };
         const variant = (resolved.value as Record<string, any>)[enumValue.type];
         if (variant) {
@@ -611,18 +547,15 @@ function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): unknown {
       // inner type and the arg looks like an SS58 address, wrap automatically
       const variants = Object.keys(entry.value);
       if (variants.includes("Id")) {
-        const idVariant = entry.value["Id"];
-        const innerType =
-          idVariant.type === "lookupEntry" ? idVariant.value : idVariant;
+        const idVariant = entry.value.Id;
+        const innerType = idVariant.type === "lookupEntry" ? idVariant.value : idVariant;
         if (innerType.type === "AccountId32" && !arg.startsWith("{")) {
           return { type: "Id", value: arg };
         }
       }
 
       // Simple variant name (e.g., "Id" for MultiAddress)
-      const matched = variants.find(
-        (v) => v.toLowerCase() === arg.toLowerCase(),
-      );
+      const matched = variants.find((v) => v.toLowerCase() === arg.toLowerCase());
       if (matched) {
         const variant = entry.value[matched];
         if (variant.type === "void") {
@@ -679,10 +612,7 @@ function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): unknown {
   }
 }
 
-function parsePrimitive(
-  prim: string,
-  arg: string,
-): string | number | bigint | boolean {
+function parsePrimitive(prim: string, arg: string): string | number | bigint | boolean {
   switch (prim) {
     case "bool":
       return arg === "true";
@@ -726,21 +656,19 @@ const PAPI_BUILTIN_EXTENSIONS = new Set([
   "PrevalidateAttests",
 ]);
 
-function parseExtOption(
-  ext: string | undefined,
-): Record<string, any> {
+function parseExtOption(ext: string | undefined): Record<string, any> {
   if (!ext) return {};
   try {
     const parsed = JSON.parse(ext);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      throw new Error("--ext must be a JSON object, e.g. '{\"ExtName\":{\"value\":...}}'");
+      throw new Error('--ext must be a JSON object, e.g. \'{"ExtName":{"value":...}}\'');
     }
     return parsed;
   } catch (err: any) {
     if (err.message?.startsWith("--ext")) throw err;
     throw new Error(
       `Failed to parse --ext JSON: ${err.message}\n` +
-        "Expected format: '{\"ExtName\":{\"value\":...}}'",
+        'Expected format: \'{"ExtName":{"value":...}}\'',
     );
   }
 }
@@ -800,9 +728,7 @@ function autoDefaultForType(entry: any): any {
 
 // --- Progressive transaction tracking ---
 
-function watchTransaction(
-  observable: import("rxjs").Observable<TxEvent>,
-): Promise<TxFinalized> {
+function watchTransaction(observable: import("rxjs").Observable<TxEvent>): Promise<TxFinalized> {
   const spinner = new Spinner();
   return new Promise<TxFinalized>((resolve, reject) => {
     spinner.start("Signing...");

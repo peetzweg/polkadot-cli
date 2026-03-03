@@ -1,12 +1,11 @@
-import { describe, test, expect } from "bun:test";
-import { runCli, TEST_MNEMONIC } from "./__fixtures__/run-cli.ts";
+import { describe, expect, test } from "bun:test";
 import type { StoredAccount } from "../config/accounts-types.ts";
+import { runCli, TEST_MNEMONIC } from "./__fixtures__/run-cli.ts";
 
 const STORED_ACCOUNT: StoredAccount = {
   name: "my-account",
   secret: TEST_MNEMONIC,
-  publicKey:
-    "0x44a996beb1eef7bdcab976ab6d2ca26104834164ecf28fb375600576fcc6eb0f",
+  publicKey: "0x44a996beb1eef7bdcab976ab6d2ca26104834164ecf28fb375600576fcc6eb0f",
   derivationPath: "",
 };
 
@@ -27,11 +26,7 @@ describe("dot account", () => {
   });
 
   test("create my-test succeeds", async () => {
-    const { stdout, exitCode } = await runCli([
-      "account",
-      "create",
-      "my-test",
-    ]);
+    const { stdout, exitCode } = await runCli(["account", "create", "my-test"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Account Created");
     expect(stdout).toContain("Mnemonic:");
@@ -45,20 +40,15 @@ describe("dot account", () => {
   });
 
   test("create alice (dev name) errors", async () => {
-    const { stderr, exitCode } = await runCli([
-      "account",
-      "create",
-      "alice",
-    ]);
+    const { stderr, exitCode } = await runCli(["account", "create", "alice"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("built-in dev account");
   });
 
   test("create existing (duplicate) errors", async () => {
-    const { stderr, exitCode } = await runCli(
-      ["account", "create", "my-account"],
-      { accounts: [STORED_ACCOUNT] },
-    );
+    const { stderr, exitCode } = await runCli(["account", "create", "my-account"], {
+      accounts: [STORED_ACCOUNT],
+    });
     expect(exitCode).toBe(1);
     expect(stderr).toContain("already exists");
   });
@@ -95,11 +85,7 @@ describe("dot account", () => {
   });
 
   test("import name (no --secret) errors", async () => {
-    const { stderr, exitCode } = await runCli([
-      "account",
-      "import",
-      "my-key",
-    ]);
+    const { stderr, exitCode } = await runCli(["account", "import", "my-key"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("--secret is required");
   });
@@ -141,10 +127,9 @@ describe("dot account", () => {
   });
 
   test("remove name succeeds", async () => {
-    const { stdout, exitCode } = await runCli(
-      ["account", "remove", "my-account"],
-      { accounts: [STORED_ACCOUNT] },
-    );
+    const { stdout, exitCode } = await runCli(["account", "remove", "my-account"], {
+      accounts: [STORED_ACCOUNT],
+    });
     expect(exitCode).toBe(0);
     expect(stdout).toContain("removed");
   });
@@ -156,21 +141,13 @@ describe("dot account", () => {
   });
 
   test("remove alice (dev account) errors", async () => {
-    const { stderr, exitCode } = await runCli([
-      "account",
-      "remove",
-      "alice",
-    ]);
+    const { stderr, exitCode } = await runCli(["account", "remove", "alice"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Cannot remove built-in");
   });
 
   test("remove ghost (not found) errors", async () => {
-    const { stderr, exitCode } = await runCli([
-      "account",
-      "remove",
-      "ghost",
-    ]);
+    const { stderr, exitCode } = await runCli(["account", "remove", "ghost"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("not found");
   });

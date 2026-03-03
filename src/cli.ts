@@ -1,14 +1,14 @@
 #!/usr/bin/env bun
 import cac from "cac";
+import { version } from "../package.json";
+import { registerAccountCommands } from "./commands/account.ts";
 import { registerChainCommands } from "./commands/chain.ts";
+import { registerConstCommand } from "./commands/const.ts";
+import { registerHashCommand } from "./commands/hash.ts";
 import { registerInspectCommand } from "./commands/inspect.ts";
 import { registerQueryCommand } from "./commands/query.ts";
-import { registerConstCommand } from "./commands/const.ts";
-import { registerAccountCommands } from "./commands/account.ts";
 import { registerTxCommand } from "./commands/tx.ts";
-import { registerHashCommand } from "./commands/hash.ts";
 import { CliError } from "./utils/errors.ts";
-import { version } from "../package.json";
 
 const cli = cac("dot");
 

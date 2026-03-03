@@ -1,21 +1,20 @@
 import type { CAC } from "cac";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
-import {
-  getOrFetchMetadata,
-  findPallet,
-  getPalletNames,
-} from "../core/metadata.ts";
-import { printResult, DIM, RESET, YELLOW } from "../core/output.ts";
-import { parseTarget } from "../utils/parse-target.ts";
+import { findPallet, getOrFetchMetadata, getPalletNames } from "../core/metadata.ts";
+import { DIM, printResult, RESET } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
+import { parseTarget } from "../utils/parse-target.ts";
 import { parseValue } from "../utils/parse-value.ts";
 
 const DEFAULT_LIMIT = 100;
 
 export function registerQueryCommand(cli: CAC) {
   cli
-    .command("query [target] [...keys]", "Query on-chain storage (e.g. System.Number, System.Account <addr>)")
+    .command(
+      "query [target] [...keys]",
+      "Query on-chain storage (e.g. System.Number, System.Account <addr>)",
+    )
     .option("--limit <n>", "Max entries to return for map queries (0 = unlimited)", {
       default: DEFAULT_LIMIT,
     })
@@ -31,25 +30,22 @@ export function registerQueryCommand(cli: CAC) {
           console.log("Examples:");
           console.log("  $ dot query System.Number                         # plain storage value");
           console.log("  $ dot query System.Account 5Grw...                # single map entry");
-          console.log("  $ dot query System.Account                        # all entries (limit 100)");
+          console.log(
+            "  $ dot query System.Account                        # all entries (limit 100)",
+          );
           console.log("  $ dot query System.Account --limit 10             # first 10 entries");
-          console.log("  $ dot query System.Account --limit 0              # all entries (no limit)");
+          console.log(
+            "  $ dot query System.Account --limit 0              # all entries (no limit)",
+          );
           console.log("  $ dot query Assets.Metadata 42 --chain asset-hub");
           return;
         }
 
         const config = await loadConfig();
-        const { name: chainName, chain: chainConfig } = resolveChain(
-          config,
-          opts.chain,
-        );
+        const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
         const { pallet, item } = parseTarget(target);
 
-        const clientHandle = await createChainClient(
-          chainName,
-          chainConfig,
-          opts.rpc,
-        );
+        const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
 
         try {
           const meta = await getOrFetchMetadata(chainName, clientHandle);
@@ -65,26 +61,19 @@ export function registerQueryCommand(cli: CAC) {
           if (!storageItem) {
             const storageNames = palletInfo.storage.map((s) => s.name);
             throw new Error(
-              suggestMessage(
-                `storage item in ${palletInfo.name}`,
-                item,
-                storageNames,
-              ),
+              suggestMessage(`storage item in ${palletInfo.name}`, item, storageNames),
             );
           }
 
           const unsafeApi = clientHandle.client.getUnsafeApi();
-          const storageApi = (unsafeApi as any).query[palletInfo.name][
-            storageItem.name
-          ];
+          const storageApi = (unsafeApi as any).query[palletInfo.name][storageItem.name];
 
           const parsedKeys = keys.map(parseValue);
           const format = opts.output ?? "pretty";
 
           if (storageItem.type === "map" && parsedKeys.length === 0) {
             // Fetch all entries
-            const entries: Array<{ keyArgs: any; value: any }> =
-              await storageApi.getEntries();
+            const entries: Array<{ keyArgs: any; value: any }> = await storageApi.getEntries();
 
             const limit = Number(opts.limit);
             const truncated = limit > 0 && entries.length > limit;

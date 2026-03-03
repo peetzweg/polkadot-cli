@@ -1,25 +1,17 @@
 import type { CAC } from "cac";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
+import type { MetadataBundle } from "../core/metadata.ts";
 import {
-  getOrFetchMetadata,
-  listPallets,
-  findPallet,
-  getPalletNames,
   describeType,
+  findPallet,
+  getOrFetchMetadata,
+  getPalletNames,
+  listPallets,
 } from "../core/metadata.ts";
-import {
-  printHeading,
-  printItem,
-  printDocs,
-  BOLD,
-  CYAN,
-  DIM,
-  RESET,
-  YELLOW,
-} from "../core/output.ts";
-import { parseTarget } from "../utils/parse-target.ts";
+import { BOLD, CYAN, DIM, printDocs, printHeading, printItem, RESET } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
+import { parseTarget } from "../utils/parse-target.ts";
 
 export function registerInspectCommand(cli: CAC) {
   cli
@@ -31,7 +23,7 @@ export function registerInspectCommand(cli: CAC) {
       const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
 
       // Try loading cached metadata first; if unavailable, connect and fetch
-      let meta;
+      let meta: MetadataBundle;
       try {
         meta = await getOrFetchMetadata(chainName);
       } catch {
@@ -114,9 +106,7 @@ export function registerInspectCommand(cli: CAC) {
           `  ${BOLD}Value:${RESET} ${describeType(meta.lookup, storageItem.valueTypeId)}`,
         );
         if (storageItem.keyTypeId != null) {
-          console.log(
-            `  ${BOLD}Key:${RESET} ${describeType(meta.lookup, storageItem.keyTypeId)}`,
-          );
+          console.log(`  ${BOLD}Key:${RESET} ${describeType(meta.lookup, storageItem.keyTypeId)}`);
         }
         if (storageItem.docs.length) {
           console.log();
@@ -132,9 +122,7 @@ export function registerInspectCommand(cli: CAC) {
       );
       if (constantItem) {
         printHeading(`${pallet.name}.${constantItem.name} (Constant)`);
-        console.log(
-          `  ${BOLD}Type:${RESET} ${describeType(meta.lookup, constantItem.typeId)}`,
-        );
+        console.log(`  ${BOLD}Type:${RESET} ${describeType(meta.lookup, constantItem.typeId)}`);
         if (constantItem.docs.length) {
           console.log();
           printDocs(constantItem.docs);
@@ -148,8 +136,6 @@ export function registerInspectCommand(cli: CAC) {
         ...pallet.storage.map((s) => s.name),
         ...pallet.constants.map((c) => c.name),
       ];
-      throw new Error(
-        suggestMessage(`item in ${pallet.name}`, itemName, allItems),
-      );
+      throw new Error(suggestMessage(`item in ${pallet.name}`, itemName, allItems));
     });
 }

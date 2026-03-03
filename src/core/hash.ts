@@ -1,6 +1,6 @@
 import { blake2b } from "@noble/hashes/blake2.js";
-import { keccak_256 } from "@noble/hashes/sha3.js";
 import { sha256 } from "@noble/hashes/sha2.js";
+import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 
 interface Algorithm {
@@ -52,7 +52,7 @@ export function parseInputData(input: string): Uint8Array {
 }
 
 export function toHex(bytes: Uint8Array): string {
-  return "0x" + bytesToHex(bytes);
+  return `0x${bytesToHex(bytes)}`;
 }
 
 export function isValidAlgorithm(name: string): boolean {

@@ -1,31 +1,24 @@
 import { sr25519CreateDerive } from "@polkadot-labs/hdkd";
 import {
   DEV_PHRASE,
-  mnemonicToEntropy,
   entropyToMiniSecret,
   generateMnemonic,
-  validateMnemonic,
+  mnemonicToEntropy,
   ss58Address,
+  validateMnemonic,
 } from "@polkadot-labs/hdkd-helpers";
-import { getPolkadotSigner } from "polkadot-api/signer";
 import type { PolkadotSigner } from "polkadot-api/signer";
-import { loadAccounts, findAccount } from "../config/accounts-store.ts";
+import { getPolkadotSigner } from "polkadot-api/signer";
+import { findAccount, loadAccounts } from "../config/accounts-store.ts";
 
-export const DEV_NAMES = [
-  "alice",
-  "bob",
-  "charlie",
-  "dave",
-  "eve",
-  "ferdie",
-] as const;
+export const DEV_NAMES = ["alice", "bob", "charlie", "dave", "eve", "ferdie"] as const;
 
 export function isDevAccount(name: string): boolean {
   return DEV_NAMES.includes(name.toLowerCase() as any);
 }
 
 function devDerivationPath(name: string): string {
-  return "//" + name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+  return `//${name.charAt(0).toUpperCase()}${name.slice(1).toLowerCase()}`;
 }
 
 function deriveFromMnemonic(
@@ -112,9 +105,7 @@ export function toSs58(publicKey: Uint8Array | string, prefix = 42): string {
   return ss58Address(publicKey, prefix);
 }
 
-export async function resolveAccountSigner(
-  name: string,
-): Promise<PolkadotSigner> {
+export async function resolveAccountSigner(name: string): Promise<PolkadotSigner> {
   // Check dev accounts first
   if (isDevAccount(name)) {
     const keypair = getDevKeypair(name);
@@ -125,13 +116,8 @@ export async function resolveAccountSigner(
   const accountsFile = await loadAccounts();
   const account = findAccount(accountsFile, name);
   if (!account) {
-    const available = [
-      ...DEV_NAMES,
-      ...accountsFile.accounts.map((a) => a.name),
-    ];
-    throw new Error(
-      `Unknown account "${name}". Available accounts: ${available.join(", ")}`,
-    );
+    const available = [...DEV_NAMES, ...accountsFile.accounts.map((a) => a.name)];
+    throw new Error(`Unknown account "${name}". Available accounts: ${available.join(", ")}`);
   }
 
   const isHexSeed = /^0x[0-9a-fA-F]{64}$/.test(account.secret);

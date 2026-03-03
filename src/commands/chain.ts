@@ -1,13 +1,8 @@
 import type { CAC } from "cac";
-import {
-  loadConfig,
-  saveConfig,
-  removeChainData,
-} from "../config/store.ts";
-import { resolveChain } from "../config/store.ts";
+import { loadConfig, removeChainData, resolveChain, saveConfig } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
 import { fetchMetadataFromChain } from "../core/metadata.ts";
-import { printHeading, BOLD, CYAN, RESET, DIM } from "../core/output.ts";
+import { BOLD, CYAN, DIM, printHeading, RESET } from "../core/output.ts";
 
 const CHAIN_HELP = `
 ${BOLD}Usage:${RESET}
@@ -61,10 +56,7 @@ export function registerChainCommands(cli: CAC) {
     );
 }
 
-async function chainAdd(
-  name: string | undefined,
-  opts: { rpc?: string; lightClient?: boolean },
-) {
+async function chainAdd(name: string | undefined, opts: { rpc?: string; lightClient?: boolean }) {
   if (!name) {
     console.error("Chain name is required.\n");
     console.error("Usage: dot chain add <name> --rpc <url>");
@@ -144,10 +136,7 @@ async function chainList() {
   console.log();
 }
 
-async function chainUpdate(
-  name: string | undefined,
-  opts: { rpc?: string },
-) {
+async function chainUpdate(name: string | undefined, opts: { rpc?: string }) {
   const config = await loadConfig();
   const { name: chainName, chain: chainConfig } = resolveChain(config, name);
 

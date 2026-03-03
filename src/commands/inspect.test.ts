@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { runCli } from "./__fixtures__/run-cli.ts";
 
 describe("dot inspect", () => {
@@ -43,20 +43,14 @@ describe("dot inspect", () => {
   });
 
   test("inspect System.SS58Prefix shows constant detail", async () => {
-    const { stdout, exitCode } = await runCli([
-      "inspect",
-      "System.SS58Prefix",
-    ]);
+    const { stdout, exitCode } = await runCli(["inspect", "System.SS58Prefix"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("(Constant)");
     expect(stdout).toContain("Type:");
   });
 
   test("inspect Balances.ExistentialDeposit shows constant detail", async () => {
-    const { stdout, exitCode } = await runCli([
-      "inspect",
-      "Balances.ExistentialDeposit",
-    ]);
+    const { stdout, exitCode } = await runCli(["inspect", "Balances.ExistentialDeposit"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("(Constant)");
   });

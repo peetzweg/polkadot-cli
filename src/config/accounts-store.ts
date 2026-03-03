@@ -1,7 +1,7 @@
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { mkdir, readFile, writeFile, access } from "node:fs/promises";
-import { getConfigDir } from "./store.ts";
 import type { AccountsFile, StoredAccount } from "./accounts-types.ts";
+import { getConfigDir } from "./store.ts";
 
 const ACCOUNTS_PATH = join(getConfigDir(), "accounts.json");
 
@@ -29,14 +29,9 @@ export async function loadAccounts(): Promise<AccountsFile> {
 
 export async function saveAccounts(file: AccountsFile): Promise<void> {
   await ensureDir(getConfigDir());
-  await writeFile(ACCOUNTS_PATH, JSON.stringify(file, null, 2) + "\n");
+  await writeFile(ACCOUNTS_PATH, `${JSON.stringify(file, null, 2)}\n`);
 }
 
-export function findAccount(
-  file: AccountsFile,
-  name: string,
-): StoredAccount | undefined {
-  return file.accounts.find(
-    (a) => a.name.toLowerCase() === name.toLowerCase(),
-  );
+export function findAccount(file: AccountsFile, name: string): StoredAccount | undefined {
+  return file.accounts.find((a) => a.name.toLowerCase() === name.toLowerCase());
 }

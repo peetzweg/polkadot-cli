@@ -14,7 +14,11 @@
     "build": "bun build src/cli.ts --outfile dist/cli.mjs --target node --packages external && bun run build:shebang",
     "build:shebang": "bun -e \"const f='dist/cli.mjs'; const s=await Bun.file(f).text(); await Bun.write(f, s.replace('#!/usr/bin/env bun', '#!/usr/bin/env node').replace('// @bun\\n',''))\"",
     "prepublishOnly": "bun run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
     "test": "bun test",
+    "prepare": "husky",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "changeset publish"
@@ -42,7 +46,9 @@
     "polkadot-api": "^1.23.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.5",
     "@changesets/cli": "^2.29.4",
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "husky": "^9.1.7"
   }
 }

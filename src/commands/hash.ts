@@ -7,9 +7,9 @@ import {
   parseInputData,
   toHex,
 } from "../core/hash.ts";
-import { printResult, BOLD, CYAN, DIM, RESET } from "../core/output.ts";
-import { suggestMessage } from "../utils/fuzzy-match.ts";
+import { BOLD, CYAN, DIM, printResult, RESET } from "../core/output.ts";
 import { CliError } from "../utils/errors.ts";
+import { suggestMessage } from "../utils/fuzzy-match.ts";
 
 async function resolveInput(
   data: string | undefined,
@@ -53,7 +53,9 @@ function printAlgorithmHelp(): void {
   console.log(`${BOLD}Usage:${RESET} dot hash <algorithm> <data> [options]\n`);
   console.log(`${BOLD}Algorithms:${RESET}`);
   for (const [name, algo] of Object.entries(ALGORITHMS)) {
-    console.log(`  ${CYAN}${name}${RESET}  ${DIM}${algo.description} (${algo.outputLen} bytes)${RESET}`);
+    console.log(
+      `  ${CYAN}${name}${RESET}  ${DIM}${algo.description} (${algo.outputLen} bytes)${RESET}`,
+    );
   }
   console.log(`\n${BOLD}Options:${RESET}`);
   console.log(`  ${CYAN}--file <path>${RESET}   ${DIM}Hash file contents${RESET}`);
@@ -83,9 +85,7 @@ export function registerHashCommand(cli: CAC) {
         }
 
         if (!isValidAlgorithm(algorithm)) {
-          throw new CliError(
-            suggestMessage("algorithm", algorithm, getAlgorithmNames()),
-          );
+          throw new CliError(suggestMessage("algorithm", algorithm, getAlgorithmNames()));
         }
 
         const input = await resolveInput(data, opts);
@@ -94,7 +94,14 @@ export function registerHashCommand(cli: CAC) {
 
         const format = opts.output ?? "pretty";
         if (format === "json") {
-          printResult({ algorithm, input: data ?? (opts.file ? `file:${opts.file}` : "stdin"), hash: hexHash }, "json");
+          printResult(
+            {
+              algorithm,
+              input: data ?? (opts.file ? `file:${opts.file}` : "stdin"),
+              hash: hexHash,
+            },
+            "json",
+          );
         } else {
           console.log(hexHash);
         }

@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { runCli } from "./__fixtures__/run-cli.ts";
 
 describe("dot chain", () => {
@@ -72,11 +72,7 @@ describe("dot chain", () => {
   });
 
   test("default nonexistent errors", async () => {
-    const { stderr, exitCode } = await runCli([
-      "chain",
-      "default",
-      "nonexistent",
-    ]);
+    const { stderr, exitCode } = await runCli(["chain", "default", "nonexistent"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("not found");
     expect(stderr).toContain("Available");
@@ -95,21 +91,13 @@ describe("dot chain", () => {
   });
 
   test("remove polkadot errors", async () => {
-    const { stderr, exitCode } = await runCli([
-      "chain",
-      "remove",
-      "polkadot",
-    ]);
+    const { stderr, exitCode } = await runCli(["chain", "remove", "polkadot"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Cannot remove");
   });
 
   test("remove nonexistent errors", async () => {
-    const { stderr, exitCode } = await runCli([
-      "chain",
-      "remove",
-      "nonexistent",
-    ]);
+    const { stderr, exitCode } = await runCli(["chain", "remove", "nonexistent"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("not found");
   });

@@ -1,14 +1,8 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { Binary } from "polkadot-api";
 import { getTestMetadata } from "./__fixtures__/load-metadata.ts";
 import { runCli } from "./__fixtures__/run-cli.ts";
-import {
-  parsePrimitive,
-  parseCallArgs,
-  parseTypedArg,
-  parseStructArgs,
-  normalizeValue,
-} from "./tx.ts";
+import { normalizeValue, parseCallArgs, parsePrimitive, parseTypedArg } from "./tx.ts";
 
 const meta = getTestMetadata();
 
@@ -52,7 +46,10 @@ describe("parsePrimitive", () => {
 
 describe("parseCallArgs", () => {
   test("System.remark with hex bytes", () => {
-    const result = parseCallArgs(meta, "System", "remark", ["0xdeadbeef"]) as Record<string, unknown>;
+    const result = parseCallArgs(meta, "System", "remark", ["0xdeadbeef"]) as Record<
+      string,
+      unknown
+    >;
     // System.remark is a struct variant with field "remark"
     expect(result.remark).toBeInstanceOf(Binary);
     expect((result.remark as Binary).asHex()).toBe("0xdeadbeef");
@@ -75,21 +72,21 @@ describe("parseCallArgs", () => {
   });
 
   test("wrong arg count throws", () => {
-    expect(() =>
-      parseCallArgs(meta, "System", "remark", ["0xaa", "extra"]),
-    ).toThrow(/takes 1 argument/);
+    expect(() => parseCallArgs(meta, "System", "remark", ["0xaa", "extra"])).toThrow(
+      /takes 1 argument/,
+    );
   });
 
   test("too few args throws with expected types", () => {
     expect(() =>
-      parseCallArgs(meta, "Balances", "transfer_keep_alive", ["5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"]),
+      parseCallArgs(meta, "Balances", "transfer_keep_alive", [
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      ]),
     ).toThrow(/takes 2 argument/);
   });
 
   test("zero args for non-void call throws", () => {
-    expect(() =>
-      parseCallArgs(meta, "System", "remark", []),
-    ).toThrow(/takes 1 argument/);
+    expect(() => parseCallArgs(meta, "System", "remark", [])).toThrow(/takes 1 argument/);
   });
 });
 
@@ -99,11 +96,7 @@ describe("parseTypedArg", () => {
     const { codec, location } = meta.builder.buildCall("System", "remark");
     const callData = { remark: Binary.fromHex("0xaa") };
     const encodedArgs = codec.enc(callData);
-    const fullCall = new Uint8Array([
-      location[0],
-      location[1],
-      ...encodedArgs,
-    ]);
+    const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
     const callHex = Binary.fromBytes(fullCall).asHex();
 
     const callTypeId = meta.lookup.call;
@@ -122,7 +115,7 @@ describe("parseTypedArg", () => {
     // Find the dest field type from Balances.transfer_keep_alive
     const palletMeta = meta.unified.pallets.find((p) => p.name === "Balances")!;
     const callsEntry = meta.lookup(palletMeta.calls!.type);
-    const variant = (callsEntry.value as Record<string, any>)["transfer_keep_alive"];
+    const variant = ((callsEntry as any).value as Record<string, any>).transfer_keep_alive;
     // The variant may be a lookupEntry wrapping a struct
     let inner = variant;
     while (inner.type === "lookupEntry") inner = inner.value;
@@ -263,7 +256,10 @@ describe("normalizeValue", () => {
         },
       },
     };
-    const input = [{ type: "Variant", value: [1] }, { type: "Variant", value: [2] }];
+    const input = [
+      { type: "Variant", value: [1] },
+      { type: "Variant", value: [2] },
+    ];
     const result = normalizeValue(meta.lookup, mockEntry, input) as any[];
     expect(result[0]).toEqual({ type: "Variant", value: 1 });
     expect(result[1]).toEqual({ type: "Variant", value: 2 });
@@ -328,12 +324,7 @@ describe("normalizeValue", () => {
 
 describe("dot tx CLI integration", () => {
   test("System.remark --encode outputs hex", async () => {
-    const { stdout, exitCode } = await runCli([
-      "tx",
-      "System.remark",
-      "0xdeadbeef",
-      "--encode",
-    ]);
+    const { stdout, exitCode } = await runCli(["tx", "System.remark", "0xdeadbeef", "--encode"]);
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/^0x[0-9a-f]+$/);
   });
@@ -356,12 +347,7 @@ describe("dot tx CLI integration", () => {
   });
 
   test("--encode without --from succeeds", async () => {
-    const { exitCode } = await runCli([
-      "tx",
-      "System.remark",
-      "0xaa",
-      "--encode",
-    ]);
+    const { exitCode } = await runCli(["tx", "System.remark", "0xaa", "--encode"]);
     expect(exitCode).toBe(0);
   });
 
@@ -380,43 +366,25 @@ describe("dot tx CLI integration", () => {
   });
 
   test("--encode with raw hex 0x0001 rejects", async () => {
-    const { stderr, exitCode } = await runCli([
-      "tx",
-      "0x0001",
-      "--encode",
-    ]);
+    const { stderr, exitCode } = await runCli(["tx", "0x0001", "--encode"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("already encoded");
   });
 
   test("unknown pallet gives suggestion", async () => {
-    const { stderr, exitCode } = await runCli([
-      "tx",
-      "Systm.remark",
-      "0xaa",
-      "--encode",
-    ]);
+    const { stderr, exitCode } = await runCli(["tx", "Systm.remark", "0xaa", "--encode"]);
     expect(exitCode).toBe(1);
     expect(stderr).toMatch(/System/i);
   });
 
   test("unknown call gives suggestion", async () => {
-    const { stderr, exitCode } = await runCli([
-      "tx",
-      "System.remrk",
-      "0xaa",
-      "--encode",
-    ]);
+    const { stderr, exitCode } = await runCli(["tx", "System.remrk", "0xaa", "--encode"]);
     expect(exitCode).toBe(1);
     expect(stderr).toMatch(/remark/i);
   });
 
   test("missing --from without --encode errors", async () => {
-    const { stderr, exitCode } = await runCli([
-      "tx",
-      "System.remark",
-      "0xaa",
-    ]);
+    const { stderr, exitCode } = await runCli(["tx", "System.remark", "0xaa"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("--from");
   });
@@ -436,11 +404,7 @@ describe("dot tx CLI integration", () => {
   });
 
   test("--encode with wrong arg count errors", async () => {
-    const { stderr, exitCode } = await runCli([
-      "tx",
-      "System.remark",
-      "--encode",
-    ]);
+    const { stderr, exitCode } = await runCli(["tx", "System.remark", "--encode"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("takes 1 argument");
   });

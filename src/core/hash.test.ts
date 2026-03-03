@@ -1,12 +1,5 @@
-import { test, expect, describe } from "bun:test";
-import {
-  ALGORITHMS,
-  computeHash,
-  getAlgorithmNames,
-  isValidAlgorithm,
-  parseInputData,
-  toHex,
-} from "./hash.ts";
+import { describe, expect, test } from "bun:test";
+import { computeHash, getAlgorithmNames, isValidAlgorithm, parseInputData, toHex } from "./hash.ts";
 
 describe("toHex", () => {
   test("formats bytes as 0x-prefixed hex", () => {

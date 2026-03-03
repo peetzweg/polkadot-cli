@@ -10,7 +10,7 @@ const BOLD = isTTY ? "\x1b[1m" : "";
 
 function replacer(_key: string, value: unknown): unknown {
   if (typeof value === "bigint") return value.toString();
-  if (value instanceof Uint8Array) return "0x" + Buffer.from(value).toString("hex");
+  if (value instanceof Uint8Array) return `0x${Buffer.from(value).toString("hex")}`;
   return value;
 }
 
@@ -25,22 +25,14 @@ export function formatPretty(data: unknown): string {
 }
 
 function colorizeJson(json: string): string {
-  return json.replace(
-    /("(?:\\.|[^"\\])*")\s*:/g,
-    `${CYAN}$1${RESET}:`,
-  ).replace(
-    /:\s*("(?:\\.|[^"\\])*")/g,
-    (match, str) => match.replace(str, `${GREEN}${str}${RESET}`),
-  ).replace(
-    /:\s*(\d+(?:\.\d+)?)/g,
-    (match, num) => match.replace(num, `${YELLOW}${num}${RESET}`),
-  ).replace(
-    /:\s*(true|false)/g,
-    (match, bool) => match.replace(bool, `${MAGENTA}${bool}${RESET}`),
-  ).replace(
-    /:\s*(null)/g,
-    (match, n) => match.replace(n, `${DIM}${n}${RESET}`),
-  );
+  return json
+    .replace(/("(?:\\.|[^"\\])*")\s*:/g, `${CYAN}$1${RESET}:`)
+    .replace(/:\s*("(?:\\.|[^"\\])*")/g, (match, str) =>
+      match.replace(str, `${GREEN}${str}${RESET}`),
+    )
+    .replace(/:\s*(\d+(?:\.\d+)?)/g, (match, num) => match.replace(num, `${YELLOW}${num}${RESET}`))
+    .replace(/:\s*(true|false)/g, (match, bool) => match.replace(bool, `${MAGENTA}${bool}${RESET}`))
+    .replace(/:\s*(null)/g, (match, n) => match.replace(n, `${DIM}${n}${RESET}`));
 }
 
 export function printResult(data: unknown, format: string = "pretty"): void {

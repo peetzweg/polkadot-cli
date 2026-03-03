@@ -1,15 +1,15 @@
 import type { CAC } from "cac";
-import { loadAccounts, saveAccounts, findAccount } from "../config/accounts-store.ts";
+import { findAccount, loadAccounts, saveAccounts } from "../config/accounts-store.ts";
 import {
-  isDevAccount,
-  DEV_NAMES,
   createNewAccount,
+  DEV_NAMES,
+  getDevAddress,
   importAccount,
+  isDevAccount,
   publicKeyToHex,
   toSs58,
-  getDevAddress,
 } from "../core/accounts.ts";
-import { printHeading, printItem, BOLD, RESET, YELLOW } from "../core/output.ts";
+import { BOLD, printHeading, printItem, RESET, YELLOW } from "../core/output.ts";
 
 const ACCOUNT_HELP = `
 ${BOLD}Usage:${RESET}
@@ -33,11 +33,7 @@ export function registerAccountCommands(cli: CAC) {
     .command("account [action] [name]", "Manage local accounts (create, import, list, remove)")
     .option("--secret <value>", "Secret key (mnemonic or hex seed) for import")
     .action(
-      async (
-        action: string | undefined,
-        name: string | undefined,
-        opts: { secret?: string },
-      ) => {
+      async (action: string | undefined, name: string | undefined, opts: { secret?: string }) => {
         if (!action) {
           console.log(ACCOUNT_HELP);
           return;
@@ -101,10 +97,7 @@ async function accountCreate(name: string | undefined) {
   console.log();
 }
 
-async function accountImport(
-  name: string | undefined,
-  opts: { secret?: string },
-) {
+async function accountImport(name: string | undefined, opts: { secret?: string }) {
   if (!name) {
     console.error("Account name is required.\n");
     console.error('Usage: dot account import <name> --secret "mnemonic or hex seed"');
@@ -180,9 +173,7 @@ async function accountRemove(name: string | undefined) {
   }
 
   const accountsFile = await loadAccounts();
-  const idx = accountsFile.accounts.findIndex(
-    (a) => a.name.toLowerCase() === name.toLowerCase(),
-  );
+  const idx = accountsFile.accounts.findIndex((a) => a.name.toLowerCase() === name.toLowerCase());
   if (idx === -1) {
     throw new Error(`Account "${name}" not found.`);
   }

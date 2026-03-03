@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { runCli } from "./__fixtures__/run-cli.ts";
 
 describe("dot hash", () => {
@@ -13,41 +13,25 @@ describe("dot hash", () => {
   });
 
   test("blake2b256 0xdeadbeef produces 64-char hex", async () => {
-    const { stdout, exitCode } = await runCli([
-      "hash",
-      "blake2b256",
-      "0xdeadbeef",
-    ]);
+    const { stdout, exitCode } = await runCli(["hash", "blake2b256", "0xdeadbeef"]);
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
   test("blake2b128 0xdeadbeef produces 32-char hex", async () => {
-    const { stdout, exitCode } = await runCli([
-      "hash",
-      "blake2b128",
-      "0xdeadbeef",
-    ]);
+    const { stdout, exitCode } = await runCli(["hash", "blake2b128", "0xdeadbeef"]);
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/^0x[0-9a-f]{32}$/);
   });
 
   test("keccak256 0xdeadbeef produces 64-char hex", async () => {
-    const { stdout, exitCode } = await runCli([
-      "hash",
-      "keccak256",
-      "0xdeadbeef",
-    ]);
+    const { stdout, exitCode } = await runCli(["hash", "keccak256", "0xdeadbeef"]);
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
   test("sha256 0xdeadbeef produces 64-char hex", async () => {
-    const { stdout, exitCode } = await runCli([
-      "hash",
-      "sha256",
-      "0xdeadbeef",
-    ]);
+    const { stdout, exitCode } = await runCli(["hash", "sha256", "0xdeadbeef"]);
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/^0x[0-9a-f]{64}$/);
   });
@@ -56,9 +40,7 @@ describe("dot hash", () => {
     const { stdout, exitCode } = await runCli(["hash", "sha256", "hello"]);
     expect(exitCode).toBe(0);
     // SHA-256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
-    expect(stdout).toBe(
-      "0x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
-    );
+    expect(stdout).toBe("0x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
   });
 
   test("sha256 --file hashes file contents", async () => {
@@ -68,9 +50,7 @@ describe("dot hash", () => {
     );
     expect(exitCode).toBe(0);
     // Same as sha256("hello")
-    expect(stdout).toBe(
-      "0x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
-    );
+    expect(stdout).toBe("0x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
   });
 
   test("blake2b256 --file with binary content", async () => {
@@ -84,24 +64,13 @@ describe("dot hash", () => {
   });
 
   test("sha256 --stdin with piped data", async () => {
-    const { stdout, exitCode } = await runCli(
-      ["hash", "sha256", "--stdin"],
-      { stdin: "hello" },
-    );
+    const { stdout, exitCode } = await runCli(["hash", "sha256", "--stdin"], { stdin: "hello" });
     expect(exitCode).toBe(0);
-    expect(stdout).toBe(
-      "0x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
-    );
+    expect(stdout).toBe("0x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
   });
 
   test("sha256 hello --output json returns JSON", async () => {
-    const { stdout, exitCode } = await runCli([
-      "hash",
-      "sha256",
-      "hello",
-      "--output",
-      "json",
-    ]);
+    const { stdout, exitCode } = await runCli(["hash", "sha256", "hello", "--output", "json"]);
     expect(exitCode).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(parsed.algorithm).toBe("sha256");
@@ -137,12 +106,7 @@ describe("dot hash", () => {
   });
 
   test("--file nonexistent path errors", async () => {
-    const { exitCode } = await runCli([
-      "hash",
-      "sha256",
-      "--file",
-      "/nonexistent/path/file.txt",
-    ]);
+    const { exitCode } = await runCli(["hash", "sha256", "--file", "/nonexistent/path/file.txt"]);
     expect(exitCode).toBe(1);
   });
 

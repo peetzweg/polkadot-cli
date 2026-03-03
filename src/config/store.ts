@@ -1,7 +1,7 @@
-import { join } from "node:path";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { mkdir, readFile, writeFile, rm, access } from "node:fs/promises";
-import type { Config, ChainConfig } from "./types.ts";
+import { join } from "node:path";
+import type { ChainConfig, Config } from "./types.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
 
 const DOT_DIR = join(homedir(), ".polkadot");
@@ -49,12 +49,10 @@ export async function loadConfig(): Promise<Config> {
 
 export async function saveConfig(config: Config): Promise<void> {
   await ensureDir(DOT_DIR);
-  await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2) + "\n");
+  await writeFile(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
 }
 
-export async function loadMetadata(
-  chainName: string,
-): Promise<Uint8Array | null> {
+export async function loadMetadata(chainName: string): Promise<Uint8Array | null> {
   const path = getMetadataPath(chainName);
   if (await fileExists(path)) {
     return await readFile(path);
@@ -62,10 +60,7 @@ export async function loadMetadata(
   return null;
 }
 
-export async function saveMetadata(
-  chainName: string,
-  data: Uint8Array,
-): Promise<void> {
+export async function saveMetadata(chainName: string, data: Uint8Array): Promise<void> {
   const dir = getChainDir(chainName);
   await ensureDir(dir);
   await writeFile(getMetadataPath(chainName), data);
@@ -84,9 +79,7 @@ export function resolveChain(
   const chain = config.chains[name];
   if (!chain) {
     const available = Object.keys(config.chains).join(", ");
-    throw new Error(
-      `Unknown chain "${name}". Available chains: ${available}`,
-    );
+    throw new Error(`Unknown chain "${name}". Available chains: ${available}`);
   }
   return { name, chain };
 }

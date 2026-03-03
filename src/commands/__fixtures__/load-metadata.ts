@@ -1,7 +1,7 @@
-import { parseMetadata } from "../../core/metadata.ts";
-import type { MetadataBundle } from "../../core/metadata.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { MetadataBundle } from "../../core/metadata.ts";
+import { parseMetadata } from "../../core/metadata.ts";
 
 let cached: MetadataBundle | null = null;
 

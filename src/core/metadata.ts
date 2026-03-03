@@ -1,8 +1,5 @@
-import {
-  decAnyMetadata,
-  unifyMetadata,
-} from "@polkadot-api/substrate-bindings";
-import { getLookupFn, getDynamicBuilder } from "@polkadot-api/metadata-builders";
+import { getDynamicBuilder, getLookupFn } from "@polkadot-api/metadata-builders";
+import { decAnyMetadata, unifyMetadata } from "@polkadot-api/substrate-bindings";
 import { loadMetadata, saveMetadata } from "../config/store.ts";
 import { ConnectionError, MetadataError } from "../utils/errors.ts";
 import type { ClientHandle } from "./client.ts";
@@ -67,10 +64,13 @@ export async function fetchMetadataFromChain(
       client._request<string>("state_getMetadata", []),
       new Promise<never>((_, reject) =>
         setTimeout(
-          () => reject(new ConnectionError(
-            `Timed out fetching metadata for "${chainName}" after ${METADATA_TIMEOUT_MS / 1000}s. ` +
-              "Check that the RPC endpoint is correct and reachable.",
-          )),
+          () =>
+            reject(
+              new ConnectionError(
+                `Timed out fetching metadata for "${chainName}" after ${METADATA_TIMEOUT_MS / 1000}s. ` +
+                  "Check that the RPC endpoint is correct and reachable.",
+              ),
+            ),
           METADATA_TIMEOUT_MS,
         ),
       ),
@@ -127,21 +127,16 @@ export function listPallets(meta: MetadataBundle): PalletInfo[] {
   }));
 }
 
-function extractCalls(
-  meta: MetadataBundle,
-  callsRef: { type: number } | undefined,
-): CallInfo[] {
+function extractCalls(meta: MetadataBundle, callsRef: { type: number } | undefined): CallInfo[] {
   if (!callsRef) return [];
   try {
     const entry = meta.lookup(callsRef.type);
     if (entry.type !== "enum") return [];
-    return Object.entries(entry.value as Record<string, any>).map(
-      ([name, variant]) => ({
-        name,
-        docs: (variant as any).docs ?? [],
-        typeId: resolveCallTypeId(variant),
-      }),
-    );
+    return Object.entries(entry.value as Record<string, any>).map(([name, variant]) => ({
+      name,
+      docs: (variant as any).docs ?? [],
+      typeId: resolveCallTypeId(variant),
+    }));
   } catch {
     return [];
   }
@@ -154,14 +149,9 @@ function resolveCallTypeId(variant: any): number | null {
   return null;
 }
 
-export function findPallet(
-  meta: MetadataBundle,
-  palletName: string,
-): PalletInfo | undefined {
+export function findPallet(meta: MetadataBundle, palletName: string): PalletInfo | undefined {
   const pallets = listPallets(meta);
-  return pallets.find(
-    (p) => p.name.toLowerCase() === palletName.toLowerCase(),
-  );
+  return pallets.find((p) => p.name.toLowerCase() === palletName.toLowerCase());
 }
 
 export interface SignedExtensionInfo {
@@ -208,7 +198,9 @@ function formatLookupEntry(entry: any): string {
     case "tuple":
       return `(${entry.value.map(formatLookupEntry).join(", ")})`;
     case "struct":
-      return `{ ${Object.entries(entry.value).map(([k, v]) => `${k}: ${formatLookupEntry(v)}`).join(", ")} }`;
+      return `{ ${Object.entries(entry.value)
+        .map(([k, v]) => `${k}: ${formatLookupEntry(v)}`)
+        .join(", ")} }`;
     case "option":
       return `Option<${formatLookupEntry(entry.value)}>`;
     case "result":

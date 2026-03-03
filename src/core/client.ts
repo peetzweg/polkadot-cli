@@ -1,8 +1,9 @@
+import type { JsonRpcProvider } from "@polkadot-api/json-rpc-provider";
 import { createClient } from "polkadot-api";
-import { getWsProvider } from "polkadot-api/ws-provider";
 import { withPolkadotSdkCompat } from "polkadot-api/polkadot-sdk-compat";
-import type { ChainConfig } from "../config/types.ts";
+import { getWsProvider } from "polkadot-api/ws-provider";
 import { loadMetadata, saveMetadata } from "../config/store.ts";
+import type { ChainConfig } from "../config/types.ts";
 import { ConnectionError } from "../utils/errors.ts";
 
 // Known chain specs for light client usage
@@ -26,7 +27,9 @@ function suppressWsNoise(): () => void {
     if (typeof args[0] === "string" && args[0].includes("Unable to connect")) return;
     orig(...args);
   };
-  return () => { console.error = orig; };
+  return () => {
+    console.error = orig;
+  };
 }
 
 export async function createChainClient(
@@ -38,7 +41,7 @@ export async function createChainClient(
 
   const restoreConsole = suppressWsNoise();
 
-  let provider;
+  let provider: JsonRpcProvider;
 
   if (useLight) {
     provider = await createSmoldotProvider(chainName);
@@ -50,9 +53,7 @@ export async function createChainClient(
         `No RPC endpoint configured for chain "${chainName}". Use --rpc or configure one with: dot chain add ${chainName} --rpc <url>`,
       );
     }
-    provider = withPolkadotSdkCompat(
-      getWsProvider(rpc, { timeout: 10_000 }),
-    );
+    provider = withPolkadotSdkCompat(getWsProvider(rpc, { timeout: 10_000 }));
   }
 
   const client = createClient(provider, {

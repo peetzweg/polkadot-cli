@@ -1,14 +1,10 @@
 import type { CAC } from "cac";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
-import {
-  getOrFetchMetadata,
-  findPallet,
-  getPalletNames,
-} from "../core/metadata.ts";
+import { findPallet, getOrFetchMetadata, getPalletNames } from "../core/metadata.ts";
 import { printResult } from "../core/output.ts";
-import { parseTarget } from "../utils/parse-target.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
+import { parseTarget } from "../utils/parse-target.ts";
 
 export function registerConstCommand(cli: CAC) {
   cli
@@ -27,17 +23,10 @@ export function registerConstCommand(cli: CAC) {
           return;
         }
         const config = await loadConfig();
-        const { name: chainName, chain: chainConfig } = resolveChain(
-          config,
-          opts.chain,
-        );
+        const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
         const { pallet, item } = parseTarget(target);
 
-        const clientHandle = await createChainClient(
-          chainName,
-          chainConfig,
-          opts.rpc,
-        );
+        const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
 
         try {
           // Validate pallet/item against metadata
@@ -53,20 +42,14 @@ export function registerConstCommand(cli: CAC) {
           );
           if (!constantItem) {
             const constNames = palletInfo.constants.map((c) => c.name);
-            throw new Error(
-              suggestMessage(
-                `constant in ${palletInfo.name}`,
-                item,
-                constNames,
-              ),
-            );
+            throw new Error(suggestMessage(`constant in ${palletInfo.name}`, item, constNames));
           }
 
           const unsafeApi = clientHandle.client.getUnsafeApi();
           const runtimeToken = await (unsafeApi as any).runtimeToken;
-          const result = (unsafeApi as any).constants[palletInfo.name][
-            constantItem.name
-          ](runtimeToken);
+          const result = (unsafeApi as any).constants[palletInfo.name][constantItem.name](
+            runtimeToken,
+          );
 
           printResult(result, opts.output ?? "pretty");
         } finally {

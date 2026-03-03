@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { runCli } from "./__fixtures__/run-cli.ts";
 
 describe("global CLI", () => {
@@ -33,23 +33,13 @@ describe("global CLI", () => {
   });
 
   test("--chain nonexistent errors", async () => {
-    const { stderr, exitCode } = await runCli([
-      "inspect",
-      "--chain",
-      "nonexistent",
-    ]);
+    const { stderr, exitCode } = await runCli(["inspect", "--chain", "nonexistent"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Unknown chain");
   });
 
   test("hash with --output json produces valid JSON", async () => {
-    const { stdout, exitCode } = await runCli([
-      "hash",
-      "sha256",
-      "hello",
-      "--output",
-      "json",
-    ]);
+    const { stdout, exitCode } = await runCli(["hash", "sha256", "hello", "--output", "json"]);
     expect(exitCode).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(parsed).toHaveProperty("algorithm");
