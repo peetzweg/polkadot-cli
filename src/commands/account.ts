@@ -14,16 +14,18 @@ import { printHeading, printItem, BOLD, RESET, YELLOW } from "../core/output.ts"
 const ACCOUNT_HELP = `
 ${BOLD}Usage:${RESET}
   $ dot account create <name>                Create a new account
-  $ dot account import <name> --secret <s>   Import from mnemonic or hex seed
+  $ dot account import <name> --secret <s>   Import from BIP39 mnemonic
   $ dot account list                         List all accounts
   $ dot account remove <name>                Remove a stored account
 
 ${BOLD}Examples:${RESET}
   $ dot account create my-validator
   $ dot account import treasury --secret "word1 word2 ... word12"
-  $ dot account import raw-key --secret 0xabcdef...
   $ dot account list
   $ dot account remove my-validator
+
+${YELLOW}Note: Secrets are stored unencrypted in ~/.polkadot/accounts.json.
+      Hex seed import (0x...) is not supported via CLI.${RESET}
 `.trimStart();
 
 export function registerAccountCommands(cli: CAC) {

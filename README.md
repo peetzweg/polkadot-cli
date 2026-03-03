@@ -39,6 +39,8 @@ dot chain remove westend
 
 Dev accounts (Alice, Bob, Charlie, Dave, Eve, Ferdie) are always available for testnets. Create or import your own accounts for any chain.
 
+> **Security warning:** Account secrets (mnemonics and seeds) are currently stored **unencrypted** in `~/.polkadot/accounts.json`. Do not use this for high-value accounts on mainnet. Encrypted storage is planned for a future release.
+
 ```bash
 # List all accounts (dev + stored)
 dot account list
@@ -49,12 +51,18 @@ dot account create my-validator
 # Import from a BIP39 mnemonic
 dot account import treasury --secret "word1 word2 ... word12"
 
-# Import from a hex seed
-dot account import raw-key --secret 0xabcdef...
-
 # Remove an account
 dot account remove my-validator
 ```
+
+**Supported secret formats for import:**
+
+| Format | Example | Status |
+|--------|---------|--------|
+| BIP39 mnemonic (12/24 words) | `"abandon abandon ... about"` | Supported |
+| Hex seed (`0x` + 64 hex chars) | `0xabcdef0123...` | Not supported via CLI (see below) |
+
+**Known limitation:** Hex seed import (`--secret 0x...`) does not work from the command line. The CLI argument parser (`cac`) interprets `0x`-prefixed values as JavaScript numbers, which loses precision for 32-byte seeds. Use a BIP39 mnemonic instead. If you need to import a raw seed programmatically, write it directly to `~/.polkadot/accounts.json`.
 
 ### Query storage
 
@@ -209,11 +217,13 @@ Config and metadata caches live in `~/.polkadot/`:
 ```
 ~/.polkadot/
 ├── config.json          # chains and default chain
-├── accounts.json        # stored accounts (secrets encrypted at rest — coming soon)
+├── accounts.json        # stored accounts (⚠️ secrets are NOT encrypted — see below)
 └── chains/
     └── polkadot/
         └── metadata.bin # cached SCALE-encoded metadata
 ```
+
+> **Warning:** `accounts.json` stores secrets (mnemonics and seeds) in **plain text**. Encrypted-at-rest storage is planned but not yet implemented. Keep appropriate file permissions (`chmod 600 ~/.polkadot/accounts.json`) and do not use this for high-value mainnet accounts.
 
 ## Development
 
