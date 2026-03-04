@@ -80,12 +80,6 @@ export function registerQueryCommand(cli: CAC) {
           const parsedKeys = parseStorageKeys(meta, palletInfo.name, storageItem, keys);
           const format = opts.output ?? "pretty";
 
-          if (format === "json") {
-            console.error(`chain: ${chainName}`);
-          } else {
-            console.log(`${DIM}chain: ${chainName}${RESET}\n`);
-          }
-
           if (storageItem.type === "map" && parsedKeys.length === 0) {
             // Fetch all entries
             const entries: Array<{ keyArgs: any; value: any }> = await storageApi.getEntries();
