@@ -1,11 +1,13 @@
 import type { CAC } from "cac";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
-import { findPallet, getOrFetchMetadata, getPalletNames } from "../core/metadata.ts";
+import type { MetadataBundle, StorageItemInfo } from "../core/metadata.ts";
+import { describeType, findPallet, getOrFetchMetadata, getPalletNames } from "../core/metadata.ts";
 import { DIM, printResult, RESET } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseTarget } from "../utils/parse-target.ts";
 import { parseValue } from "../utils/parse-value.ts";
+import { parseStructArgs, parseTypedArg } from "./tx.ts";
 
 const DEFAULT_LIMIT = 100;
 
@@ -68,8 +70,14 @@ export function registerQueryCommand(cli: CAC) {
           const unsafeApi = clientHandle.client.getUnsafeApi();
           const storageApi = (unsafeApi as any).query[palletInfo.name][storageItem.name];
 
-          const parsedKeys = keys.map(parseValue);
+          const parsedKeys = parseStorageKeys(meta, palletInfo.name, storageItem, keys);
           const format = opts.output ?? "pretty";
+
+          if (format === "json") {
+            console.error(`chain: ${chainName}`);
+          } else {
+            console.log(`${DIM}chain: ${chainName}${RESET}\n`);
+          }
 
           if (storageItem.type === "map" && parsedKeys.length === 0) {
             // Fetch all entries
@@ -103,3 +111,79 @@ export function registerQueryCommand(cli: CAC) {
       },
     );
 }
+
+/**
+ * Parse CLI key arguments for a storage query using metadata awareness.
+ *
+ * - Plain storage (no keys): returns []
+ * - Single-hasher map with struct key: composes positional args into a struct,
+ *   or accepts a single JSON arg
+ * - Single-hasher map with non-struct key: parses 1 arg via parseTypedArg
+ * - Multi-hasher NMap: parses each CLI arg against its corresponding key type
+ */
+function parseStorageKeys(
+  meta: MetadataBundle,
+  palletName: string,
+  storageItem: StorageItemInfo,
+  args: string[],
+): unknown[] {
+  // Plain storage — no keys expected
+  if (storageItem.type === "plain" || storageItem.keyTypeId == null) {
+    return args.map(parseValue);
+  }
+
+  // No args provided — caller will use getEntries()
+  if (args.length === 0) return [];
+
+  const storageEntry = meta.builder.buildStorage(palletName, storageItem.name);
+  const len = storageEntry.len; // number of getValue() arguments (= number of hashers)
+  const keyEntry = meta.lookup(storageItem.keyTypeId);
+
+  if (len === 1) {
+    // Single-hasher map: getValue() takes exactly 1 argument
+    if (args.length === 1) {
+      // Single CLI arg — parse it typed (handles JSON structs, primitives, AccountId, etc.)
+      return [parseTypedArg(meta, keyEntry, args[0]!)];
+    }
+
+    // Multiple CLI args — only valid if the key type is a struct
+    if (keyEntry.type === "struct") {
+      const label = `${palletName}.${storageItem.name} key`;
+      return [parseStructArgs(meta, keyEntry.value, args, label)];
+    }
+
+    // Wrong arg count for a non-struct single-hasher key
+    const typeDesc = describeType(meta.lookup, storageItem.keyTypeId);
+    throw new Error(
+      `${palletName}.${storageItem.name} key expects ${typeDesc}\n` +
+        `  Pass 1 argument. Got ${args.length}.`,
+    );
+  }
+
+  // Multi-hasher NMap: getValue() takes N separate arguments
+  if (args.length !== len) {
+    // Build description of expected key types
+    let typeDesc: string;
+    if (keyEntry.type === "tuple") {
+      typeDesc = (keyEntry.value as any[])
+        .map((e: any) => describeType(meta.lookup, e.id))
+        .join(", ");
+    } else {
+      typeDesc = describeType(meta.lookup, storageItem.keyTypeId);
+    }
+    throw new Error(
+      `${palletName}.${storageItem.name} expects ${len} key arg(s): (${typeDesc}). Got ${args.length}.`,
+    );
+  }
+
+  // Parse each arg against its corresponding tuple element type
+  if (keyEntry.type === "tuple") {
+    const entries = keyEntry.value as any[];
+    return entries.map((entry: any, i: number) => parseTypedArg(meta, entry, args[i]!));
+  }
+
+  // Fallback for non-tuple multi-hasher (shouldn't normally happen)
+  return args.map((arg) => parseTypedArg(meta, keyEntry, arg));
+}
+
+export { parseStorageKeys };
