@@ -26,6 +26,7 @@ ${BOLD}Examples:${RESET}
 export function registerChainCommands(cli: CAC) {
   cli
     .command("chain [action] [name]", "Manage chains (add, remove, update, list, default)")
+    .alias("chains")
     .action(
       async (
         action: string | undefined,
@@ -33,8 +34,7 @@ export function registerChainCommands(cli: CAC) {
         opts: { rpc?: string; lightClient?: boolean },
       ) => {
         if (!action) {
-          console.log(CHAIN_HELP);
-          return;
+          return chainList();
         }
         switch (action) {
           case "add":

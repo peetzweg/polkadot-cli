@@ -31,12 +31,12 @@ ${YELLOW}Note: Secrets are stored unencrypted in ~/.polkadot/accounts.json.
 export function registerAccountCommands(cli: CAC) {
   cli
     .command("account [action] [name]", "Manage local accounts (create, import, list, remove)")
+    .alias("accounts")
     .option("--secret <value>", "Secret key (mnemonic or hex seed) for import")
     .action(
       async (action: string | undefined, name: string | undefined, opts: { secret?: string }) => {
         if (!action) {
-          console.log(ACCOUNT_HELP);
-          return;
+          return accountList();
         }
         switch (action) {
           case "create":

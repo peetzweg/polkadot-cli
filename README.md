@@ -22,7 +22,8 @@ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 dot chain add westend --light-client
 
 # List configured chains
-dot chain list
+dot chains              # shorthand
+dot chain list          # equivalent
 
 # Re-fetch metadata after a runtime upgrade
 dot chain update          # updates default chain
@@ -43,7 +44,8 @@ Dev accounts (Alice, Bob, Charlie, Dave, Eve, Ferdie) are always available for t
 
 ```bash
 # List all accounts (dev + stored)
-dot account list
+dot accounts            # shorthand
+dot account list        # equivalent
 
 # Create a new account (generates a mnemonic)
 dot account create my-validator

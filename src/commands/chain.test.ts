@@ -2,13 +2,18 @@ import { describe, expect, test } from "bun:test";
 import { runCli } from "./__fixtures__/run-cli.ts";
 
 describe("dot chain", () => {
-  test("no action shows help", async () => {
+  test("no action lists chains", async () => {
     const { stdout, exitCode } = await runCli(["chain"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("add");
-    expect(stdout).toContain("remove");
-    expect(stdout).toContain("list");
-    expect(stdout).toContain("default");
+    expect(stdout).toContain("polkadot");
+    expect(stdout).toContain("(default)");
+  });
+
+  test("chains shorthand lists chains", async () => {
+    const { stdout, exitCode } = await runCli(["chains"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("polkadot");
+    expect(stdout).toContain("(default)");
   });
 
   test("unknown action foo errors", async () => {

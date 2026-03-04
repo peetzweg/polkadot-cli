@@ -30,8 +30,11 @@ dot chain add westend --light-client
 Show all configured chains and which one is the default:
 
 ```
+dot chains
 dot chain list
 ```
+
+Both forms are equivalent. `dot chains` is a shorthand that skips the `list` subcommand. Running `dot chain` with no action also lists chains.
 
 ### Update metadata
 
@@ -65,8 +68,11 @@ Manage signing accounts. Dev accounts (Alice, Bob, Charlie, Dave, Eve, Ferdie) a
 Show all accounts, both dev and stored:
 
 ```
+dot accounts
 dot account list
 ```
+
+Both forms are equivalent. `dot accounts` is a shorthand that skips the `list` subcommand. Running `dot account` with no action also lists accounts.
 
 ### Create an account
 
