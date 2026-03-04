@@ -20,6 +20,20 @@ jobs:
 
       - run: bun run typecheck
 
-      - run: bun test
+      - name: Run tests with coverage
+        run: bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage 2>&1 | tee coverage-output.txt
+
+      - name: Add coverage to job summary
+        if: always()
+        run: |
+          echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          awk '/^-+\|/{found++} found{print} found>=2{exit}' coverage-output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - run: bun run build

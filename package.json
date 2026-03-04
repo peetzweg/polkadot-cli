@@ -18,6 +18,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "test": "bun test",
+    "test:coverage": "bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage",
     "prepare": "husky",
     "changeset": "changeset",
     "version": "changeset version",

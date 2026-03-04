@@ -1,4 +1,4 @@
-![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/peetzweg/<GIST_ID>/raw/polkadot-cli-coverage.json)
+[![codecov](https://codecov.io/gh/peetzweg/polkadot-cli/branch/main/graph/badge.svg)](https://codecov.io/gh/peetzweg/polkadot-cli)
 
 # polkadot-cli
 
