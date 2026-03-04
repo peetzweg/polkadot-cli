@@ -72,4 +72,34 @@ describe("dot inspect", () => {
     const { exitCode } = await runCli(["inspect", "System.FooBarBaz"]);
     expect(exitCode).toBe(1);
   });
+
+  test("chain prefix lists pallet items", async () => {
+    const config = {
+      chains: { kusama: { rpc: "wss://kusama-rpc.polkadot.io" } },
+    };
+    const { stdout, exitCode } = await runCli(["inspect", "kusama.System"], { config });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System Pallet");
+    expect(stdout).toContain("Storage Items:");
+  });
+
+  test("chain prefix with item shows detail", async () => {
+    const config = {
+      chains: { kusama: { rpc: "wss://kusama-rpc.polkadot.io" } },
+    };
+    const { stdout, exitCode } = await runCli(["inspect", "kusama.System.Account"], { config });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Storage)");
+  });
+
+  test("chain prefix + --chain flag errors", async () => {
+    const config = {
+      chains: { kusama: { rpc: "wss://kusama-rpc.polkadot.io" } },
+    };
+    const { stderr, exitCode } = await runCli(["inspect", "kusama.System", "--chain", "polkadot"], {
+      config,
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Chain specified both as prefix");
+  });
 });

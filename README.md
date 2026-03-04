@@ -1,3 +1,5 @@
+![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/peetzweg/<GIST_ID>/raw/polkadot-cli-coverage.json)
+
 # polkadot-cli
 
 A command-line tool for interacting with Polkadot-ecosystem chains. Manage chains and accounts, query storage, look up constants, inspect metadata, submit extrinsics, and compute hashes — all from your terminal.
@@ -66,6 +68,20 @@ dot account remove my-validator
 
 **Known limitation:** Hex seed import (`--secret 0x...`) does not work from the command line. The CLI argument parser (`cac`) interprets `0x`-prefixed values as JavaScript numbers, which loses precision for 32-byte seeds. Use a BIP39 mnemonic instead. If you need to import a raw seed programmatically, write it directly to `~/.polkadot/accounts.json`.
 
+### Chain prefix
+
+Instead of the `--chain` flag, you can prefix any target with the chain name using dot notation:
+
+```bash
+dot query kusama.System.Account 5GrwvaEF...
+dot const kusama.Balances.ExistentialDeposit
+dot tx kusama.Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice
+dot inspect kusama.System
+dot inspect kusama.System.Account
+```
+
+The `--chain` flag and default chain still work as before. If both a chain prefix and `--chain` flag are provided, the CLI errors.
+
 ### Query storage
 
 ```bash
@@ -80,6 +96,9 @@ dot query System.Account --limit 10
 
 # Pipe to jq (colors disabled automatically)
 dot query System.Account --limit 5 | jq '.[0].value.data.free'
+
+# Query a specific chain using chain prefix
+dot query kusama.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 ```
 
 ### Look up constants
@@ -87,6 +106,7 @@ dot query System.Account --limit 5 | jq '.[0].value.data.free'
 ```bash
 dot const Balances.ExistentialDeposit
 dot const System.SS58Prefix --chain kusama
+dot const kusama.Balances.ExistentialDeposit
 ```
 
 ### Inspect metadata
@@ -102,6 +122,10 @@ dot inspect System
 
 # Detailed type info for a specific item
 dot inspect System.Account
+
+# Inspect a specific chain using chain prefix
+dot inspect kusama.System
+dot inspect kusama.System.Account
 ```
 
 ### Submit extrinsics

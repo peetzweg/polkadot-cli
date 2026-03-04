@@ -18,7 +18,7 @@ import {
 import { BOLD, CYAN, DIM, GREEN, RED, RESET, Spinner, YELLOW } from "../core/output.ts";
 import { CliError } from "../utils/errors.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
-import { parseTarget } from "../utils/parse-target.ts";
+import { parseTarget, resolveTargetChain } from "../utils/parse-target.ts";
 import { parseValue } from "../utils/parse-value.ts";
 
 export function registerTxCommand(cli: CAC) {
@@ -51,7 +51,7 @@ export function registerTxCommand(cli: CAC) {
       ) => {
         if (!target) {
           console.log(
-            "Usage: dot tx <Pallet.Call|0xCallHex> [...args] --from <account> [--dry-run] [--encode]",
+            "Usage: dot tx <[Chain.]Pallet.Call|0xCallHex> [...args] --from <account> [--dry-run] [--encode]",
           );
           console.log("");
           console.log("Examples:");
@@ -59,6 +59,9 @@ export function registerTxCommand(cli: CAC) {
           console.log("  $ dot tx System.remark 0xdeadbeef --from alice --dry-run");
           console.log("  $ dot tx 0x0001076465616462656566 --from alice");
           console.log("  $ dot tx Assets.force_create 4 owner true 10 --encode --chain people");
+          console.log(
+            "  $ dot tx kusama.Balances.transferKeepAlive 5FHn... 1000000000000 --from alice",
+          );
           return;
         }
 
@@ -77,7 +80,14 @@ export function registerTxCommand(cli: CAC) {
         }
 
         const config = await loadConfig();
-        const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
+        let effectiveChain: string | undefined = opts.chain;
+        let parsedTarget: ReturnType<typeof parseTarget> | undefined;
+        if (!isRawCall) {
+          const knownChains = Object.keys(config.chains);
+          parsedTarget = parseTarget(target, { knownChains });
+          effectiveChain = resolveTargetChain(parsedTarget, opts.chain);
+        }
+        const { name: chainName, chain: chainConfig } = resolveChain(config, effectiveChain);
 
         const signer = opts.encode ? undefined : await resolveAccountSigner(opts.from!);
 
@@ -128,7 +138,8 @@ export function registerTxCommand(cli: CAC) {
             tx = await (unsafeApi as any).txFromCallData(callBinary);
             callHex = target;
           } else {
-            const { pallet, item: callName } = parseTarget(target);
+            const pallet = parsedTarget!.pallet;
+            const callName = parsedTarget!.item!;
 
             // Validate pallet
             const palletNames = getPalletNames(meta);

@@ -612,4 +612,28 @@ describe("dot tx CLI integration", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/^0x[0-9a-f]+$/);
   });
+
+  test("chain prefix --encode works (3-segment)", async () => {
+    const { stdout, exitCode } = await runCli([
+      "tx",
+      "polkadot.System.remark",
+      "0xdeadbeef",
+      "--encode",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/^0x[0-9a-f]+$/);
+  });
+
+  test("chain prefix + --chain flag errors", async () => {
+    const { stderr, exitCode } = await runCli([
+      "tx",
+      "polkadot.System.remark",
+      "0xaa",
+      "--encode",
+      "--chain",
+      "polkadot",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Chain specified both as prefix");
+  });
 });

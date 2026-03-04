@@ -12,6 +12,23 @@ describe("dot query", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Usage: dot query");
   });
+
+  test("chain prefix works (3-segment)", async () => {
+    const { stdout, exitCode } = await runCli(["query", "polkadot.System.Number"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("chain: polkadot");
+  });
+
+  test("chain prefix + --chain flag errors", async () => {
+    const { stderr, exitCode } = await runCli([
+      "query",
+      "polkadot.System.Number",
+      "--chain",
+      "polkadot",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Chain specified both as prefix");
+  });
 });
 
 // ---------------------------------------------------------------------------

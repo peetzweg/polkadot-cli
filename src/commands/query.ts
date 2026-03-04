@@ -5,7 +5,7 @@ import type { MetadataBundle, StorageItemInfo } from "../core/metadata.ts";
 import { describeType, findPallet, getOrFetchMetadata, getPalletNames } from "../core/metadata.ts";
 import { DIM, printResult, RESET } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
-import { parseTarget } from "../utils/parse-target.ts";
+import { parseTarget, resolveTargetChain } from "../utils/parse-target.ts";
 import { parseValue } from "../utils/parse-value.ts";
 import { parseStructArgs, parseTypedArg } from "./tx.ts";
 
@@ -27,7 +27,9 @@ export function registerQueryCommand(cli: CAC) {
         opts: { chain?: string; rpc?: string; output?: string; limit: number },
       ) => {
         if (!target) {
-          console.log("Usage: dot query <Pallet.Item> [...keys] [--chain <name>] [--output json]");
+          console.log(
+            "Usage: dot query <[Chain.]Pallet.Item> [...keys] [--chain <name>] [--output json]",
+          );
           console.log("");
           console.log("Examples:");
           console.log("  $ dot query System.Number                         # plain storage value");
@@ -40,12 +42,17 @@ export function registerQueryCommand(cli: CAC) {
             "  $ dot query System.Account --limit 0              # all entries (no limit)",
           );
           console.log("  $ dot query Assets.Metadata 42 --chain asset-hub");
+          console.log("  $ dot query kusama.System.Account 5Grw...         # chain prefix");
           return;
         }
 
         const config = await loadConfig();
-        const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
-        const { pallet, item } = parseTarget(target);
+        const knownChains = Object.keys(config.chains);
+        const parsed = parseTarget(target, { knownChains });
+        const effectiveChain = resolveTargetChain(parsed, opts.chain);
+        const { name: chainName, chain: chainConfig } = resolveChain(config, effectiveChain);
+        const pallet = parsed.pallet;
+        const item = parsed.item!;
 
         const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
 

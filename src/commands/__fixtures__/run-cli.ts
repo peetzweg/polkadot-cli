@@ -51,6 +51,7 @@ export async function runCli(
     if (chainName !== "polkadot") {
       const dir = join(dotDir, "chains", chainName);
       mkdirSync(dir, { recursive: true });
+      copyFileSync(FIXTURE_METADATA, join(dir, "metadata.bin"));
     }
   }
 

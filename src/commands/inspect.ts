@@ -11,7 +11,7 @@ import {
 } from "../core/metadata.ts";
 import { BOLD, CYAN, DIM, printDocs, printHeading, printItem, RESET } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
-import { parseTarget } from "../utils/parse-target.ts";
+import { parseTarget, resolveTargetChain } from "../utils/parse-target.ts";
 
 export function registerInspectCommand(cli: CAC) {
   cli
@@ -20,7 +20,20 @@ export function registerInspectCommand(cli: CAC) {
     .option("--rpc <url>", "Override RPC endpoint")
     .action(async (target: string | undefined, opts: { chain?: string; rpc?: string }) => {
       const config = await loadConfig();
-      const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
+      const knownChains = Object.keys(config.chains);
+
+      let effectiveChain: string | undefined = opts.chain;
+      let palletName: string | undefined;
+      let itemName: string | undefined;
+
+      if (target) {
+        const parsed = parseTarget(target, { knownChains, allowPalletOnly: true });
+        effectiveChain = resolveTargetChain(parsed, opts.chain);
+        palletName = parsed.pallet;
+        itemName = parsed.item;
+      }
+
+      const { name: chainName, chain: chainConfig } = resolveChain(config, effectiveChain);
 
       // Try loading cached metadata first; if unavailable, connect and fetch
       let meta: MetadataBundle;
@@ -50,13 +63,12 @@ export function registerInspectCommand(cli: CAC) {
         return;
       }
 
-      // Check if target is "Pallet" or "Pallet.Item"
-      if (!target.includes(".")) {
+      if (!itemName) {
         // List pallet items
         const palletNames = getPalletNames(meta);
-        const pallet = findPallet(meta, target);
+        const pallet = findPallet(meta, palletName!);
         if (!pallet) {
-          throw new Error(suggestMessage("pallet", target, palletNames));
+          throw new Error(suggestMessage("pallet", palletName!, palletNames));
         }
 
         printHeading(`${pallet.name} Pallet`);
@@ -87,12 +99,10 @@ export function registerInspectCommand(cli: CAC) {
       }
 
       // Specific item detail
-      const { pallet: palletName, item: itemName } = parseTarget(target);
-
       const palletNames = getPalletNames(meta);
-      const pallet = findPallet(meta, palletName);
+      const pallet = findPallet(meta, palletName!);
       if (!pallet) {
-        throw new Error(suggestMessage("pallet", palletName, palletNames));
+        throw new Error(suggestMessage("pallet", palletName!, palletNames));
       }
 
       // Search in storage

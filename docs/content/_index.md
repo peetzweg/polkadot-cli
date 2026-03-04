@@ -97,6 +97,22 @@ dot account import raw-key --secret 0xabcdef...
 dot account remove my-validator
 ```
 
+## Chain Prefix
+
+Instead of the `--chain` flag, you can prefix any target with the chain name using dot notation:
+
+```
+dot query kusama.System.Account 5GrwvaEF...
+dot const kusama.Balances.ExistentialDeposit
+dot tx kusama.Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice
+dot inspect kusama.System
+dot inspect kusama.System.Account
+```
+
+The `--chain` flag and default chain still work as before. Using `Pallet.Item` without a prefix continues to target the default chain. If both a chain prefix and `--chain` flag are provided, the CLI errors with a clear message.
+
+For `inspect`, a two-segment input like `kusama.System` is disambiguated by checking configured chain names. Chain names (lowercase, e.g. `kusama`) and pallet names (PascalCase, e.g. `System`) don't collide in practice. If they did, the chain prefix takes priority and `--chain` serves as an escape hatch.
+
 ## Query
 
 Read on-chain storage. Specify a `Pallet.Item` to fetch a plain value, or pass a key for map lookups. Omit the key to enumerate map entries.
@@ -113,6 +129,9 @@ dot query System.Account --limit 10
 
 # Pipe to jq (colors disabled automatically)
 dot query System.Account --limit 5 | jq '.[0].value.data.free'
+
+# Query a specific chain using chain prefix
+dot query kusama.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 ```
 
 ## Constants
@@ -122,6 +141,7 @@ Look up runtime constants by `Pallet.Constant`:
 ```
 dot const Balances.ExistentialDeposit
 dot const System.SS58Prefix --chain kusama
+dot const kusama.Balances.ExistentialDeposit
 ```
 
 ## Inspect
@@ -137,6 +157,10 @@ dot inspect System
 
 # Detailed type info for a specific item
 dot inspect System.Account
+
+# Inspect a specific chain using chain prefix
+dot inspect kusama.System
+dot inspect kusama.System.Account
 ```
 
 ## Transactions

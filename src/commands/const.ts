@@ -2,9 +2,9 @@ import type { CAC } from "cac";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
 import { findPallet, getOrFetchMetadata, getPalletNames } from "../core/metadata.ts";
-import { printResult } from "../core/output.ts";
+import { DIM, printResult, RESET } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
-import { parseTarget } from "../utils/parse-target.ts";
+import { parseTarget, resolveTargetChain } from "../utils/parse-target.ts";
 
 export function registerConstCommand(cli: CAC) {
   cli
@@ -15,16 +15,23 @@ export function registerConstCommand(cli: CAC) {
         opts: { chain?: string; rpc?: string; output?: string },
       ) => {
         if (!target) {
-          console.log("Usage: dot const <Pallet.Constant> [--chain <name>] [--output json]");
+          console.log(
+            "Usage: dot const <[Chain.]Pallet.Constant> [--chain <name>] [--output json]",
+          );
           console.log("");
           console.log("Examples:");
           console.log("  $ dot const Balances.ExistentialDeposit");
           console.log("  $ dot const System.SS58Prefix --chain kusama");
+          console.log("  $ dot const kusama.Balances.ExistentialDeposit    # chain prefix");
           return;
         }
         const config = await loadConfig();
-        const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
-        const { pallet, item } = parseTarget(target);
+        const knownChains = Object.keys(config.chains);
+        const parsed = parseTarget(target, { knownChains });
+        const effectiveChain = resolveTargetChain(parsed, opts.chain);
+        const { name: chainName, chain: chainConfig } = resolveChain(config, effectiveChain);
+        const pallet = parsed.pallet;
+        const item = parsed.item!;
 
         const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
 
@@ -51,7 +58,13 @@ export function registerConstCommand(cli: CAC) {
             runtimeToken,
           );
 
-          printResult(result, opts.output ?? "pretty");
+          const format = opts.output ?? "pretty";
+          if (format === "json") {
+            console.error(`chain: ${chainName}`);
+          } else {
+            console.log(`${DIM}chain: ${chainName}${RESET}\n`);
+          }
+          printResult(result, format);
         } finally {
           clientHandle.destroy();
         }
