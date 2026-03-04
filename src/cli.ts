@@ -8,7 +8,10 @@ import { registerHashCommand } from "./commands/hash.ts";
 import { registerInspectCommand } from "./commands/inspect.ts";
 import { registerQueryCommand } from "./commands/query.ts";
 import { registerTxCommand } from "./commands/tx.ts";
+import { getUpdateNotification, startBackgroundCheck } from "./core/update-notifier.ts";
 import { CliError } from "./utils/errors.ts";
+
+startBackgroundCheck(version);
 
 const cli = cac("dot");
 
@@ -30,6 +33,12 @@ registerHashCommand(cli);
 cli.help();
 cli.version(version);
 
+function showUpdateAndExit(code: number): never {
+  const note = getUpdateNotification(version);
+  if (note) process.stderr.write(`${note}\n`);
+  process.exit(code);
+}
+
 function handleError(err: unknown): never {
   if (err instanceof CliError) {
     console.error(`Error: ${err.message}`);
@@ -39,18 +48,21 @@ function handleError(err: unknown): never {
   } else {
     console.error("An unexpected error occurred:", err);
   }
-  process.exit(1);
+  showUpdateAndExit(1);
 }
 
 try {
   cli.parse(process.argv, { run: false });
 
-  if (!(cli as any).matchedCommandName && !cli.options.help && !cli.options.version) {
+  if (cli.options.version || cli.options.help) {
+    showUpdateAndExit(0);
+  } else if (!(cli as any).matchedCommandName) {
     cli.outputHelp();
+    showUpdateAndExit(0);
   } else {
     const result = (cli as any).runMatchedCommand();
     if (result && typeof result.then === "function") {
-      result.then(() => process.exit(0), handleError);
+      result.then(() => showUpdateAndExit(0), handleError);
     }
   }
 } catch (err) {

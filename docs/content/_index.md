@@ -312,6 +312,27 @@ These flags work with any command:
 | `--output json` | Raw JSON output (default: pretty) |
 | `--limit <n>` | Max entries for map queries (0 = unlimited, default: 100) |
 
+## Update Notifications
+
+After each command, the CLI checks whether a newer version is available on npm and displays a notification:
+
+```
+╭───────────────────────────────────────────────╮
+│                                               │
+│   Update available! 0.6.2 → 0.7.0            │
+│   Run npm i -g polkadot-cli to update         │
+│                                               │
+╰───────────────────────────────────────────────╯
+```
+
+The version check runs in the background on startup and caches the result for 24 hours in `~/.polkadot/update-check.json`. It never blocks the CLI.
+
+The notification is automatically suppressed when:
+
+- `DOT_NO_UPDATE_CHECK=1` is set
+- `CI` environment variable is set (any value)
+- stdout is not a TTY (e.g. piped output)
+
 ## Configuration
 
 Config and metadata caches live in `~/.polkadot/`:
@@ -320,6 +341,7 @@ Config and metadata caches live in `~/.polkadot/`:
 ~/.polkadot/
 ├── config.json          # chains and default chain
 ├── accounts.json        # stored accounts
+├── update-check.json    # cached update check result
 └── chains/
     └── polkadot/
         └── metadata.bin # cached SCALE-encoded metadata
