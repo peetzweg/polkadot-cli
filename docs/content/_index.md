@@ -127,8 +127,9 @@ dot query System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 # All map entries (default limit: 100)
 dot query System.Account --limit 10
 
-# Pipe to jq (colors disabled automatically)
+# Pipe to jq — stdout is clean JSON, no extra text
 dot query System.Account --limit 5 | jq '.[0].value.data.free'
+dot query System.Number --output json | jq '.+1'
 
 # Query a specific chain using chain prefix
 dot query kusama.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
@@ -142,6 +143,9 @@ Look up runtime constants by `Pallet.Constant`:
 dot const Balances.ExistentialDeposit
 dot const System.SS58Prefix --chain kusama
 dot const kusama.Balances.ExistentialDeposit
+
+# Pipe to jq — stdout is clean JSON, no extra text
+dot const Balances.ExistentialDeposit --output json | jq
 ```
 
 ## Inspect

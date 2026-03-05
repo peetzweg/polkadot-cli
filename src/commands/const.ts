@@ -2,7 +2,7 @@ import type { CAC } from "cac";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
 import { findPallet, getOrFetchMetadata, getPalletNames } from "../core/metadata.ts";
-import { DIM, printResult, RESET } from "../core/output.ts";
+import { printResult } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseTarget, resolveTargetChain } from "../utils/parse-target.ts";
 
@@ -59,11 +59,6 @@ export function registerConstCommand(cli: CAC) {
           );
 
           const format = opts.output ?? "pretty";
-          if (format === "json") {
-            console.error(`chain: ${chainName}`);
-          } else {
-            console.log(`${DIM}chain: ${chainName}${RESET}\n`);
-          }
           printResult(result, format);
         } finally {
           clientHandle.destroy();

@@ -16,7 +16,25 @@ describe("dot query", () => {
   test("chain prefix works (3-segment)", async () => {
     const { stdout, exitCode } = await runCli(["query", "polkadot.System.Number"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("chain: polkadot");
+    expect(stdout).toBeTruthy();
+  });
+
+  test("stdout does not contain chain info prefix", async () => {
+    const { stdout, exitCode } = await runCli(["query", "polkadot.System.Number"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("chain:");
+    expect(stdout).not.toContain("chain: polkadot");
+  });
+
+  test("json output is valid JSON with no extra text", async () => {
+    const { stdout, exitCode } = await runCli([
+      "query",
+      "polkadot.System.Number",
+      "--output",
+      "json",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(() => JSON.parse(stdout)).not.toThrow();
   });
 
   test("chain prefix + --chain flag errors", async () => {
