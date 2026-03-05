@@ -6,6 +6,7 @@ import {
   formatDispatchError,
   normalizeValue,
   parseCallArgs,
+  parseEnumShorthand,
   parsePrimitive,
   parseTypedArg,
 } from "./tx.ts";
@@ -47,6 +48,52 @@ describe("parsePrimitive", () => {
 
   test("char passthrough", () => {
     expect(parsePrimitive("char", "x")).toBe("x");
+  });
+});
+
+describe("parseEnumShorthand", () => {
+  test("returns null for plain variant name (no parens)", () => {
+    expect(parseEnumShorthand("Root")).toBeNull();
+  });
+
+  test("parses Parachain(1000)", () => {
+    expect(parseEnumShorthand("Parachain(1000)")).toEqual({
+      variant: "Parachain",
+      inner: "1000",
+    });
+  });
+
+  test("parses system(Authorized)", () => {
+    expect(parseEnumShorthand("system(Authorized)")).toEqual({
+      variant: "system",
+      inner: "Authorized",
+    });
+  });
+
+  test("parses nested system(Signed(5FHn...))", () => {
+    expect(parseEnumShorthand("system(Signed(5FHn...))")).toEqual({
+      variant: "system",
+      inner: "Signed(5FHn...)",
+    });
+  });
+
+  test("returns null for JSON", () => {
+    expect(parseEnumShorthand('{"type":"Root"}')).toBeNull();
+  });
+
+  test("returns null for hex", () => {
+    expect(parseEnumShorthand("0xdead")).toBeNull();
+  });
+
+  test("parses Root() as empty inner", () => {
+    expect(parseEnumShorthand("Root()")).toEqual({
+      variant: "Root",
+      inner: "",
+    });
+  });
+
+  test("returns null for array-like input", () => {
+    expect(parseEnumShorthand("[1,2,3]")).toBeNull();
   });
 });
 
@@ -149,6 +196,117 @@ describe("parseTypedArg", () => {
   test("compact u32 returns number", () => {
     const compactEntry = { type: "compact", isBig: false };
     expect(parseTypedArg(meta, compactEntry, "42")).toBe(42);
+  });
+
+  test("enum shorthand Parachain(1000) with number inner", () => {
+    const enumEntry = {
+      type: "enum",
+      value: {
+        Parachain: { type: "compact", isBig: false },
+        Here: { type: "void" },
+      },
+    };
+    expect(parseTypedArg(meta, enumEntry, "Parachain(1000)")).toEqual({
+      type: "Parachain",
+      value: 1000,
+    });
+  });
+
+  test("enum shorthand system(Authorized) with nested enum", () => {
+    const enumEntry = {
+      type: "enum",
+      value: {
+        system: {
+          type: "enum",
+          value: {
+            Root: { type: "void" },
+            Authorized: { type: "void" },
+          },
+        },
+      },
+    };
+    expect(parseTypedArg(meta, enumEntry, "system(Authorized)")).toEqual({
+      type: "system",
+      value: { type: "Authorized" },
+    });
+  });
+
+  test("enum shorthand is case-insensitive", () => {
+    const enumEntry = {
+      type: "enum",
+      value: {
+        Parachain: { type: "compact", isBig: false },
+      },
+    };
+    expect(parseTypedArg(meta, enumEntry, "parachain(42)")).toEqual({
+      type: "Parachain",
+      value: 42,
+    });
+  });
+
+  test("enum shorthand Root() treated as void", () => {
+    const enumEntry = {
+      type: "enum",
+      value: {
+        Root: { type: "void" },
+      },
+    };
+    expect(parseTypedArg(meta, enumEntry, "Root()")).toEqual({ type: "Root" });
+  });
+
+  test("enum shorthand with JSON inner for structs", () => {
+    const enumEntry = {
+      type: "enum",
+      value: {
+        AccountId32: {
+          type: "struct",
+          value: {
+            id: { type: "array", value: { type: "primitive", value: "u8" }, len: 32 },
+          },
+        },
+      },
+    };
+    const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+    const result = parseTypedArg(meta, enumEntry, `AccountId32({"id":"${hex}"})`) as any;
+    expect(result.type).toBe("AccountId32");
+    expect(result.value.id).toBeInstanceOf(Binary);
+  });
+
+  test("enum shorthand does not break SS58 auto-wrap", () => {
+    // SS58 addresses don't match shorthand pattern (no parens), so MultiAddress auto-wrap still works
+    const palletMeta = meta.unified.pallets.find((p) => p.name === "Balances")!;
+    const callsEntry = meta.lookup(palletMeta.calls!.type);
+    const variant = ((callsEntry as any).value as Record<string, any>).transfer_keep_alive;
+    let inner = variant;
+    while (inner.type === "lookupEntry") inner = inner.value;
+    const destEntry = inner.value.dest;
+
+    const addr = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
+    expect(parseTypedArg(meta, destEntry, addr)).toEqual({ type: "Id", value: addr });
+  });
+
+  test("enum shorthand does not break JSON format", () => {
+    const enumEntry = {
+      type: "enum",
+      value: {
+        Parachain: { type: "compact", isBig: false },
+      },
+    };
+    expect(parseTypedArg(meta, enumEntry, '{"type":"Parachain","value":1000}')).toEqual({
+      type: "Parachain",
+      value: 1000,
+    });
+  });
+
+  test("enum shorthand does not break void variant name", () => {
+    const enumEntry = {
+      type: "enum",
+      value: {
+        Root: { type: "void" },
+        Signed: { type: "AccountId32" },
+      },
+    };
+    expect(parseTypedArg(meta, enumEntry, "Root")).toEqual({ type: "Root" });
   });
 });
 
@@ -622,6 +780,31 @@ describe("dot tx CLI integration", () => {
     ]);
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/^0x[0-9a-f]+$/);
+  });
+
+  test("--encode Utility.dispatch_as with enum shorthand system(Authorized)", async () => {
+    // First encode a remark to use as the call arg
+    const { stdout: remarkHex } = await runCli(["tx", "System.remark", "0xcafe", "--encode"]);
+
+    // Use shorthand syntax for the OriginCaller enum
+    const {
+      stdout: shorthandHex,
+      exitCode,
+      stderr,
+    } = await runCli(["tx", "Utility.dispatch_as", "system(Authorized)", remarkHex, "--encode"]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(shorthandHex).toMatch(/^0x[0-9a-f]+$/);
+
+    // Verify it produces the same output as the JSON format
+    const { stdout: jsonHex } = await runCli([
+      "tx",
+      "Utility.dispatch_as",
+      '{"type":"system","value":{"type":"Authorized"}}',
+      remarkHex,
+      "--encode",
+    ]);
+    expect(shorthandHex).toBe(jsonHex);
   });
 
   test("chain prefix + --chain flag errors", async () => {

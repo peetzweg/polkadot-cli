@@ -153,6 +153,27 @@ dot tx 0x0503008eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48 
 dot tx Utility.batchAll '[{"type":"Balances","value":{"type":"transfer_keep_alive","value":{"dest":"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty","value":1000000000000}}},{"type":"Balances","value":{"type":"transfer_keep_alive","value":{"dest":"5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y","value":2000000000000}}}]' --from alice
 ```
 
+#### Enum shorthand
+
+Enum arguments accept a concise `Variant(value)` syntax instead of verbose JSON:
+
+```bash
+# Instead of: '{"type":"system","value":{"type":"Authorized"}}'
+dot tx Utility.dispatch_as 'system(Authorized)' $(dot tx System.remark 0xcafe --encode) --from alice
+
+# Nested enums work too
+dot tx Utility.dispatch_as 'system(Signed(5FHneW46...))' <call> --from alice
+
+# Void variants — empty parens or just the name
+dot tx ... 'Root()' ...
+dot tx ... 'Root' ...
+
+# JSON inside parens for struct values
+dot tx ... 'AccountId32({"id":"0xd435..."})' ...
+```
+
+Variant matching is case-insensitive (`system` resolves to `system`, `authorized` to `Authorized`). All existing formats (JSON objects, hex, SS58 addresses) continue to work unchanged.
+
 #### Encode call data
 
 Encode a call to hex without signing or submitting. Useful for preparing calls to pass to `Sudo.sudo`, multisig proposals, or governance. Works offline from cached metadata and does not require `--from`.

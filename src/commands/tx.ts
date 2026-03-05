@@ -588,7 +588,19 @@ function normalizeValue(lookup: Lookup, entry: any, value: unknown): unknown {
   }
 }
 
+function parseEnumShorthand(arg: string): { variant: string; inner: string } | null {
+  if (arg.startsWith("{") || arg.startsWith("[") || arg.startsWith("0x")) return null;
+  const firstParen = arg.indexOf("(");
+  if (firstParen === -1 || !arg.endsWith(")")) return null;
+  const variant = arg.slice(0, firstParen);
+  if (!/^[a-zA-Z_]\w*$/.test(variant)) return null;
+  return { variant, inner: arg.slice(firstParen + 1, -1) };
+}
+
 function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): unknown {
+  // Resolve lookupEntry indirection
+  if (entry.type === "lookupEntry") return parseTypedArg(meta, entry.value, arg);
+
   switch (entry.type) {
     case "primitive":
       return parsePrimitive(entry.value, arg);
@@ -627,9 +639,24 @@ function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): unknown {
         }
       }
 
+      // Enum shorthand: Variant(value)
+      const variants = Object.keys(entry.value);
+      const shorthand = parseEnumShorthand(arg);
+      if (shorthand) {
+        const matched = variants.find((v) => v.toLowerCase() === shorthand.variant.toLowerCase());
+        if (matched) {
+          const variantDef = entry.value[matched];
+          const resolvedDef = variantDef.type === "lookupEntry" ? variantDef.value : variantDef;
+          if (resolvedDef.type === "void" || shorthand.inner === "") {
+            return { type: matched };
+          }
+          const innerValue = parseTypedArg(meta, variantDef, shorthand.inner);
+          return normalizeValue(meta.lookup, entry, { type: matched, value: innerValue });
+        }
+      }
+
       // Auto-wrap MultiAddress-like enums: if "Id" variant has AccountId32
       // inner type and the arg looks like an SS58 address, wrap automatically
-      const variants = Object.keys(entry.value);
       if (variants.includes("Id")) {
         const idVariant = entry.value.Id;
         const innerType = idVariant.type === "lookupEntry" ? idVariant.value : idVariant;
@@ -853,6 +880,7 @@ function watchTransaction(observable: import("rxjs").Observable<TxEvent>): Promi
 export {
   formatDispatchError,
   parseCallArgs,
+  parseEnumShorthand,
   parseTypedArg,
   parseStructArgs,
   normalizeValue,

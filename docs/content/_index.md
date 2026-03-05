@@ -226,6 +226,31 @@ dot tx Utility.batchAll '[
 ]' --from alice
 ```
 
+### Enum shorthand
+
+Enum arguments accept a concise `Variant(value)` syntax instead of verbose JSON. This is especially useful for calls like `Utility.dispatch_as` where the origin is an enum:
+
+```
+# Before (verbose JSON)
+dot tx Utility.dispatch_as '{"type":"system","value":{"type":"Authorized"}}' <call> --from alice
+
+# After (shorthand)
+dot tx Utility.dispatch_as 'system(Authorized)' <call> --from alice
+```
+
+The syntax supports:
+
+| Input | Result |
+|---|---|
+| `Root` | `{ type: "Root" }` (plain variant, already worked) |
+| `Root()` | `{ type: "Root" }` (empty parens, same as above) |
+| `Parachain(1000)` | `{ type: "Parachain", value: 1000 }` |
+| `system(Authorized)` | `{ type: "system", value: { type: "Authorized" } }` |
+| `system(Signed(5FHn...))` | nested 3 levels deep |
+| `AccountId32({"id":"0x..."})` | JSON inside parens for struct values |
+
+Variant matching is case-insensitive — `system(authorized)` resolves the outer variant to `system` and the inner to `Authorized` using the chain's metadata. All existing formats (JSON objects, hex, SS58 addresses) continue to work unchanged.
+
 ### Encode call data
 
 Encode a call to hex without signing or submitting. This is useful for preparing calls to pass to `Sudo.sudo`, multisig proposals, governance preimages, or any workflow that needs raw call bytes. Works offline from cached metadata and does not require `--from`.
