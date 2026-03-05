@@ -1,5 +1,11 @@
 # polkadot-cli
 
+## 0.8.1
+
+### Patch Changes
+
+- 84761a3: Remove `chain: <name>` output from `query` and `const` commands. Previously, both commands printed the chain name to stdout (in pretty mode) or stderr (in JSON mode) before the result. This broke piping to `jq` and other tools that expect clean, parseable output. Stdout now contains only the query/constant result, making `dot query ... | jq` and `dot const ... | jq` work out of the box.
+
 ## 0.8.0
 
 ### Minor Changes
