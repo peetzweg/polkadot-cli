@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Binary, FixedSizeBinary } from "polkadot-api";
 import { formatJson, formatPretty } from "./output.ts";
 
 describe("formatJson", () => {
@@ -35,6 +36,44 @@ describe("formatJson", () => {
       key: "0xabcd",
       active: true,
       extra: null,
+    });
+  });
+
+  test("converts Binary with valid UTF-8 to text", () => {
+    expect(formatJson({ symbol: Binary.fromText("DOT") })).toBe('{\n  "symbol": "DOT"\n}');
+  });
+
+  test("converts Binary with invalid UTF-8 to hex", () => {
+    expect(formatJson({ data: Binary.fromBytes(new Uint8Array([0x80, 0x81])) })).toBe(
+      '{\n  "data": "0x8081"\n}',
+    );
+  });
+
+  test("converts empty Binary to empty string", () => {
+    expect(formatJson({ data: Binary.fromBytes(new Uint8Array([])) })).toBe('{\n  "data": ""\n}');
+  });
+
+  test("converts FixedSizeBinary with invalid UTF-8 to hex", () => {
+    expect(formatJson({ hash: FixedSizeBinary.fromBytes(new Uint8Array([0xfe, 0xff])) })).toBe(
+      '{\n  "hash": "0xfeff"\n}',
+    );
+  });
+
+  test("handles nested object with Binary, bigint, and primitives", () => {
+    const data = {
+      deposit: 6693666000n,
+      name: Binary.fromText("Paseo Token"),
+      symbol: Binary.fromText("PAS"),
+      decimals: 10,
+      is_frozen: false,
+    };
+    const parsed = JSON.parse(formatJson(data));
+    expect(parsed).toEqual({
+      deposit: "6693666000",
+      name: "Paseo Token",
+      symbol: "PAS",
+      decimals: 10,
+      is_frozen: false,
     });
   });
 

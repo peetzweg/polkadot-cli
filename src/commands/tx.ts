@@ -358,6 +358,10 @@ function formatEventValue(v: unknown): string {
   if (typeof v === "number") return v.toString();
   if (typeof v === "boolean") return v.toString();
   if (v === null || v === undefined) return "null";
+  if (v instanceof Binary) {
+    const text = v.asText();
+    return text.includes("\uFFFD") ? v.asHex() : text;
+  }
   return JSON.stringify(v, (_k, val) => (typeof val === "bigint" ? val.toString() : val));
 }
 
@@ -879,6 +883,7 @@ function watchTransaction(observable: import("rxjs").Observable<TxEvent>): Promi
 
 export {
   formatDispatchError,
+  formatEventValue,
   parseCallArgs,
   parseEnumShorthand,
   parseTypedArg,

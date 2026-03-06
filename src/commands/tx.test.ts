@@ -4,6 +4,7 @@ import { getTestMetadata } from "./__fixtures__/load-metadata.ts";
 import { runCli } from "./__fixtures__/run-cli.ts";
 import {
   formatDispatchError,
+  formatEventValue,
   normalizeValue,
   parseCallArgs,
   parseEnumShorthand,
@@ -575,6 +576,36 @@ describe("normalizeValue", () => {
     const mockEntry = { type: "primitive", value: "u128" };
     expect(normalizeValue(meta.lookup, mockEntry, 42n)).toBe(42n);
     expect(normalizeValue(meta.lookup, mockEntry, 42)).toBe(42);
+  });
+});
+
+describe("formatEventValue", () => {
+  test("Binary with valid UTF-8 returns text", () => {
+    expect(formatEventValue(Binary.fromText("DOT"))).toBe("DOT");
+  });
+
+  test("Binary with invalid UTF-8 returns hex", () => {
+    expect(formatEventValue(Binary.fromBytes(new Uint8Array([0x80, 0x81])))).toBe("0x8081");
+  });
+
+  test("empty Binary returns empty string", () => {
+    expect(formatEventValue(Binary.fromBytes(new Uint8Array([])))).toBe("");
+  });
+
+  test("bigint returns string", () => {
+    expect(formatEventValue(42n)).toBe("42");
+  });
+
+  test("string passes through", () => {
+    expect(formatEventValue("hello")).toBe("hello");
+  });
+
+  test("null returns 'null'", () => {
+    expect(formatEventValue(null)).toBe("null");
+  });
+
+  test("object is JSON-stringified", () => {
+    expect(formatEventValue({ a: 1 })).toBe('{"a":1}');
   });
 });
 

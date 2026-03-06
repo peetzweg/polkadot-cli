@@ -102,6 +102,20 @@ dot query System.Number --output json | jq '.+1'
 dot query kusama.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 ```
 
+#### Output formatting
+
+Query results automatically convert on-chain types for readability:
+
+- **BigInt** values (e.g. balances) render as decimal strings
+- **Binary** fields (e.g. token `name`, `symbol`) render as text when valid UTF-8, or as `0x`-prefixed hex otherwise
+- **Uint8Array** values render as `0x`-prefixed hex
+
+```bash
+# Token metadata — symbol and name display as text, not {}
+dot query assethub-paseo.Assets.Metadata 50000413
+# { "deposit": "6693666000", "name": "Paseo Token", "symbol": "PAS", ... }
+```
+
 ### Look up constants
 
 ```bash
