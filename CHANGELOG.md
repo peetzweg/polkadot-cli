@@ -1,5 +1,15 @@
 # polkadot-cli
 
+## 0.9.0
+
+### Minor Changes
+
+- 7b5eec7: Add ergonomic enum shorthand syntax for `dot tx` arguments. Instead of verbose JSON like `'{"type":"system","value":{"type":"Authorized"}}'`, you can now write `'system(Authorized)'`. Supports nested enums, case-insensitive variant matching, JSON inside parens for structs, and empty parens for void variants. All existing formats (JSON, hex, SS58 addresses) continue to work unchanged.
+
+### Patch Changes
+
+- 8e4fcf8: Fix Binary values (e.g. token `symbol` and `name` fields) displaying as `{}` in query and transaction output. Binary instances now render as human-readable text when valid UTF-8, or as hex strings otherwise.
+
 ## 0.8.1
 
 ### Patch Changes
