@@ -46,7 +46,8 @@ export function registerAccountCommands(cli: CAC) {
         opts: { secret?: string; env?: string },
       ) => {
         if (!action) {
-          return accountList();
+          console.log(ACCOUNT_HELP);
+          return;
         }
         switch (action) {
           case "create":

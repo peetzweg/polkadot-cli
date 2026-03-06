@@ -34,7 +34,7 @@ dot chains
 dot chain list
 ```
 
-Both forms are equivalent. `dot chains` is a shorthand that skips the `list` subcommand. Running `dot chain` with no action also lists chains.
+Both forms are equivalent. `dot chains` is a shorthand that skips the `list` subcommand. Running `dot chain` with no action shows help with all available actions.
 
 ### Update metadata
 
@@ -72,7 +72,7 @@ dot accounts
 dot account list
 ```
 
-Both forms are equivalent. `dot accounts` is a shorthand that skips the `list` subcommand. Running `dot account` with no action also lists accounts.
+Both forms are equivalent. `dot accounts` is a shorthand that skips the `list` subcommand. Running `dot account` with no action shows help with all available actions.
 
 ### Create an account
 

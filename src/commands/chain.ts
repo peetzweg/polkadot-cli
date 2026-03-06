@@ -34,7 +34,8 @@ export function registerChainCommands(cli: CAC) {
         opts: { rpc?: string; lightClient?: boolean },
       ) => {
         if (!action) {
-          return chainList();
+          console.log(CHAIN_HELP);
+          return;
         }
         switch (action) {
           case "add":

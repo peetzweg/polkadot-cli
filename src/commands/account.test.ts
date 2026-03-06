@@ -10,18 +10,17 @@ const STORED_ACCOUNT: StoredAccount = {
 };
 
 describe("dot account", () => {
-  test("no action lists accounts", async () => {
+  test("no action shows help", async () => {
     const { stdout, exitCode } = await runCli(["account"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("Dev Accounts");
-    expect(stdout).toContain("Alice");
+    expect(stdout).toContain("dot account create");
+    expect(stdout).toContain("dot account list");
   });
 
-  test("accounts shorthand lists accounts", async () => {
+  test("accounts shorthand shows help", async () => {
     const { stdout, exitCode } = await runCli(["accounts"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("Dev Accounts");
-    expect(stdout).toContain("Alice");
+    expect(stdout).toContain("dot account create");
   });
 
   test("unknown action foo errors", async () => {

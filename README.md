@@ -19,13 +19,16 @@ This installs the `dot` command globally.
 ### Manage chains
 
 ```bash
+# Show chain help
+dot chain               # shows available actions
+dot chains              # shorthand, same as above
+
 # Add a chain
 dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 dot chain add westend --light-client
 
 # List configured chains
-dot chains              # shorthand
-dot chain list          # equivalent
+dot chain list
 
 # Re-fetch metadata after a runtime upgrade
 dot chain update          # updates default chain
@@ -45,9 +48,12 @@ Dev accounts (Alice, Bob, Charlie, Dave, Eve, Ferdie) are always available for t
 > **Security warning:** Account secrets (mnemonics and seeds) are currently stored **unencrypted** in `~/.polkadot/accounts.json`. Do not use this for high-value accounts on mainnet. Encrypted storage is planned for a future release. Use `--env` to keep secrets off disk entirely.
 
 ```bash
+# Show account help
+dot account             # shows available actions
+dot accounts            # shorthand, same as above
+
 # List all accounts (dev + stored)
-dot accounts            # shorthand
-dot account list        # equivalent
+dot account list
 
 # Create a new account (generates a mnemonic)
 dot account create my-validator
