@@ -15,11 +15,11 @@ import { BOLD, printHeading, printItem, RESET, YELLOW } from "../core/output.ts"
 
 const ACCOUNT_HELP = `
 ${BOLD}Usage:${RESET}
-  $ dot account create <name>                Create a new account
+  $ dot account create|new <name>             Create a new account
   $ dot account import <name> --secret <s>   Import from BIP39 mnemonic
   $ dot account add <name> --env <VAR>       Add account backed by env variable
   $ dot account list                         List all accounts
-  $ dot account remove <name>                Remove a stored account
+  $ dot account remove|delete <name>         Remove a stored account
 
 ${BOLD}Examples:${RESET}
   $ dot account create my-validator
@@ -50,6 +50,7 @@ export function registerAccountCommands(cli: CAC) {
           return;
         }
         switch (action) {
+          case "new":
           case "create":
             return accountCreate(name);
           case "import":
@@ -58,6 +59,7 @@ export function registerAccountCommands(cli: CAC) {
             return accountAdd(name, opts);
           case "list":
             return accountList();
+          case "delete":
           case "remove":
             return accountRemove(name);
           default:

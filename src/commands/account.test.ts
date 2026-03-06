@@ -37,6 +37,14 @@ describe("dot account", () => {
     expect(stdout).toContain("Address:");
   });
 
+  test("new is an alias for create", async () => {
+    const { stdout, exitCode } = await runCli(["account", "new", "my-test"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Created");
+    expect(stdout).toContain("Mnemonic:");
+    expect(stdout).toContain("Address:");
+  });
+
   test("create (no name) errors", async () => {
     const { stderr, exitCode } = await runCli(["account", "create"]);
     expect(exitCode).toBe(1);
@@ -132,6 +140,14 @@ describe("dot account", () => {
 
   test("remove name succeeds", async () => {
     const { stdout, exitCode } = await runCli(["account", "remove", "my-account"], {
+      accounts: [STORED_ACCOUNT],
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("removed");
+  });
+
+  test("delete is an alias for remove", async () => {
+    const { stdout, exitCode } = await runCli(["account", "delete", "my-account"], {
       accounts: [STORED_ACCOUNT],
     });
     expect(exitCode).toBe(0);

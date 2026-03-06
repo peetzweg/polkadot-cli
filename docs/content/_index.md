@@ -80,7 +80,10 @@ Generate a new BIP39 mnemonic and store the account:
 
 ```
 dot account create my-validator
+dot account new my-validator
 ```
+
+`new` is an alias for `create`.
 
 ### Import an account
 
@@ -118,7 +121,10 @@ MY_SECRET="word1 word2 ..." dot tx System.remark 0xdead --from ci-signer
 
 ```
 dot account remove my-validator
+dot account delete my-validator
 ```
+
+`delete` is an alias for `remove`.
 
 ## Chain Prefix
 
