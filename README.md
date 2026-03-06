@@ -42,7 +42,7 @@ dot chain remove westend
 
 Dev accounts (Alice, Bob, Charlie, Dave, Eve, Ferdie) are always available for testnets. Create or import your own accounts for any chain.
 
-> **Security warning:** Account secrets (mnemonics and seeds) are currently stored **unencrypted** in `~/.polkadot/accounts.json`. Do not use this for high-value accounts on mainnet. Encrypted storage is planned for a future release.
+> **Security warning:** Account secrets (mnemonics and seeds) are currently stored **unencrypted** in `~/.polkadot/accounts.json`. Do not use this for high-value accounts on mainnet. Encrypted storage is planned for a future release. Use `--env` to keep secrets off disk entirely.
 
 ```bash
 # List all accounts (dev + stored)
@@ -55,9 +55,25 @@ dot account create my-validator
 # Import from a BIP39 mnemonic
 dot account import treasury --secret "word1 word2 ... word12"
 
+# Add an env-var-backed account (secret stays off disk)
+dot account add ci-signer --env MY_SECRET
+
+# Use it — the env var is read at signing time
+MY_SECRET="word1 word2 ..." dot tx System.remark 0xdead --from ci-signer
+
 # Remove an account
 dot account remove my-validator
 ```
+
+#### Env-var-backed accounts
+
+For CI/CD and security-conscious workflows, store a reference to an environment variable instead of the secret itself:
+
+```bash
+dot account add ci-signer --env MY_SECRET
+```
+
+The secret is never written to disk. At signing time, the CLI reads `$MY_SECRET` and derives the keypair. If the variable is not set, the CLI errors with a clear message. `account list` shows an `(env: MY_SECRET)` badge and resolves the address live when the variable is available.
 
 **Supported secret formats for import:**
 

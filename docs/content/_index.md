@@ -91,6 +91,29 @@ dot account import treasury --secret "word1 word2 ... word12"
 dot account import raw-key --secret 0xabcdef...
 ```
 
+### Add an env-var-backed account
+
+Store a reference to an environment variable instead of the secret itself. The secret never touches disk — ideal for CI/CD pipelines and security-conscious workflows:
+
+```
+dot account add ci-signer --env MY_SECRET
+```
+
+At signing time, the CLI reads `$MY_SECRET` and derives the keypair. If the variable is not set, the CLI errors with a clear message.
+
+`account list` shows an `(env: MY_SECRET)` badge and resolves the address live when the variable is available:
+
+```
+dot accounts
+# ci-signer (env: MY_SECRET)  5EPCUjPx...
+```
+
+Use the account like any other:
+
+```
+MY_SECRET="word1 word2 ..." dot tx System.remark 0xdead --from ci-signer
+```
+
 ### Remove an account
 
 ```

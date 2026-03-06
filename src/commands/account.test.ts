@@ -156,4 +156,103 @@ describe("dot account", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("not found");
   });
+
+  test("add name --env VAR (env set) succeeds with address", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "add", "env-test", "--env", "MY_SECRET"],
+      {
+        env: { MY_SECRET: TEST_MNEMONIC },
+      },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Added");
+    expect(stdout).toContain("Address:");
+  });
+
+  test("add name --env VAR (env not set) succeeds with deferred", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "add", "env-test", "--env", "MY_SECRET"],
+      { env: { MY_SECRET: "" } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Added");
+    expect(stdout).toContain("will resolve");
+  });
+
+  test("add (no name) errors", async () => {
+    const { stderr, exitCode } = await runCli(["account", "add"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("name is required");
+  });
+
+  test("add name (no --env) errors", async () => {
+    const { stderr, exitCode } = await runCli(["account", "add", "env-test"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("--env is required");
+  });
+
+  test("add alice --env VAR (dev name) errors", async () => {
+    const { stderr, exitCode } = await runCli(["account", "add", "alice", "--env", "MY_SECRET"], {
+      env: { MY_SECRET: TEST_MNEMONIC },
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("built-in dev account");
+  });
+
+  test("add duplicate --env VAR errors", async () => {
+    const { stderr, exitCode } = await runCli(
+      ["account", "add", "my-account", "--env", "MY_SECRET"],
+      {
+        accounts: [STORED_ACCOUNT],
+        env: { MY_SECRET: TEST_MNEMONIC },
+      },
+    );
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("already exists");
+  });
+
+  test("list with env-backed account shows env badge", async () => {
+    const envAccount: StoredAccount = {
+      name: "env-acct",
+      secret: { env: "MY_SECRET" },
+      publicKey: "",
+      derivationPath: "",
+    };
+    const { stdout, exitCode } = await runCli(["account", "list"], {
+      accounts: [envAccount],
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(env: MY_SECRET)");
+    expect(stdout).toContain("n/a");
+  });
+
+  test("list with env-backed account (env set) shows resolved address", async () => {
+    const envAccount: StoredAccount = {
+      name: "env-acct",
+      secret: { env: "MY_SECRET" },
+      publicKey: "",
+      derivationPath: "",
+    };
+    const { stdout, exitCode } = await runCli(["account", "list"], {
+      accounts: [envAccount],
+      env: { MY_SECRET: TEST_MNEMONIC },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(env: MY_SECRET)");
+    expect(stdout).not.toContain("n/a");
+  });
+
+  test("remove env-backed account works", async () => {
+    const envAccount: StoredAccount = {
+      name: "env-acct",
+      secret: { env: "MY_SECRET" },
+      publicKey: "",
+      derivationPath: "",
+    };
+    const { stdout, exitCode } = await runCli(["account", "remove", "env-acct"], {
+      accounts: [envAccount],
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("removed");
+  });
 });

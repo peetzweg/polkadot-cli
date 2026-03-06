@@ -15,6 +15,7 @@ export interface RunCliOptions {
   config?: Partial<Config>;
   files?: Record<string, string | Uint8Array>;
   stdin?: string | Uint8Array;
+  env?: Record<string, string>;
 }
 
 function deepMergeConfig(base: Config, override: Partial<Config>): Config {
@@ -78,7 +79,7 @@ export async function runCli(
 
   try {
     const spawnOpts: Parameters<typeof Bun.spawn>[1] = {
-      env: { ...process.env, HOME: tmpHome },
+      env: { ...process.env, HOME: tmpHome, ...options?.env },
       stdout: "pipe",
       stderr: "pipe",
     };

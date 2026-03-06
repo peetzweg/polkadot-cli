@@ -10,6 +10,7 @@ import {
 import type { PolkadotSigner } from "polkadot-api/signer";
 import { getPolkadotSigner } from "polkadot-api/signer";
 import { findAccount, loadAccounts } from "../config/accounts-store.ts";
+import { type EnvSecret, isEnvSecret } from "../config/accounts-types.ts";
 
 export const DEV_NAMES = ["alice", "bob", "charlie", "dave", "eve", "ferdie"] as const;
 
@@ -105,6 +106,28 @@ export function toSs58(publicKey: Uint8Array | string, prefix = 42): string {
   return ss58Address(publicKey, prefix);
 }
 
+export function resolveSecret(secret: string | EnvSecret): string {
+  if (isEnvSecret(secret)) {
+    const value = process.env[secret.env];
+    if (!value) {
+      throw new Error(`Environment variable "${secret.env}" is not set. Set it before signing.`);
+    }
+    return value;
+  }
+  return secret;
+}
+
+export function tryDerivePublicKey(envVarName: string): string | null {
+  const value = process.env[envVarName];
+  if (!value) return null;
+  try {
+    const { publicKey } = importAccount(value);
+    return publicKeyToHex(publicKey);
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveAccountSigner(name: string): Promise<PolkadotSigner> {
   // Check dev accounts first
   if (isDevAccount(name)) {
@@ -120,10 +143,11 @@ export async function resolveAccountSigner(name: string): Promise<PolkadotSigner
     throw new Error(`Unknown account "${name}". Available accounts: ${available.join(", ")}`);
   }
 
-  const isHexSeed = /^0x[0-9a-fA-F]{64}$/.test(account.secret);
+  const secret = resolveSecret(account.secret);
+  const isHexSeed = /^0x[0-9a-fA-F]{64}$/.test(secret);
   const keypair = isHexSeed
-    ? deriveFromHexSeed(account.secret, account.derivationPath)
-    : deriveFromMnemonic(account.secret, account.derivationPath);
+    ? deriveFromHexSeed(secret, account.derivationPath)
+    : deriveFromMnemonic(secret, account.derivationPath);
 
   return getPolkadotSigner(keypair.publicKey, "Sr25519", keypair.sign);
 }
