@@ -427,13 +427,15 @@ After each command, the CLI checks whether a newer version is available on npm a
 ╰───────────────────────────────────────────────╯
 ```
 
-The version check runs in the background on startup and caches the result for 24 hours in `~/.polkadot/update-check.json`. It never blocks the CLI.
+The version check runs in the background on startup and caches the result for 24 hours in `~/.polkadot/update-check.json`. Before exiting, the CLI waits up to 500ms for the check to finish so the cache file is written — even for fast commands like `--help` and `--version`. Long-running commands (queries, transactions) are unaffected since the check completes well before they finish.
+
+If the network is unreachable, the failed check is cached for 1 hour so subsequent runs don't incur the 500ms wait repeatedly.
 
 The notification is automatically suppressed when:
 
 - `DOT_NO_UPDATE_CHECK=1` is set
 - `CI` environment variable is set (any value)
-- stdout is not a TTY (e.g. piped output)
+- stderr is not a TTY (e.g. piped output)
 
 ## Configuration
 

@@ -6,7 +6,11 @@ import { getConfigDir } from "../config/store.ts";
 const CACHE_FILE = "update-check.json";
 const STALE_MS = 24 * 60 * 60 * 1000; // 24 hours
 const FETCH_TIMEOUT_MS = 5000;
+const EXIT_WAIT_TIMEOUT_MS = 500;
+const RETRY_AFTER_FAILURE_MS = 60 * 60 * 1000; // 1 hour
 const REGISTRY_URL = "https://registry.npmjs.org/polkadot-cli/latest";
+
+let pendingCheck: Promise<void> | null = null;
 
 interface UpdateCache {
   lastCheck: number;
@@ -97,7 +101,7 @@ async function writeCache(cache: UpdateCache): Promise<void> {
  * Fire-and-forget background check. Reads cache synchronously;
  * if stale or missing, fetches latest version from npm registry.
  */
-export function startBackgroundCheck(_currentVersion: string): void {
+export function startBackgroundCheck(currentVersion: string): void {
   const cache = readCache();
   const now = Date.now();
 
@@ -105,20 +109,41 @@ export function startBackgroundCheck(_currentVersion: string): void {
     return; // cache is fresh
   }
 
-  // Fire-and-forget fetch
-  fetch(REGISTRY_URL, {
+  pendingCheck = fetch(REGISTRY_URL, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   })
     .then((res) => res.json())
     .then((data: any) => {
       const latestVersion = data.version;
       if (typeof latestVersion === "string") {
-        writeCache({ lastCheck: now, latestVersion });
+        return writeCache({ lastCheck: now, latestVersion });
       }
     })
     .catch(() => {
-      // silently ignore network errors
+      // Write a failure cache entry with a 1-hour TTL so we don't
+      // re-fetch (and block exit for 500ms) on every invocation when
+      // the network is down.
+      return writeCache({
+        lastCheck: now - STALE_MS + RETRY_AFTER_FAILURE_MS,
+        latestVersion: currentVersion,
+      });
     });
+}
+
+/**
+ * Waits for a pending background check to complete, with a timeout
+ * so fast commands are not blocked for more than EXIT_WAIT_TIMEOUT_MS.
+ */
+export async function waitForPendingCheck(): Promise<void> {
+  if (!pendingCheck) return;
+  const timeout = new Promise<void>((resolve) => setTimeout(resolve, EXIT_WAIT_TIMEOUT_MS));
+  await Promise.race([pendingCheck.catch(() => {}), timeout]);
+  pendingCheck = null;
+}
+
+/** @internal — exposed for unit tests only */
+export function _setPendingCheckForTest(p: Promise<void> | null): void {
+  pendingCheck = p;
 }
 
 /**

@@ -8,7 +8,11 @@ import { registerHashCommand } from "./commands/hash.ts";
 import { registerInspectCommand } from "./commands/inspect.ts";
 import { registerQueryCommand } from "./commands/query.ts";
 import { registerTxCommand } from "./commands/tx.ts";
-import { getUpdateNotification, startBackgroundCheck } from "./core/update-notifier.ts";
+import {
+  getUpdateNotification,
+  startBackgroundCheck,
+  waitForPendingCheck,
+} from "./core/update-notifier.ts";
 import { CliError } from "./utils/errors.ts";
 
 startBackgroundCheck(version);
@@ -33,13 +37,14 @@ registerHashCommand(cli);
 cli.help();
 cli.version(version);
 
-function showUpdateAndExit(code: number): never {
+async function showUpdateAndExit(code: number): Promise<never> {
+  await waitForPendingCheck();
   const note = getUpdateNotification(version);
   if (note) process.stderr.write(`${note}\n`);
   process.exit(code);
 }
 
-function handleError(err: unknown): never {
+async function handleError(err: unknown): Promise<never> {
   if (err instanceof CliError) {
     console.error(`Error: ${err.message}`);
   } else if (err instanceof Error) {
@@ -48,23 +53,27 @@ function handleError(err: unknown): never {
   } else {
     console.error("An unexpected error occurred:", err);
   }
-  showUpdateAndExit(1);
+  return showUpdateAndExit(1);
 }
 
-try {
-  cli.parse(process.argv, { run: false });
+async function main() {
+  try {
+    cli.parse(process.argv, { run: false });
 
-  if (cli.options.version || cli.options.help) {
-    showUpdateAndExit(0);
-  } else if (!(cli as any).matchedCommandName) {
-    cli.outputHelp();
-    showUpdateAndExit(0);
-  } else {
-    const result = (cli as any).runMatchedCommand();
-    if (result && typeof result.then === "function") {
-      result.then(() => showUpdateAndExit(0), handleError);
+    if (cli.options.version || cli.options.help) {
+      await showUpdateAndExit(0);
+    } else if (!(cli as any).matchedCommandName) {
+      cli.outputHelp();
+      await showUpdateAndExit(0);
+    } else {
+      const result = (cli as any).runMatchedCommand();
+      if (result && typeof result.then === "function") {
+        await result.then(() => showUpdateAndExit(0), handleError);
+      }
     }
+  } catch (err) {
+    await handleError(err);
   }
-} catch (err) {
-  handleError(err);
 }
+
+main();

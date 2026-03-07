@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import {
+  _setPendingCheckForTest,
   buildNotificationBox,
   compareSemver,
   getUpdateNotification,
   isNewerVersion,
+  waitForPendingCheck,
 } from "./update-notifier.ts";
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI escape codes requires matching \x1b
@@ -172,6 +174,66 @@ describe("getUpdateNotification", () => {
 });
 
 // ---------------------------------------------------------------------------
+// waitForPendingCheck
+// ---------------------------------------------------------------------------
+describe("waitForPendingCheck", () => {
+  test("resolves immediately when no check is pending", async () => {
+    _setPendingCheckForTest(null);
+    const start = performance.now();
+    await waitForPendingCheck();
+    const elapsed = performance.now() - start;
+    expect(elapsed).toBeLessThan(50);
+  });
+
+  test("awaits a fast pending check", async () => {
+    let resolved = false;
+    const fast = new Promise<void>((r) =>
+      setTimeout(() => {
+        resolved = true;
+        r();
+      }, 10),
+    );
+    _setPendingCheckForTest(fast);
+    await waitForPendingCheck();
+    expect(resolved).toBe(true);
+  });
+
+  test("times out if pending check is slow (capped at ~500ms)", async () => {
+    let resolved = false;
+    const slow = new Promise<void>((r) =>
+      setTimeout(() => {
+        resolved = true;
+        r();
+      }, 5000),
+    );
+    _setPendingCheckForTest(slow);
+    const start = performance.now();
+    await waitForPendingCheck();
+    const elapsed = performance.now() - start;
+    // Should have timed out around 500ms, not waited the full 5s
+    expect(elapsed).toBeLessThan(1000);
+    expect(resolved).toBe(false);
+  });
+
+  test("nulls out pendingCheck after awaiting", async () => {
+    _setPendingCheckForTest(Promise.resolve());
+    await waitForPendingCheck();
+    // Second call should return immediately (pendingCheck is null)
+    const start = performance.now();
+    await waitForPendingCheck();
+    const elapsed = performance.now() - start;
+    expect(elapsed).toBeLessThan(50);
+  });
+
+  test("handles a rejected pending check gracefully", async () => {
+    _setPendingCheckForTest(Promise.reject(new Error("network down")));
+    // Should not throw — the catch in startBackgroundCheck handles this,
+    // but waitForPendingCheck should also not propagate
+    await waitForPendingCheck();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Integration: suppression via env vars in a real CLI subprocess
 // ---------------------------------------------------------------------------
 describe("update notifier integration", () => {
@@ -195,5 +257,32 @@ describe("update notifier integration", () => {
     const stderr = await new Response(proc.stderr as ReadableStream).text();
     await proc.exited;
     expect(stderr).not.toContain("Update available");
+  });
+
+  test("--help exits cleanly within a reasonable time (waits for pending check)", async () => {
+    const start = performance.now();
+    const proc = Bun.spawn(["bun", join(import.meta.dir, "../cli.ts"), "--help"], {
+      env: { ...process.env, DOT_NO_UPDATE_CHECK: "1" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const exitCode = await proc.exited;
+    const elapsed = performance.now() - start;
+    expect(exitCode).toBe(0);
+    // Should not hang — even with the 500ms wait, total time should be bounded
+    expect(elapsed).toBeLessThan(10000);
+  });
+
+  test("bare dot (no subcommand) exits cleanly", async () => {
+    const proc = Bun.spawn(["bun", join(import.meta.dir, "../cli.ts")], {
+      env: { ...process.env, DOT_NO_UPDATE_CHECK: "1" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stdout = await new Response(proc.stdout as ReadableStream).text();
+    const exitCode = await proc.exited;
+    expect(exitCode).toBe(0);
+    // Bare invocation shows help
+    expect(stdout).toContain("Usage:");
   });
 });
