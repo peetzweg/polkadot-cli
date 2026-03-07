@@ -1,5 +1,18 @@
 # polkadot-cli
 
+## 0.11.0
+
+### Minor Changes
+
+- 77299c1: Merge `account add --env` into `account import` so that `import` accepts both `--secret` and `--env`. `add` is now an alias for `import` (like `new` for `create` and `delete` for `remove`).
+
+### Patch Changes
+
+- 3100e88: Add `new` as an alias for `account create` and `delete` as an alias for `account remove` for more natural command naming.
+- 6ed0d38: Fix case-insensitive chain name resolution. Chain names like `Polkadot`, `POLKADOT`, or `Kusama` now resolve correctly in `--chain` flags, chain prefixes (e.g. `Polkadot.System.Number`), `chain default`, and `chain remove`.
+- 112d7c9: Fix update notification never showing due to a race condition. The background version check now stores its promise and `process.exit()` waits up to 500ms for it to complete, ensuring the cache file is written before exit. Failed checks are cached for 1 hour to avoid repeated delays when the network is down.
+- d859287: Show help text instead of listing items when running `dot account` or `dot chain` with no action. This is consistent with typical CLI behavior where bare subcommands show usage help. Use `dot account list` or `dot chain list` to list items explicitly.
+
 ## 0.10.0
 
 ### Minor Changes
