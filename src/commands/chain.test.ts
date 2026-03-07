@@ -21,12 +21,16 @@ describe("dot chain", () => {
     expect(stderr).toContain('Unknown action "foo"');
   });
 
-  test("list shows polkadot (default)", async () => {
+  test("list shows all built-in chains", async () => {
     const { stdout, exitCode } = await runCli(["chain", "list"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("polkadot");
     expect(stdout).toContain("(default)");
     expect(stdout).toContain("rpc.polkadot.io");
+    expect(stdout).toContain("paseo");
+    expect(stdout).toContain("polkadot-asset-hub");
+    expect(stdout).toContain("paseo-asset-hub");
+    expect(stdout).toContain("polkadot-people");
   });
 
   test("list with multiple chains shows all", async () => {
@@ -100,6 +104,18 @@ describe("dot chain", () => {
     expect(stderr).toContain("Cannot remove");
   });
 
+  test("remove paseo errors (built-in)", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "remove", "paseo"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Cannot remove the built-in "paseo" chain');
+  });
+
+  test("remove polkadot-asset-hub errors (built-in)", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "remove", "polkadot-asset-hub"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Cannot remove the built-in "polkadot-asset-hub" chain');
+  });
+
   test("remove nonexistent errors", async () => {
     const { stderr, exitCode } = await runCli(["chain", "remove", "nonexistent"]);
     expect(exitCode).toBe(1);
@@ -135,5 +151,23 @@ describe("dot chain", () => {
     const { stderr, exitCode } = await runCli(["chain", "add", "mychain"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Must provide either --rpc");
+  });
+
+  test("remove Polkadot (case-insensitive) errors as built-in", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "remove", "Polkadot"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Cannot remove");
+  });
+
+  test("default Polkadot (case-insensitive) succeeds", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "default", "Polkadot"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('Default chain set to "polkadot"');
+  });
+
+  test("default POLKADOT (all-caps) succeeds", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "default", "POLKADOT"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('Default chain set to "polkadot"');
   });
 });

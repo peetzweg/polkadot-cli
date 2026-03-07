@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveChain } from "./store.ts";
+import { findChainName, resolveChain } from "./store.ts";
 import type { Config } from "./types.ts";
 
 const config: Config = {
@@ -41,5 +41,36 @@ describe("resolveChain", () => {
     expect(() => resolveChain(cfg, "noexist")).toThrow(
       'Unknown chain "noexist". Available chains: polkadot',
     );
+  });
+
+  test("resolves chain name case-insensitively", () => {
+    const result = resolveChain(config, "Polkadot");
+    expect(result).toEqual({
+      name: "polkadot",
+      chain: { rpc: "wss://rpc.polkadot.io" },
+    });
+  });
+
+  test("resolves chain name with all-caps", () => {
+    const result = resolveChain(config, "KUSAMA");
+    expect(result).toEqual({
+      name: "kusama",
+      chain: { rpc: "wss://kusama-rpc.polkadot.io" },
+    });
+  });
+});
+
+describe("findChainName", () => {
+  test("returns exact match when casing matches", () => {
+    expect(findChainName(config, "polkadot")).toBe("polkadot");
+  });
+
+  test("returns config key for case-insensitive match", () => {
+    expect(findChainName(config, "Polkadot")).toBe("polkadot");
+    expect(findChainName(config, "KUSAMA")).toBe("kusama");
+  });
+
+  test("returns undefined for unknown chain", () => {
+    expect(findChainName(config, "westend")).toBeUndefined();
   });
 });

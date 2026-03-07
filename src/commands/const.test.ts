@@ -42,4 +42,21 @@ describe("dot const", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Chain specified both as prefix");
   });
+
+  test("case-insensitive chain prefix resolves correctly", async () => {
+    const { stdout, exitCode } = await runCli(["const", "Polkadot.System.SS58Prefix"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBeTruthy();
+  });
+
+  test("case-insensitive --chain flag resolves correctly", async () => {
+    const { stdout, exitCode } = await runCli([
+      "const",
+      "System.SS58Prefix",
+      "--chain",
+      "POLKADOT",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBeTruthy();
+  });
 });

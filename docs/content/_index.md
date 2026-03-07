@@ -142,6 +142,8 @@ dot inspect kusama.System
 dot inspect kusama.System.Account
 ```
 
+Chain names are case-insensitive — `Polkadot.System.Account`, `POLKADOT.System.Account`, and `polkadot.System.Account` all resolve the same way. The same applies to `--chain Polkadot` and `dot chain default Polkadot`.
+
 The `--chain` flag and default chain still work as before. Using `Pallet.Item` without a prefix continues to target the default chain. If both a chain prefix and `--chain` flag are provided, the CLI errors with a clear message.
 
 For `inspect`, a two-segment input like `kusama.System` is disambiguated by checking configured chain names. Chain names (lowercase, e.g. `kusama`) and pallet names (PascalCase, e.g. `System`) don't collide in practice. If they did, the chain prefix takes priority and `--chain` serves as an escape hatch.

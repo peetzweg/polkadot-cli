@@ -7,11 +7,19 @@ import type { ChainConfig } from "../config/types.ts";
 import { ConnectionError } from "../utils/errors.ts";
 
 // Known chain specs for light client usage
-const KNOWN_CHAIN_SPECS: Record<string, string> = {
-  polkadot: "polkadot-api/chains/polkadot",
-  kusama: "polkadot-api/chains/ksmcc3",
-  westend: "polkadot-api/chains/westend2",
-  paseo: "polkadot-api/chains/paseo",
+interface ChainSpecEntry {
+  spec: string;
+  relay?: string;
+}
+
+const KNOWN_CHAIN_SPECS: Record<string, ChainSpecEntry> = {
+  polkadot: { spec: "polkadot-api/chains/polkadot" },
+  kusama: { spec: "polkadot-api/chains/ksmcc3" },
+  westend: { spec: "polkadot-api/chains/westend2" },
+  paseo: { spec: "polkadot-api/chains/paseo" },
+  "polkadot-asset-hub": { spec: "polkadot-api/chains/polkadot_asset_hub", relay: "polkadot" },
+  "polkadot-people": { spec: "polkadot-api/chains/polkadot_people", relay: "polkadot" },
+  "paseo-asset-hub": { spec: "polkadot-api/chains/paseo_asset_hub", relay: "paseo" },
 };
 
 export interface ClientHandle {
@@ -76,16 +84,28 @@ async function createSmoldotProvider(chainName: string) {
   const { start } = await import("polkadot-api/smoldot");
   const { getSmProvider } = await import("polkadot-api/sm-provider");
 
-  const specPath = KNOWN_CHAIN_SPECS[chainName];
-  if (!specPath) {
+  const entry = KNOWN_CHAIN_SPECS[chainName];
+  if (!entry) {
     throw new ConnectionError(
       `Light client is only supported for known chains: ${Object.keys(KNOWN_CHAIN_SPECS).join(", ")}. ` +
         `Use --rpc to connect to "${chainName}" instead.`,
     );
   }
 
-  const { chainSpec } = await import(specPath);
+  const { chainSpec } = await import(entry.spec);
   const smoldot = start();
+
+  if (entry.relay) {
+    const relayEntry = KNOWN_CHAIN_SPECS[entry.relay];
+    if (!relayEntry) {
+      throw new ConnectionError(`Relay chain "${entry.relay}" not found in known chain specs.`);
+    }
+    const { chainSpec: relaySpec } = await import(relayEntry.spec);
+    const relayChain = await smoldot.addChain({ chainSpec: relaySpec, disableJsonRpc: true });
+    const chain = await smoldot.addChain({ chainSpec, potentialRelayChains: [relayChain] });
+    return getSmProvider(chain);
+  }
+
   const chain = await smoldot.addChain({ chainSpec });
   return getSmProvider(chain);
 }

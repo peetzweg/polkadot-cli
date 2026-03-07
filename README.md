@@ -104,6 +104,8 @@ dot inspect kusama.System
 dot inspect kusama.System.Account
 ```
 
+Chain names are case-insensitive — `Polkadot.System.Account`, `POLKADOT.System.Account`, and `polkadot.System.Account` all resolve the same way. The same applies to `--chain Polkadot` and `dot chain default Polkadot`.
+
 The `--chain` flag and default chain still work as before. If both a chain prefix and `--chain` flag are provided, the CLI errors.
 
 ### Query storage

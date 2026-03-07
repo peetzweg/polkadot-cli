@@ -32,6 +32,14 @@ describe("parseTarget (default, item required)", () => {
     expect(() => parseTarget(".Account")).toThrow(/Expected format/);
     expect(() => parseTarget("System.")).toThrow(/Expected format/);
   });
+
+  test("3-segment preserves user casing for chain prefix", () => {
+    expect(parseTarget("Polkadot.System.Account")).toEqual({
+      chain: "Polkadot",
+      pallet: "System",
+      item: "Account",
+    });
+  });
 });
 
 describe("parseTarget (allowPalletOnly)", () => {

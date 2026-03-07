@@ -102,4 +102,16 @@ describe("dot inspect", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Chain specified both as prefix");
   });
+
+  test("case-insensitive chain prefix resolves correctly", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "Polkadot.System"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System Pallet");
+  });
+
+  test("case-insensitive --chain flag resolves correctly", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "System", "--chain", "POLKADOT"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System Pallet");
+  });
 });

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { StoredAccount } from "../../config/accounts-types.ts";
 import type { Config } from "../../config/types.ts";
+import { DEFAULT_CONFIG } from "../../config/types.ts";
 
 const FIXTURE_METADATA = join(import.meta.dir, "polkadot-metadata.bin");
 const CLI_PATH = join(import.meta.dir, "../../cli.ts");
@@ -37,23 +38,16 @@ export async function runCli(
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const tmpHome = mkdtempSync(join(tmpdir(), "dot-test-"));
   const dotDir = join(tmpHome, ".polkadot");
-  const chainDir = join(dotDir, "chains", "polkadot");
-  mkdirSync(chainDir, { recursive: true });
-  copyFileSync(FIXTURE_METADATA, join(chainDir, "metadata.bin"));
 
-  const baseConfig: Config = {
-    defaultChain: "polkadot",
-    chains: { polkadot: { rpc: "wss://rpc.polkadot.io" } },
-  };
-  const finalConfig = options?.config ? deepMergeConfig(baseConfig, options.config) : baseConfig;
+  const finalConfig = options?.config
+    ? deepMergeConfig(DEFAULT_CONFIG, options.config)
+    : DEFAULT_CONFIG;
 
-  // Create chain dirs for any additional chains with metadata
+  // Create chain dirs with metadata for all configured chains
   for (const chainName of Object.keys(finalConfig.chains)) {
-    if (chainName !== "polkadot") {
-      const dir = join(dotDir, "chains", chainName);
-      mkdirSync(dir, { recursive: true });
-      copyFileSync(FIXTURE_METADATA, join(dir, "metadata.bin"));
-    }
+    const dir = join(dotDir, "chains", chainName);
+    mkdirSync(dir, { recursive: true });
+    copyFileSync(FIXTURE_METADATA, join(dir, "metadata.bin"));
   }
 
   writeFileSync(join(dotDir, "config.json"), JSON.stringify(finalConfig));

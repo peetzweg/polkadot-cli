@@ -40,8 +40,11 @@ async function fileExists(path: string): Promise<boolean> {
 export async function loadConfig(): Promise<Config> {
   await ensureDir(DOT_DIR);
   if (await fileExists(CONFIG_PATH)) {
-    const data = await readFile(CONFIG_PATH, "utf-8");
-    return JSON.parse(data) as Config;
+    const saved = JSON.parse(await readFile(CONFIG_PATH, "utf-8")) as Config;
+    return {
+      ...saved,
+      chains: { ...DEFAULT_CONFIG.chains, ...saved.chains },
+    };
   }
   await saveConfig(DEFAULT_CONFIG);
   return DEFAULT_CONFIG;
@@ -71,15 +74,20 @@ export async function removeChainData(chainName: string): Promise<void> {
   await rm(dir, { recursive: true, force: true });
 }
 
+export function findChainName(config: Config, input: string): string | undefined {
+  if (config.chains[input]) return input;
+  return Object.keys(config.chains).find((k) => k.toLowerCase() === input.toLowerCase());
+}
+
 export function resolveChain(
   config: Config,
   chainFlag?: string,
 ): { name: string; chain: ChainConfig } {
-  const name = chainFlag ?? config.defaultChain;
-  const chain = config.chains[name];
-  if (!chain) {
+  const input = chainFlag ?? config.defaultChain;
+  const name = findChainName(config, input);
+  if (!name) {
     const available = Object.keys(config.chains).join(", ");
-    throw new Error(`Unknown chain "${name}". Available chains: ${available}`);
+    throw new Error(`Unknown chain "${input}". Available chains: ${available}`);
   }
-  return { name, chain };
+  return { name, chain: config.chains[name]! };
 }

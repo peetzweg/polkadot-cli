@@ -47,6 +47,18 @@ describe("dot query", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Chain specified both as prefix");
   });
+
+  test("case-insensitive chain prefix resolves correctly", async () => {
+    const { stdout, exitCode } = await runCli(["query", "Polkadot.System.Number"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBeTruthy();
+  });
+
+  test("case-insensitive --chain flag resolves correctly", async () => {
+    const { stdout, exitCode } = await runCli(["query", "System.Number", "--chain", "POLKADOT"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------

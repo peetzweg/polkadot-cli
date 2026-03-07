@@ -1,5 +1,12 @@
 import type { CAC } from "cac";
-import { loadConfig, removeChainData, resolveChain, saveConfig } from "../config/store.ts";
+import {
+  findChainName,
+  loadConfig,
+  removeChainData,
+  resolveChain,
+  saveConfig,
+} from "../config/store.ts";
+import { BUILTIN_CHAIN_NAMES } from "../config/types.ts";
 import { createChainClient } from "../core/client.ts";
 import { fetchMetadataFromChain } from "../core/metadata.ts";
 import { BOLD, CYAN, DIM, printHeading, RESET } from "../core/output.ts";
@@ -102,24 +109,25 @@ async function chainRemove(name: string | undefined) {
 
   const config = await loadConfig();
 
-  if (!config.chains[name]) {
+  const resolved = findChainName(config, name);
+  if (!resolved) {
     throw new Error(`Chain "${name}" not found.`);
   }
 
-  if (name === "polkadot") {
-    throw new Error('Cannot remove the built-in "polkadot" chain.');
+  if (BUILTIN_CHAIN_NAMES.has(resolved)) {
+    throw new Error(`Cannot remove the built-in "${resolved}" chain.`);
   }
 
-  delete config.chains[name];
+  delete config.chains[resolved];
 
-  if (config.defaultChain === name) {
+  if (config.defaultChain === resolved) {
     config.defaultChain = "polkadot";
     console.log(`Default chain reset to "polkadot".`);
   }
 
   await saveConfig(config);
-  await removeChainData(name);
-  console.log(`Chain "${name}" removed.`);
+  await removeChainData(resolved);
+  console.log(`Chain "${resolved}" removed.`);
 }
 
 async function chainList() {
@@ -161,12 +169,13 @@ async function chainDefault(name: string | undefined) {
 
   const config = await loadConfig();
 
-  if (!config.chains[name]) {
+  const resolved = findChainName(config, name);
+  if (!resolved) {
     const available = Object.keys(config.chains).join(", ");
     throw new Error(`Chain "${name}" not found. Available: ${available}`);
   }
 
-  config.defaultChain = name;
+  config.defaultChain = resolved;
   await saveConfig(config);
-  console.log(`Default chain set to "${name}".`);
+  console.log(`Default chain set to "${resolved}".`);
 }
