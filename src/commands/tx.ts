@@ -882,12 +882,16 @@ function watchTransaction(observable: import("rxjs").Observable<TxEvent>): Promi
 }
 
 export {
+  autoDefaultForType,
+  buildCustomSignedExtensions,
   formatDispatchError,
   formatEventValue,
+  NO_DEFAULT,
+  normalizeValue,
   parseCallArgs,
   parseEnumShorthand,
-  parseTypedArg,
-  parseStructArgs,
-  normalizeValue,
+  parseExtOption,
   parsePrimitive,
+  parseStructArgs,
+  parseTypedArg,
 };

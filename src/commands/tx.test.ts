@@ -3,11 +3,15 @@ import { Binary } from "polkadot-api";
 import { getTestMetadata } from "./__fixtures__/load-metadata.ts";
 import { runCli } from "./__fixtures__/run-cli.ts";
 import {
+  autoDefaultForType,
+  buildCustomSignedExtensions,
   formatDispatchError,
   formatEventValue,
+  NO_DEFAULT,
   normalizeValue,
   parseCallArgs,
   parseEnumShorthand,
+  parseExtOption,
   parsePrimitive,
   parseTypedArg,
 } from "./tx.ts";
@@ -644,6 +648,87 @@ describe("formatDispatchError", () => {
   test("Module error with non-object value falls back to type: value", () => {
     const err = { type: "Module", value: "unexpected" };
     expect(formatDispatchError(err)).toBe("Module: unexpected");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseExtOption
+// ---------------------------------------------------------------------------
+
+describe("parseExtOption", () => {
+  test("undefined returns empty object", () => {
+    expect(parseExtOption(undefined)).toEqual({});
+  });
+
+  test("valid JSON object is returned", () => {
+    expect(parseExtOption('{"Foo":{"value":1}}')).toEqual({ Foo: { value: 1 } });
+  });
+
+  test("JSON array throws", () => {
+    expect(() => parseExtOption("[1,2]")).toThrow("JSON object");
+  });
+
+  test("non-object JSON (string) throws", () => {
+    expect(() => parseExtOption('"hello"')).toThrow("JSON object");
+  });
+
+  test("invalid JSON throws with helpful message", () => {
+    expect(() => parseExtOption("{bad}")).toThrow("Failed to parse --ext JSON");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// autoDefaultForType
+// ---------------------------------------------------------------------------
+
+describe("autoDefaultForType", () => {
+  test("void returns empty Uint8Array", () => {
+    const result = autoDefaultForType({ type: "void" });
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect((result as Uint8Array).length).toBe(0);
+  });
+
+  test("option returns undefined", () => {
+    expect(
+      autoDefaultForType({ type: "option", value: { type: "primitive", value: "u32" } }),
+    ).toBeUndefined();
+  });
+
+  test("enum with Disabled variant returns Disabled", () => {
+    const entry = {
+      type: "enum",
+      value: { Enabled: { type: "void" }, Disabled: { type: "void" } },
+    };
+    expect(autoDefaultForType(entry)).toEqual({ type: "Disabled", value: undefined });
+  });
+
+  test("enum without Disabled variant returns NO_DEFAULT", () => {
+    const entry = { type: "enum", value: { Enabled: { type: "void" } } };
+    expect(autoDefaultForType(entry)).toBe(NO_DEFAULT);
+  });
+
+  test("other types return NO_DEFAULT", () => {
+    expect(autoDefaultForType({ type: "primitive", value: "u32" })).toBe(NO_DEFAULT);
+    expect(autoDefaultForType({ type: "struct", value: {} })).toBe(NO_DEFAULT);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildCustomSignedExtensions
+// ---------------------------------------------------------------------------
+
+describe("buildCustomSignedExtensions", () => {
+  test("skips PAPI builtin extensions", () => {
+    const result = buildCustomSignedExtensions(meta, {});
+    expect(result).not.toHaveProperty("CheckNonce");
+    expect(result).not.toHaveProperty("CheckMortality");
+    expect(result).not.toHaveProperty("CheckWeight");
+    expect(result).not.toHaveProperty("ChargeTransactionPayment");
+  });
+
+  test("returns empty for standard polkadot metadata (all extensions are builtins)", () => {
+    const result = buildCustomSignedExtensions(meta, {});
+    expect(Object.keys(result).length).toBe(0);
   });
 });
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { findChainName, resolveChain } from "./store.ts";
 import type { Config } from "./types.ts";
+import { DEFAULT_CONFIG } from "./types.ts";
 
 const config: Config = {
   defaultChain: "polkadot",
@@ -72,5 +73,47 @@ describe("findChainName", () => {
 
   test("returns undefined for unknown chain", () => {
     expect(findChainName(config, "westend")).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadConfig merge logic (inline simulation — the same spread pattern used in loadConfig)
+// ---------------------------------------------------------------------------
+
+describe("loadConfig merge behavior", () => {
+  function simulateMerge(saved: Config): Config {
+    return {
+      ...saved,
+      chains: { ...DEFAULT_CONFIG.chains, ...saved.chains },
+    };
+  }
+
+  test("saved config with only custom chains still includes all built-in chains", () => {
+    const saved: Config = {
+      defaultChain: "my-chain",
+      chains: { "my-chain": { rpc: "wss://my-chain.example" } },
+    };
+    const merged = simulateMerge(saved);
+    for (const name of Object.keys(DEFAULT_CONFIG.chains)) {
+      expect(merged.chains[name]).toBeDefined();
+    }
+    expect(merged.chains["my-chain"]).toEqual({ rpc: "wss://my-chain.example" });
+  });
+
+  test("saved config overrides for built-in chain are preserved", () => {
+    const saved: Config = {
+      defaultChain: "polkadot",
+      chains: { polkadot: { rpc: "wss://my-custom-rpc.example" } },
+    };
+    const merged = simulateMerge(saved);
+    expect(merged.chains.polkadot!.rpc).toBe("wss://my-custom-rpc.example");
+    // Other built-in chains still present
+    expect(merged.chains.paseo).toBeDefined();
+  });
+
+  test("empty saved chains still gets all built-in chains", () => {
+    const saved: Config = { defaultChain: "polkadot", chains: {} };
+    const merged = simulateMerge(saved);
+    expect(Object.keys(merged.chains)).toEqual(Object.keys(DEFAULT_CONFIG.chains));
   });
 });

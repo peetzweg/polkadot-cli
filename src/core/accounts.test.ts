@@ -7,6 +7,7 @@ import {
   importAccount,
   isDevAccount,
   publicKeyToHex,
+  resolveAccountSigner,
   resolveSecret,
   toSs58,
   tryDerivePublicKey,
@@ -191,5 +192,43 @@ describe("tryDerivePublicKey", () => {
     process.env[ENV_KEY] = hexSeed;
     const result = tryDerivePublicKey(ENV_KEY);
     expect(result).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveAccountSigner
+// ---------------------------------------------------------------------------
+
+describe("resolveAccountSigner", () => {
+  test("dev account (alice) returns a valid signer with known public key", async () => {
+    const signer = await resolveAccountSigner("alice");
+    expect(signer).toBeDefined();
+    expect(signer.publicKey).toBeInstanceOf(Uint8Array);
+    expect(signer.publicKey).toHaveLength(32);
+    expect(publicKeyToHex(signer.publicKey)).toBe(
+      "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+    );
+  });
+
+  test("dev account is case-insensitive", async () => {
+    const lower = await resolveAccountSigner("bob");
+    const upper = await resolveAccountSigner("Bob");
+    expect(publicKeyToHex(lower.publicKey)).toBe(publicKeyToHex(upper.publicKey));
+  });
+
+  test("all dev accounts produce distinct signers", async () => {
+    const keys = new Set<string>();
+    for (const name of ["alice", "bob", "charlie", "dave", "eve", "ferdie"]) {
+      const signer = await resolveAccountSigner(name);
+      keys.add(publicKeyToHex(signer.publicKey));
+    }
+    expect(keys.size).toBe(6);
+  });
+
+  test("unknown account throws with available accounts list", async () => {
+    // This will read from real accounts file but "nonexistent" should never exist
+    await expect(resolveAccountSigner("nonexistent_account_xyz_42")).rejects.toThrow(
+      /Unknown account.*Available accounts/,
+    );
   });
 });

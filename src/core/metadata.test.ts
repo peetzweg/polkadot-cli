@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { getTestMetadata } from "../commands/__fixtures__/load-metadata.ts";
+import { MetadataError } from "../utils/errors.ts";
 import {
   describeType,
   findPallet,
+  getOrFetchMetadata,
   getPalletNames,
   getSignedExtensions,
   type Lookup,
   listPallets,
   type MetadataBundle,
+  parseMetadata,
 } from "./metadata.ts";
 
 const meta: MetadataBundle = getTestMetadata();
@@ -185,5 +188,22 @@ describe("getSignedExtensions", () => {
       expect(typeof ext.type).toBe("number");
       expect(typeof ext.additionalSigned).toBe("number");
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getOrFetchMetadata — error paths
+// ---------------------------------------------------------------------------
+
+describe("getOrFetchMetadata", () => {
+  test("no cached metadata + no client throws MetadataError", async () => {
+    // Use a chain name that definitely has no cached metadata
+    await expect(getOrFetchMetadata("nonexistent-chain-xyz")).rejects.toThrow(MetadataError);
+    await expect(getOrFetchMetadata("nonexistent-chain-xyz")).rejects.toThrow(/No cached metadata/);
+  });
+
+  test("corrupt metadata bytes throws", () => {
+    const garbage = new Uint8Array([0x00, 0x01, 0x02, 0x03]);
+    expect(() => parseMetadata(garbage)).toThrow();
   });
 });
