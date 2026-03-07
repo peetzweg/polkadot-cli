@@ -96,10 +96,10 @@ describe("dot account", () => {
     expect(stderr).toContain("name is required");
   });
 
-  test("import name (no --secret) errors", async () => {
+  test("import name (no --secret or --env) errors", async () => {
     const { stderr, exitCode } = await runCli(["account", "import", "my-key"]);
     expect(exitCode).toBe(1);
-    expect(stderr).toContain("--secret is required");
+    expect(stderr).toContain("--secret or --env is required");
   });
 
   test("import bob (dev name) errors", async () => {
@@ -172,51 +172,74 @@ describe("dot account", () => {
     expect(stderr).toContain("not found");
   });
 
-  test("add name --env VAR (env set) succeeds with address", async () => {
+  test("add is an alias for import (--secret)", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "add",
+      "my-imported",
+      "--secret",
+      TEST_MNEMONIC,
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Imported");
+    expect(stdout).toContain("Address:");
+  });
+
+  test("add is an alias for import (--env)", async () => {
     const { stdout, exitCode } = await runCli(
       ["account", "add", "env-test", "--env", "MY_SECRET"],
+      { env: { MY_SECRET: TEST_MNEMONIC } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Imported");
+    expect(stdout).toContain("Address:");
+  });
+
+  test("import name --env VAR (env set) succeeds with address", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "import", "env-test", "--env", "MY_SECRET"],
       {
         env: { MY_SECRET: TEST_MNEMONIC },
       },
     );
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("Account Added");
+    expect(stdout).toContain("Account Imported");
     expect(stdout).toContain("Address:");
   });
 
-  test("add name --env VAR (env not set) succeeds with deferred", async () => {
+  test("import name --env VAR (env not set) succeeds with deferred", async () => {
     const { stdout, exitCode } = await runCli(
-      ["account", "add", "env-test", "--env", "MY_SECRET"],
+      ["account", "import", "env-test", "--env", "MY_SECRET"],
       { env: { MY_SECRET: "" } },
     );
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("Account Added");
+    expect(stdout).toContain("Account Imported");
     expect(stdout).toContain("will resolve");
   });
 
-  test("add (no name) errors", async () => {
-    const { stderr, exitCode } = await runCli(["account", "add"]);
+  test("import --secret and --env together errors", async () => {
+    const { stderr, exitCode } = await runCli(
+      ["account", "import", "env-test", "--secret", TEST_MNEMONIC, "--env", "MY_SECRET"],
+      { env: { MY_SECRET: TEST_MNEMONIC } },
+    );
     expect(exitCode).toBe(1);
-    expect(stderr).toContain("name is required");
+    expect(stderr).toContain("Use --secret or --env, not both");
   });
 
-  test("add name (no --env) errors", async () => {
-    const { stderr, exitCode } = await runCli(["account", "add", "env-test"]);
-    expect(exitCode).toBe(1);
-    expect(stderr).toContain("--env is required");
-  });
-
-  test("add alice --env VAR (dev name) errors", async () => {
-    const { stderr, exitCode } = await runCli(["account", "add", "alice", "--env", "MY_SECRET"], {
-      env: { MY_SECRET: TEST_MNEMONIC },
-    });
+  test("import alice --env VAR (dev name) errors", async () => {
+    const { stderr, exitCode } = await runCli(
+      ["account", "import", "alice", "--env", "MY_SECRET"],
+      {
+        env: { MY_SECRET: TEST_MNEMONIC },
+      },
+    );
     expect(exitCode).toBe(1);
     expect(stderr).toContain("built-in dev account");
   });
 
-  test("add duplicate --env VAR errors", async () => {
+  test("import duplicate --env VAR errors", async () => {
     const { stderr, exitCode } = await runCli(
-      ["account", "add", "my-account", "--env", "MY_SECRET"],
+      ["account", "import", "my-account", "--env", "MY_SECRET"],
       {
         accounts: [STORED_ACCOUNT],
         env: { MY_SECRET: TEST_MNEMONIC },

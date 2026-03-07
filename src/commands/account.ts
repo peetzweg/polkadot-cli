@@ -15,16 +15,16 @@ import { BOLD, printHeading, printItem, RESET, YELLOW } from "../core/output.ts"
 
 const ACCOUNT_HELP = `
 ${BOLD}Usage:${RESET}
-  $ dot account create|new <name>             Create a new account
-  $ dot account import <name> --secret <s>   Import from BIP39 mnemonic
-  $ dot account add <name> --env <VAR>       Add account backed by env variable
-  $ dot account list                         List all accounts
-  $ dot account remove|delete <name>         Remove a stored account
+  $ dot account create|new <name>                       Create a new account
+  $ dot account import|add <name> --secret <s>          Import from BIP39 mnemonic
+  $ dot account import|add <name> --env <VAR>           Import account backed by env variable
+  $ dot account list                                    List all accounts
+  $ dot account remove|delete <name>                    Remove a stored account
 
 ${BOLD}Examples:${RESET}
   $ dot account create my-validator
   $ dot account import treasury --secret "word1 word2 ... word12"
-  $ dot account add ci-signer --env MY_SECRET
+  $ dot account import ci-signer --env MY_SECRET
   $ dot account list
   $ dot account remove my-validator
 
@@ -35,7 +35,7 @@ ${YELLOW}Note: Secrets are stored unencrypted in ~/.polkadot/accounts.json.
 
 export function registerAccountCommands(cli: CAC) {
   cli
-    .command("account [action] [name]", "Manage local accounts (create, import, add, list, remove)")
+    .command("account [action] [name]", "Manage local accounts (create, import, list, remove)")
     .alias("accounts")
     .option("--secret <value>", "Secret key (mnemonic or hex seed) for import")
     .option("--env <varName>", "Environment variable name holding the secret")
@@ -54,9 +54,8 @@ export function registerAccountCommands(cli: CAC) {
           case "create":
             return accountCreate(name);
           case "import":
-            return accountImport(name, opts);
           case "add":
-            return accountAdd(name, opts);
+            return accountImport(name, opts);
           case "list":
             return accountList();
           case "delete":
@@ -112,16 +111,22 @@ async function accountCreate(name: string | undefined) {
   console.log();
 }
 
-async function accountImport(name: string | undefined, opts: { secret?: string }) {
+async function accountImport(name: string | undefined, opts: { secret?: string; env?: string }) {
   if (!name) {
     console.error("Account name is required.\n");
     console.error('Usage: dot account import <name> --secret "mnemonic or hex seed"');
     process.exit(1);
   }
 
-  if (!opts.secret) {
-    console.error("--secret is required.\n");
+  if (opts.secret && opts.env) {
+    console.error("Use --secret or --env, not both.\n");
+    process.exit(1);
+  }
+
+  if (!opts.secret && !opts.env) {
+    console.error("--secret or --env is required.\n");
     console.error('Usage: dot account import <name> --secret "mnemonic or hex seed"');
+    console.error("       dot account import <name> --env <VAR>");
     process.exit(1);
   }
 
@@ -136,67 +141,44 @@ async function accountImport(name: string | undefined, opts: { secret?: string }
     throw new Error(`Account "${name}" already exists.`);
   }
 
-  const { publicKey } = importAccount(opts.secret);
-  const hexPub = publicKeyToHex(publicKey);
-  const address = toSs58(publicKey);
+  if (opts.env) {
+    const publicKey = tryDerivePublicKey(opts.env) ?? "";
 
-  accountsFile.accounts.push({
-    name,
-    secret: opts.secret,
-    publicKey: hexPub,
-    derivationPath: "",
-  });
-  await saveAccounts(accountsFile);
+    accountsFile.accounts.push({
+      name,
+      secret: { env: opts.env },
+      publicKey,
+      derivationPath: "",
+    });
+    await saveAccounts(accountsFile);
 
-  printHeading("Account Imported");
-  console.log(`  ${BOLD}Name:${RESET}    ${name}`);
-  console.log(`  ${BOLD}Address:${RESET} ${address}`);
-  console.log();
-}
-
-async function accountAdd(name: string | undefined, opts: { env?: string }) {
-  if (!name) {
-    console.error("Account name is required.\n");
-    console.error("Usage: dot account add <name> --env <VAR>");
-    process.exit(1);
-  }
-
-  if (!opts.env) {
-    console.error("--env is required.\n");
-    console.error("Usage: dot account add <name> --env <VAR>");
-    process.exit(1);
-  }
-
-  if (isDevAccount(name)) {
-    throw new Error(
-      `"${name}" is a built-in dev account and cannot be used as a custom account name.`,
-    );
-  }
-
-  const accountsFile = await loadAccounts();
-  if (findAccount(accountsFile, name)) {
-    throw new Error(`Account "${name}" already exists.`);
-  }
-
-  const publicKey = tryDerivePublicKey(opts.env) ?? "";
-
-  accountsFile.accounts.push({
-    name,
-    secret: { env: opts.env },
-    publicKey,
-    derivationPath: "",
-  });
-  await saveAccounts(accountsFile);
-
-  printHeading("Account Added");
-  console.log(`  ${BOLD}Name:${RESET}  ${name}`);
-  console.log(`  ${BOLD}Env:${RESET}   ${opts.env}`);
-  if (publicKey) {
-    console.log(`  ${BOLD}Address:${RESET} ${toSs58(publicKey)}`);
+    printHeading("Account Imported");
+    console.log(`  ${BOLD}Name:${RESET}    ${name}`);
+    console.log(`  ${BOLD}Env:${RESET}     ${opts.env}`);
+    if (publicKey) {
+      console.log(`  ${BOLD}Address:${RESET} ${toSs58(publicKey)}`);
+    } else {
+      console.log(`  ${YELLOW}Address will resolve when $${opts.env} is set.${RESET}`);
+    }
+    console.log();
   } else {
-    console.log(`  ${YELLOW}Address will resolve when $${opts.env} is set.${RESET}`);
+    const { publicKey } = importAccount(opts.secret!);
+    const hexPub = publicKeyToHex(publicKey);
+    const address = toSs58(publicKey);
+
+    accountsFile.accounts.push({
+      name,
+      secret: opts.secret!,
+      publicKey: hexPub,
+      derivationPath: "",
+    });
+    await saveAccounts(accountsFile);
+
+    printHeading("Account Imported");
+    console.log(`  ${BOLD}Name:${RESET}    ${name}`);
+    console.log(`  ${BOLD}Address:${RESET} ${address}`);
+    console.log();
   }
-  console.log();
 }
 
 async function accountList() {

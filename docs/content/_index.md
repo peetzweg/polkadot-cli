@@ -94,13 +94,17 @@ dot account import treasury --secret "word1 word2 ... word12"
 dot account import raw-key --secret 0xabcdef...
 ```
 
-### Add an env-var-backed account
+`add` is an alias for `import`.
+
+### Import an env-var-backed account
 
 Store a reference to an environment variable instead of the secret itself. The secret never touches disk — ideal for CI/CD pipelines and security-conscious workflows:
 
 ```
-dot account add ci-signer --env MY_SECRET
+dot account import ci-signer --env MY_SECRET
 ```
+
+`--secret` and `--env` are mutually exclusive.
 
 At signing time, the CLI reads `$MY_SECRET` and derives the keypair. If the variable is not set, the CLI errors with a clear message.
 

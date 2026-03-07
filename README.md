@@ -61,8 +61,8 @@ dot account create my-validator
 # Import from a BIP39 mnemonic
 dot account import treasury --secret "word1 word2 ... word12"
 
-# Add an env-var-backed account (secret stays off disk)
-dot account add ci-signer --env MY_SECRET
+# Import an env-var-backed account (secret stays off disk)
+dot account import ci-signer --env MY_SECRET
 
 # Use it — the env var is read at signing time
 MY_SECRET="word1 word2 ..." dot tx System.remark 0xdead --from ci-signer
@@ -76,8 +76,10 @@ dot account remove my-validator
 For CI/CD and security-conscious workflows, store a reference to an environment variable instead of the secret itself:
 
 ```bash
-dot account add ci-signer --env MY_SECRET
+dot account import ci-signer --env MY_SECRET
 ```
+
+`--secret` and `--env` are mutually exclusive. `add` is an alias for `import`.
 
 The secret is never written to disk. At signing time, the CLI reads `$MY_SECRET` and derives the keypair. If the variable is not set, the CLI errors with a clear message. `account list` shows an `(env: MY_SECRET)` badge and resolves the address live when the variable is available.
 
