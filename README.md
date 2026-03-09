@@ -4,7 +4,26 @@
 
 A command-line tool for interacting with Polkadot-ecosystem chains. Manage chains and accounts, query storage, look up constants, inspect metadata, submit extrinsics, and compute hashes — all from your terminal.
 
-Ships with Polkadot as the default chain with multiple fallback RPC endpoints. Add any Substrate-based chain by pointing to its RPC endpoint(s).
+Ships with Polkadot and all system parachains preconfigured with multiple fallback RPC endpoints. Add any Substrate-based chain by pointing to its RPC endpoint(s).
+
+### Preconfigured chains
+
+| Network | Chain | Light client |
+|---------|-------|:---:|
+| Polkadot | `polkadot` (relay, default) | yes |
+| | `polkadot-asset-hub` | yes |
+| | `polkadot-bridge-hub` | yes |
+| | `polkadot-collectives` | yes |
+| | `polkadot-coretime` | yes |
+| | `polkadot-people` | yes |
+| Paseo (testnet) | `paseo` (relay) | yes |
+| | `paseo-asset-hub` | yes |
+| | `paseo-bridge-hub` | — |
+| | `paseo-collectives` | — |
+| | `paseo-coretime` | yes |
+| | `paseo-people` | yes |
+
+Each chain ships with multiple RPC endpoints from decentralized infrastructure providers (IBP, Dotters, Dwellir, and others). The CLI automatically falls back to the next endpoint if the primary is unreachable.
 
 ## Install
 

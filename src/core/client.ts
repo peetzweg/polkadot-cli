@@ -18,8 +18,13 @@ const KNOWN_CHAIN_SPECS: Record<string, ChainSpecEntry> = {
   westend: { spec: "polkadot-api/chains/westend2" },
   paseo: { spec: "polkadot-api/chains/paseo" },
   "polkadot-asset-hub": { spec: "polkadot-api/chains/polkadot_asset_hub", relay: "polkadot" },
+  "polkadot-bridge-hub": { spec: "polkadot-api/chains/polkadot_bridge_hub", relay: "polkadot" },
+  "polkadot-collectives": { spec: "polkadot-api/chains/polkadot_collectives", relay: "polkadot" },
+  "polkadot-coretime": { spec: "polkadot-api/chains/polkadot_coretime", relay: "polkadot" },
   "polkadot-people": { spec: "polkadot-api/chains/polkadot_people", relay: "polkadot" },
   "paseo-asset-hub": { spec: "polkadot-api/chains/paseo_asset_hub", relay: "paseo" },
+  "paseo-coretime": { spec: "polkadot-api/chains/paseo_coretime", relay: "paseo" },
+  "paseo-people": { spec: "polkadot-api/chains/paseo_people", relay: "paseo" },
 };
 
 export interface ClientHandle {

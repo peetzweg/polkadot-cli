@@ -10,11 +10,32 @@ Install globally via npm:
 npm install -g polkadot-cli@latest
 ```
 
-This installs the `dot` command globally. Ships with Polkadot as the default chain with multiple fallback RPC endpoints. Add any Substrate-based chain by pointing to its RPC endpoint(s).
+This installs the `dot` command globally. Ships with Polkadot and all system parachains preconfigured with multiple fallback RPC endpoints. Add any Substrate-based chain by pointing to its RPC endpoint(s).
 
 ## Chains
 
-Manage chain connections. Polkadot is configured by default. Add any Substrate-based chain by RPC endpoint or Smoldot light client.
+Manage chain connections. Polkadot is configured by default along with all system parachains for both Polkadot and Paseo networks. Add any Substrate-based chain by RPC endpoint or Smoldot light client.
+
+### Preconfigured chains
+
+The following chains are available out of the box — no `dot chain add` needed:
+
+| Network | Chain | Light client |
+|---------|-------|:---:|
+| Polkadot | `polkadot` (relay, default) | yes |
+| | `polkadot-asset-hub` | yes |
+| | `polkadot-bridge-hub` | yes |
+| | `polkadot-collectives` | yes |
+| | `polkadot-coretime` | yes |
+| | `polkadot-people` | yes |
+| Paseo (testnet) | `paseo` (relay) | yes |
+| | `paseo-asset-hub` | yes |
+| | `paseo-bridge-hub` | — |
+| | `paseo-collectives` | — |
+| | `paseo-coretime` | yes |
+| | `paseo-people` | yes |
+
+Each chain ships with multiple RPC endpoints from decentralized infrastructure providers (IBP, Dotters, Dwellir, and others). The CLI automatically falls back to the next endpoint if the primary is unreachable. Use `dot chain list` to see all endpoints for each chain.
 
 ### Add a chain
 

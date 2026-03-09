@@ -38,9 +38,18 @@ describe("dot chain", () => {
     expect(stdout).toContain("(default)");
     expect(stdout).toContain("rpc.polkadot.io");
     expect(stdout).toContain("paseo");
+    // Polkadot system parachains
     expect(stdout).toContain("polkadot-asset-hub");
-    expect(stdout).toContain("paseo-asset-hub");
+    expect(stdout).toContain("polkadot-bridge-hub");
+    expect(stdout).toContain("polkadot-collectives");
+    expect(stdout).toContain("polkadot-coretime");
     expect(stdout).toContain("polkadot-people");
+    // Paseo system parachains
+    expect(stdout).toContain("paseo-asset-hub");
+    expect(stdout).toContain("paseo-bridge-hub");
+    expect(stdout).toContain("paseo-collectives");
+    expect(stdout).toContain("paseo-coretime");
+    expect(stdout).toContain("paseo-people");
   });
 
   test("list with multiple chains shows all", async () => {
@@ -89,9 +98,9 @@ describe("dot chain", () => {
     const { stdout, exitCode } = await runCli(["chain", "list"]);
     expect(exitCode).toBe(0);
     // polkadot should show primary + fallback RPCs
+    expect(stdout).toContain("polkadot.ibp.network");
+    expect(stdout).toContain("polkadot-rpc.n.dwellir.com");
     expect(stdout).toContain("rpc.polkadot.io");
-    expect(stdout).toContain("polkadot-rpc.dwellir.com");
-    expect(stdout).toContain("rpc.ibp.network/polkadot");
   });
 
   test("list with single-element array rpc", async () => {
@@ -181,6 +190,24 @@ describe("dot chain", () => {
     const { stderr, exitCode } = await runCli(["chain", "remove", "polkadot-asset-hub"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain('Cannot remove the built-in "polkadot-asset-hub" chain');
+  });
+
+  test("remove polkadot-bridge-hub errors (built-in)", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "remove", "polkadot-bridge-hub"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Cannot remove the built-in "polkadot-bridge-hub" chain');
+  });
+
+  test("remove paseo-people errors (built-in)", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "remove", "paseo-people"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Cannot remove the built-in "paseo-people" chain');
+  });
+
+  test("remove polkadot-coretime errors (built-in)", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "remove", "polkadot-coretime"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Cannot remove the built-in "polkadot-coretime" chain');
   });
 
   test("remove nonexistent errors", async () => {

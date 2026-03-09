@@ -35,11 +35,64 @@ describe("DEFAULT_CONFIG", () => {
 
   test("primaryRpc works with DEFAULT_CONFIG chains", () => {
     const primary = primaryRpc(DEFAULT_CONFIG.chains.polkadot!.rpc);
-    expect(primary).toBe("wss://rpc.polkadot.io");
+    expect(primary).toBe("wss://polkadot.ibp.network");
   });
 
   test("BUILTIN_CHAIN_NAMES matches DEFAULT_CONFIG keys", () => {
     const configKeys = new Set(Object.keys(DEFAULT_CONFIG.chains));
     expect(BUILTIN_CHAIN_NAMES).toEqual(configKeys);
+  });
+
+  test("includes all Polkadot system parachains", () => {
+    const expected = [
+      "polkadot",
+      "polkadot-asset-hub",
+      "polkadot-bridge-hub",
+      "polkadot-collectives",
+      "polkadot-coretime",
+      "polkadot-people",
+    ];
+    for (const name of expected) {
+      expect(BUILTIN_CHAIN_NAMES.has(name)).toBe(true);
+    }
+  });
+
+  test("includes all Paseo system parachains", () => {
+    const expected = [
+      "paseo",
+      "paseo-asset-hub",
+      "paseo-bridge-hub",
+      "paseo-collectives",
+      "paseo-coretime",
+      "paseo-people",
+    ];
+    for (const name of expected) {
+      expect(BUILTIN_CHAIN_NAMES.has(name)).toBe(true);
+    }
+  });
+
+  test("all RPC URLs use wss:// protocol", () => {
+    for (const [_name, config] of Object.entries(DEFAULT_CONFIG.chains)) {
+      const rpcs = Array.isArray(config.rpc) ? config.rpc : [config.rpc];
+      for (const url of rpcs) {
+        expect(url).toMatch(/^wss:\/\//);
+      }
+    }
+  });
+
+  test("every chain has at least 2 RPC endpoints", () => {
+    for (const [_name, config] of Object.entries(DEFAULT_CONFIG.chains)) {
+      expect((config.rpc as string[]).length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  test("relay chains use IBP as primary endpoint", () => {
+    expect(primaryRpc(DEFAULT_CONFIG.chains.polkadot!.rpc)).toContain("ibp.network");
+    expect(primaryRpc(DEFAULT_CONFIG.chains.paseo!.rpc)).toContain("ibp.network");
+  });
+
+  test("polkadot relay keeps rpc.polkadot.io as last fallback", () => {
+    const rpcs = DEFAULT_CONFIG.chains.polkadot!.rpc as string[];
+    expect(rpcs[rpcs.length - 1]).toBe("wss://rpc.polkadot.io");
   });
 });
