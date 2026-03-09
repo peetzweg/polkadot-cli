@@ -1,5 +1,18 @@
 # polkadot-cli
 
+## 0.12.0
+
+### Minor Changes
+
+- e811262: Add `--path` option to `account create`, `account import`, and a new `account derive` action for derivation path support. Accounts created or imported with a path derive a different keypair from the same secret. `account list` shows the derivation path alongside the account name.
+- ab8919b: Support deleting multiple accounts in one command: `dot account delete wallet1 wallet2 wallet3`. All names are validated upfront — if any name is invalid or not found, no accounts are removed (atomic semantics).
+- 13ecf03: Support multiple RPC endpoints per chain with automatic fallback. Built-in chains now ship with fallback providers. Use repeated `--rpc` flags to configure multiple endpoints: `dot chain add kusama --rpc wss://a --rpc wss://b`. If the primary endpoint is unreachable, the CLI automatically tries the next one. Existing single-RPC configs continue to work unchanged.
+- 7e576b3: Add all system parachains as preconfigured chains with full RPC endpoint lists. Polkadot and Paseo now ship with Asset Hub, Bridge Hub, Collectives, Coretime, and People parachains out of the box. Existing chains (polkadot, paseo, polkadot-asset-hub, paseo-asset-hub, polkadot-people) have been updated with additional RPC providers. IBP endpoints are listed first as primary, with community providers as fallbacks. Light client chain specs are included for all chains where available.
+
+### Patch Changes
+
+- 3c5a2cc: Fix `--help` flag on subcommands (`dot account --help`, `dot chain --help`, `dot hash --help`) to show the same detailed custom help as running the bare command instead of CAC's generic auto-generated help.
+
 ## 0.11.0
 
 ### Minor Changes
