@@ -304,6 +304,49 @@ describe("dot account", () => {
     expect(stdout).toContain("removed");
   });
 
+  // multi-delete tests
+
+  test("remove multiple names succeeds", async () => {
+    const accounts: StoredAccount[] = [
+      STORED_ACCOUNT,
+      { ...STORED_ACCOUNT, name: "acct-2" },
+      { ...STORED_ACCOUNT, name: "acct-3" },
+    ];
+    const { stdout, exitCode } = await runCli(["account", "remove", "my-account", "acct-3"], {
+      accounts,
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('"my-account" removed');
+    expect(stdout).toContain('"acct-3" removed');
+  });
+
+  test("remove multiple with one not-found errors without deleting any", async () => {
+    const accounts: StoredAccount[] = [STORED_ACCOUNT, { ...STORED_ACCOUNT, name: "acct-2" }];
+    const { stderr, exitCode } = await runCli(["account", "remove", "my-account", "ghost"], {
+      accounts,
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('"ghost" not found');
+  });
+
+  test("remove multiple with one dev account errors without deleting any", async () => {
+    const { stderr, exitCode } = await runCli(["account", "remove", "my-account", "alice"], {
+      accounts: [STORED_ACCOUNT],
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("built-in dev account");
+  });
+
+  test("delete multiple (alias) succeeds", async () => {
+    const accounts: StoredAccount[] = [STORED_ACCOUNT, { ...STORED_ACCOUNT, name: "acct-2" }];
+    const { stdout, exitCode } = await runCli(["account", "delete", "my-account", "acct-2"], {
+      accounts,
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('"my-account" removed');
+    expect(stdout).toContain('"acct-2" removed');
+  });
+
   // --path tests
 
   test("create --path //Test creates account with derivation path", async () => {

@@ -163,11 +163,13 @@ dot account derive treasury treasury-gov --path //governance
   ci-signer (//ci) (env: MY_SECRET)  5EPCUjPx...
 ```
 
-### Remove an account
+### Remove accounts
+
+Remove one or more stored accounts in a single command. When multiple names are given, the command validates all of them before deleting any — if one name is invalid, nothing is removed.
 
 ```
 dot account remove my-validator
-dot account delete my-validator
+dot account delete my-validator stale-key
 ```
 
 `delete` is an alias for `remove`.

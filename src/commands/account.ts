@@ -20,7 +20,7 @@ ${BOLD}Usage:${RESET}
   $ dot account import|add <name> --env <VAR> [--path <derivation>]  Import account backed by env variable
   $ dot account derive <source> <new-name> --path <derivation>       Derive a child account
   $ dot account list                                                 List all accounts
-  $ dot account remove|delete <name>                                 Remove a stored account
+  $ dot account remove|delete <name> [name2] ...                     Remove stored account(s)
 
 ${BOLD}Examples:${RESET}
   $ dot account create my-validator
@@ -30,7 +30,7 @@ ${BOLD}Examples:${RESET}
   $ dot account import ci-signer --env MY_SECRET --path //ci
   $ dot account derive treasury treasury-staking --path //staking
   $ dot account list
-  $ dot account remove my-validator
+  $ dot account remove my-validator stale-key
 
 ${YELLOW}Note: Secrets are stored unencrypted in ~/.polkadot/accounts.json.
       Use --env to keep secrets off disk entirely.
@@ -39,10 +39,7 @@ ${YELLOW}Note: Secrets are stored unencrypted in ~/.polkadot/accounts.json.
 
 export function registerAccountCommands(cli: CAC) {
   cli
-    .command(
-      "account [action] [name] [extra]",
-      "Manage local accounts (create, import, list, remove)",
-    )
+    .command("account [action] [...names]", "Manage local accounts (create, import, list, remove)")
     .alias("accounts")
     .option("--secret <value>", "Secret key (mnemonic or hex seed) for import")
     .option("--env <varName>", "Environment variable name holding the secret")
@@ -50,8 +47,7 @@ export function registerAccountCommands(cli: CAC) {
     .action(
       async (
         action: string | undefined,
-        name: string | undefined,
-        extra: string | undefined,
+        names: string[],
         opts: { secret?: string; env?: string; path?: string },
       ) => {
         if (!action) {
@@ -62,17 +58,17 @@ export function registerAccountCommands(cli: CAC) {
         switch (action) {
           case "new":
           case "create":
-            return accountCreate(name, opts);
+            return accountCreate(names[0], opts);
           case "import":
           case "add":
-            return accountImport(name, opts);
+            return accountImport(names[0], opts);
           case "derive":
-            return accountDerive(name, extra, opts);
+            return accountDerive(names[0], names[1], opts);
           case "list":
             return accountList();
           case "delete":
           case "remove":
-            return accountRemove(name);
+            return accountRemove(names);
           default:
             console.error(`Unknown action "${action}".\n`);
             console.log(ACCOUNT_HELP);
@@ -326,24 +322,45 @@ async function accountList() {
   console.log();
 }
 
-async function accountRemove(name: string | undefined) {
-  if (!name) {
-    console.error("Account name is required.\n");
-    console.error("Usage: dot account remove <name>");
+async function accountRemove(names: string[]) {
+  if (names.length === 0) {
+    console.error("At least one account name is required.\n");
+    console.error("Usage: dot account remove <name> [name2] ...");
     process.exit(1);
   }
 
-  if (isDevAccount(name)) {
-    throw new Error("Cannot remove built-in dev accounts.");
+  // Validate all names upfront before deleting anything
+  const errors: string[] = [];
+  for (const name of names) {
+    if (isDevAccount(name)) {
+      errors.push(`Cannot remove built-in dev account "${name}".`);
+    }
+  }
+  if (errors.length > 0) {
+    throw new Error(errors.join("\n"));
   }
 
   const accountsFile = await loadAccounts();
-  const idx = accountsFile.accounts.findIndex((a) => a.name.toLowerCase() === name.toLowerCase());
-  if (idx === -1) {
-    throw new Error(`Account "${name}" not found.`);
+  const indicesToRemove = new Set<number>();
+  for (const name of names) {
+    const idx = accountsFile.accounts.findIndex((a) => a.name.toLowerCase() === name.toLowerCase());
+    if (idx === -1) {
+      errors.push(`Account "${name}" not found.`);
+    } else {
+      indicesToRemove.add(idx);
+    }
+  }
+  if (errors.length > 0) {
+    throw new Error(errors.join("\n"));
   }
 
-  accountsFile.accounts.splice(idx, 1);
+  // Remove in reverse order to avoid index shifting
+  for (const idx of [...indicesToRemove].sort((a, b) => b - a)) {
+    accountsFile.accounts.splice(idx, 1);
+  }
   await saveAccounts(accountsFile);
-  console.log(`Account "${name}" removed.`);
+
+  for (const name of names) {
+    console.log(`Account "${name}" removed.`);
+  }
 }
