@@ -9,10 +9,11 @@ describe("dot chain", () => {
     expect(stdout).toContain("dot chain list");
   });
 
-  test("chains shorthand shows help", async () => {
+  test("chains shorthand lists chains", async () => {
     const { stdout, exitCode } = await runCli(["chains"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("dot chain add");
+    expect(stdout).toContain("Configured Chains");
+    expect(stdout).toContain("polkadot");
   });
 
   test("unknown action foo errors", async () => {

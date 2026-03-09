@@ -55,7 +55,7 @@ export function getDevAddress(name: string, prefix = 42): string {
   return ss58Address(keypair.publicKey, prefix);
 }
 
-export function createNewAccount(): {
+export function createNewAccount(path = ""): {
   mnemonic: string;
   publicKey: Uint8Array;
 } {
@@ -63,15 +63,15 @@ export function createNewAccount(): {
   const entropy = mnemonicToEntropy(mnemonic);
   const miniSecret = entropyToMiniSecret(entropy);
   const derive = sr25519CreateDerive(miniSecret);
-  const keypair = derive("");
+  const keypair = derive(path);
   return { mnemonic, publicKey: keypair.publicKey };
 }
 
-export function importAccount(secret: string): { publicKey: Uint8Array } {
+export function importAccount(secret: string, path = ""): { publicKey: Uint8Array } {
   const isHexSeed = /^0x[0-9a-fA-F]{64}$/.test(secret);
 
   if (isHexSeed) {
-    const keypair = deriveFromHexSeed(secret, "");
+    const keypair = deriveFromHexSeed(secret, path);
     return { publicKey: keypair.publicKey };
   }
 
@@ -81,7 +81,7 @@ export function importAccount(secret: string): { publicKey: Uint8Array } {
     );
   }
 
-  const keypair = deriveFromMnemonic(secret, "");
+  const keypair = deriveFromMnemonic(secret, path);
   return { publicKey: keypair.publicKey };
 }
 
@@ -117,11 +117,11 @@ export function resolveSecret(secret: string | EnvSecret): string {
   return secret;
 }
 
-export function tryDerivePublicKey(envVarName: string): string | null {
+export function tryDerivePublicKey(envVarName: string, path = ""): string | null {
   const value = process.env[envVarName];
   if (!value) return null;
   try {
-    const { publicKey } = importAccount(value);
+    const { publicKey } = importAccount(value, path);
     return publicKeyToHex(publicKey);
   } catch {
     return null;

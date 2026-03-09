@@ -41,6 +41,7 @@ export function registerChainCommands(cli: CAC) {
         opts: { rpc?: string; lightClient?: boolean },
       ) => {
         if (!action) {
+          if (process.argv[2] === "chains") return chainList();
           console.log(CHAIN_HELP);
           return;
         }

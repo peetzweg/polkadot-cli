@@ -17,10 +17,11 @@ describe("dot account", () => {
     expect(stdout).toContain("dot account list");
   });
 
-  test("accounts shorthand shows help", async () => {
+  test("accounts shorthand lists accounts", async () => {
     const { stdout, exitCode } = await runCli(["accounts"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("dot account create");
+    expect(stdout).toContain("Dev Accounts");
+    expect(stdout).toContain("Alice");
   });
 
   test("unknown action foo errors", async () => {
@@ -292,5 +293,211 @@ describe("dot account", () => {
     });
     expect(exitCode).toBe(0);
     expect(stdout).toContain("removed");
+  });
+
+  // --path tests
+
+  test("create --path //Test creates account with derivation path", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "create",
+      "my-derived",
+      "--path",
+      "//Test",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Created");
+    expect(stdout).toContain("Path:");
+    expect(stdout).toContain("//Test");
+    expect(stdout).toContain("Address:");
+  });
+
+  test("import --secret with --path stores path", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "import",
+      "my-derived",
+      "--secret",
+      TEST_MNEMONIC,
+      "--path",
+      "//Bar",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Imported");
+    expect(stdout).toContain("Path:");
+    expect(stdout).toContain("//Bar");
+    expect(stdout).toContain("Address:");
+  });
+
+  test("import --env with --path stores path", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "import", "env-derived", "--env", "MY_SECRET", "--path", "//ci"],
+      { env: { MY_SECRET: TEST_MNEMONIC } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Imported");
+    expect(stdout).toContain("Path:");
+    expect(stdout).toContain("//ci");
+    expect(stdout).toContain("Address:");
+  });
+
+  test("derive creates child account from source", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "derive", "my-account", "child-acct", "--path", "//child"],
+      { accounts: [STORED_ACCOUNT] },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Derived");
+    expect(stdout).toContain("child-acct");
+    expect(stdout).toContain("my-account");
+    expect(stdout).toContain("//child");
+    expect(stdout).toContain("Address:");
+  });
+
+  test("derive without --path errors", async () => {
+    const { stderr, exitCode } = await runCli(["account", "derive", "my-account", "child-acct"], {
+      accounts: [STORED_ACCOUNT],
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("--path is required");
+  });
+
+  test("derive with nonexistent source errors", async () => {
+    const { stderr, exitCode } = await runCli([
+      "account",
+      "derive",
+      "nonexistent",
+      "child-acct",
+      "--path",
+      "//x",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("not found");
+  });
+
+  test("derive without new name errors", async () => {
+    const { stderr, exitCode } = await runCli(
+      ["account", "derive", "my-account", "--path", "//x"],
+      { accounts: [STORED_ACCOUNT] },
+    );
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("New account name is required");
+  });
+
+  test("derive from env-backed source works", async () => {
+    const envAccount: StoredAccount = {
+      name: "env-source",
+      secret: { env: "MY_SECRET" },
+      publicKey: "",
+      derivationPath: "",
+    };
+    const { stdout, exitCode } = await runCli(
+      ["account", "derive", "env-source", "env-child", "--path", "//x"],
+      { accounts: [envAccount], env: { MY_SECRET: TEST_MNEMONIC } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Derived");
+    expect(stdout).toContain("env-child");
+    expect(stdout).toContain("Address:");
+  });
+
+  test("list shows derivation path for accounts with one", async () => {
+    const derivedAccount: StoredAccount = {
+      name: "derived-acct",
+      secret: TEST_MNEMONIC,
+      publicKey: "0x44a996beb1eef7bdcab976ab6d2ca26104834164ecf28fb375600576fcc6eb0f",
+      derivationPath: "//staking",
+    };
+    const { stdout, exitCode } = await runCli(["account", "list"], {
+      accounts: [derivedAccount],
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("derived-acct (//staking)");
+  });
+
+  test("list shows path and env badge combined", async () => {
+    const envDerived: StoredAccount = {
+      name: "env-derived",
+      secret: { env: "MY_SECRET" },
+      publicKey: "",
+      derivationPath: "//ci",
+    };
+    const { stdout, exitCode } = await runCli(["account", "list"], {
+      accounts: [envDerived],
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("env-derived (//ci) (env: MY_SECRET)");
+  });
+
+  // --path multi-segment tests
+
+  test("create --path //polkadot//0/wallet works with multi-segment path", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "create",
+      "multi-seg",
+      "--path",
+      "//polkadot//0/wallet",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Created");
+    expect(stdout).toContain("Path:");
+    expect(stdout).toContain("//polkadot//0/wallet");
+    expect(stdout).toContain("Address:");
+  });
+
+  test("import --secret with multi-segment --path //hard/soft//hard2", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "import",
+      "multi-imported",
+      "--secret",
+      TEST_MNEMONIC,
+      "--path",
+      "//hard/soft//hard2",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Imported");
+    expect(stdout).toContain("Path:");
+    expect(stdout).toContain("//hard/soft//hard2");
+    expect(stdout).toContain("Address:");
+  });
+
+  test("import with different multi-segment paths produces different addresses", async () => {
+    const run = async (path: string) => {
+      const { stdout, exitCode } = await runCli([
+        "account",
+        "import",
+        `acct-${path.replace(/\//g, "-")}`,
+        "--secret",
+        TEST_MNEMONIC,
+        "--path",
+        path,
+      ]);
+      expect(exitCode).toBe(0);
+      const match = stdout.match(/Address:\s+(\S+)/);
+      expect(match).toBeTruthy();
+      return match![1];
+    };
+
+    const addr1 = await run("//a");
+    const addr2 = await run("//a//b");
+    const addr3 = await run("//a/b");
+
+    expect(addr1).not.toBe(addr2);
+    expect(addr1).not.toBe(addr3);
+    expect(addr2).not.toBe(addr3);
+  });
+
+  test("derive with multi-segment --path //polkadot//0/wallet", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "derive", "my-account", "multi-child", "--path", "//polkadot//0/wallet"],
+      { accounts: [STORED_ACCOUNT] },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Derived");
+    expect(stdout).toContain("multi-child");
+    expect(stdout).toContain("//polkadot//0/wallet");
+    expect(stdout).toContain("Address:");
   });
 });

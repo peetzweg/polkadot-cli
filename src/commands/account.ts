@@ -15,16 +15,20 @@ import { BOLD, printHeading, printItem, RESET, YELLOW } from "../core/output.ts"
 
 const ACCOUNT_HELP = `
 ${BOLD}Usage:${RESET}
-  $ dot account create|new <name>                       Create a new account
-  $ dot account import|add <name> --secret <s>          Import from BIP39 mnemonic
-  $ dot account import|add <name> --env <VAR>           Import account backed by env variable
-  $ dot account list                                    List all accounts
-  $ dot account remove|delete <name>                    Remove a stored account
+  $ dot account create|new <name> [--path <derivation>]              Create a new account
+  $ dot account import|add <name> --secret <s> [--path <derivation>] Import from BIP39 mnemonic
+  $ dot account import|add <name> --env <VAR> [--path <derivation>]  Import account backed by env variable
+  $ dot account derive <source> <new-name> --path <derivation>       Derive a child account
+  $ dot account list                                                 List all accounts
+  $ dot account remove|delete <name>                                 Remove a stored account
 
 ${BOLD}Examples:${RESET}
   $ dot account create my-validator
+  $ dot account create my-staking --path //staking
+  $ dot account create multi --path //polkadot//0/wallet
   $ dot account import treasury --secret "word1 word2 ... word12"
-  $ dot account import ci-signer --env MY_SECRET
+  $ dot account import ci-signer --env MY_SECRET --path //ci
+  $ dot account derive treasury treasury-staking --path //staking
   $ dot account list
   $ dot account remove my-validator
 
@@ -35,27 +39,35 @@ ${YELLOW}Note: Secrets are stored unencrypted in ~/.polkadot/accounts.json.
 
 export function registerAccountCommands(cli: CAC) {
   cli
-    .command("account [action] [name]", "Manage local accounts (create, import, list, remove)")
+    .command(
+      "account [action] [name] [extra]",
+      "Manage local accounts (create, import, list, remove)",
+    )
     .alias("accounts")
     .option("--secret <value>", "Secret key (mnemonic or hex seed) for import")
     .option("--env <varName>", "Environment variable name holding the secret")
+    .option("--path <derivation>", "Derivation path (e.g. //staking, //polkadot//0/wallet)")
     .action(
       async (
         action: string | undefined,
         name: string | undefined,
-        opts: { secret?: string; env?: string },
+        extra: string | undefined,
+        opts: { secret?: string; env?: string; path?: string },
       ) => {
         if (!action) {
+          if (process.argv[2] === "accounts") return accountList();
           console.log(ACCOUNT_HELP);
           return;
         }
         switch (action) {
           case "new":
           case "create":
-            return accountCreate(name);
+            return accountCreate(name, opts);
           case "import":
           case "add":
             return accountImport(name, opts);
+          case "derive":
+            return accountDerive(name, extra, opts);
           case "list":
             return accountList();
           case "delete":
@@ -70,7 +82,7 @@ export function registerAccountCommands(cli: CAC) {
     );
 }
 
-async function accountCreate(name: string | undefined) {
+async function accountCreate(name: string | undefined, opts: { path?: string }) {
   if (!name) {
     console.error("Account name is required.\n");
     console.error("Usage: dot account create <name>");
@@ -88,7 +100,8 @@ async function accountCreate(name: string | undefined) {
     throw new Error(`Account "${name}" already exists.`);
   }
 
-  const { mnemonic, publicKey } = createNewAccount();
+  const path = opts.path ?? "";
+  const { mnemonic, publicKey } = createNewAccount(path);
   const hexPub = publicKeyToHex(publicKey);
   const address = toSs58(publicKey);
 
@@ -96,12 +109,13 @@ async function accountCreate(name: string | undefined) {
     name,
     secret: mnemonic,
     publicKey: hexPub,
-    derivationPath: "",
+    derivationPath: path,
   });
   await saveAccounts(accountsFile);
 
   printHeading("Account Created");
   console.log(`  ${BOLD}Name:${RESET}     ${name}`);
+  if (path) console.log(`  ${BOLD}Path:${RESET}     ${path}`);
   console.log(`  ${BOLD}Address:${RESET}  ${address}`);
   console.log(`  ${BOLD}Mnemonic:${RESET} ${mnemonic}`);
   console.log();
@@ -111,7 +125,10 @@ async function accountCreate(name: string | undefined) {
   console.log();
 }
 
-async function accountImport(name: string | undefined, opts: { secret?: string; env?: string }) {
+async function accountImport(
+  name: string | undefined,
+  opts: { secret?: string; env?: string; path?: string },
+) {
   if (!name) {
     console.error("Account name is required.\n");
     console.error('Usage: dot account import <name> --secret "mnemonic or hex seed"');
@@ -141,19 +158,22 @@ async function accountImport(name: string | undefined, opts: { secret?: string; 
     throw new Error(`Account "${name}" already exists.`);
   }
 
+  const path = opts.path ?? "";
+
   if (opts.env) {
-    const publicKey = tryDerivePublicKey(opts.env) ?? "";
+    const publicKey = tryDerivePublicKey(opts.env, path) ?? "";
 
     accountsFile.accounts.push({
       name,
       secret: { env: opts.env },
       publicKey,
-      derivationPath: "",
+      derivationPath: path,
     });
     await saveAccounts(accountsFile);
 
     printHeading("Account Imported");
     console.log(`  ${BOLD}Name:${RESET}    ${name}`);
+    if (path) console.log(`  ${BOLD}Path:${RESET}    ${path}`);
     console.log(`  ${BOLD}Env:${RESET}     ${opts.env}`);
     if (publicKey) {
       console.log(`  ${BOLD}Address:${RESET} ${toSs58(publicKey)}`);
@@ -162,7 +182,7 @@ async function accountImport(name: string | undefined, opts: { secret?: string; 
     }
     console.log();
   } else {
-    const { publicKey } = importAccount(opts.secret!);
+    const { publicKey } = importAccount(opts.secret!, path);
     const hexPub = publicKeyToHex(publicKey);
     const address = toSs58(publicKey);
 
@@ -170,12 +190,99 @@ async function accountImport(name: string | undefined, opts: { secret?: string; 
       name,
       secret: opts.secret!,
       publicKey: hexPub,
-      derivationPath: "",
+      derivationPath: path,
     });
     await saveAccounts(accountsFile);
 
     printHeading("Account Imported");
     console.log(`  ${BOLD}Name:${RESET}    ${name}`);
+    if (path) console.log(`  ${BOLD}Path:${RESET}    ${path}`);
+    console.log(`  ${BOLD}Address:${RESET} ${address}`);
+    console.log();
+  }
+}
+
+async function accountDerive(
+  sourceName: string | undefined,
+  newName: string | undefined,
+  opts: { path?: string },
+) {
+  if (!sourceName) {
+    console.error("Source account name is required.\n");
+    console.error("Usage: dot account derive <source> <new-name> --path <derivation>");
+    process.exit(1);
+  }
+
+  if (!newName) {
+    console.error("New account name is required.\n");
+    console.error("Usage: dot account derive <source> <new-name> --path <derivation>");
+    process.exit(1);
+  }
+
+  if (!opts.path) {
+    console.error("--path is required for derive.\n");
+    console.error("Usage: dot account derive <source> <new-name> --path <derivation>");
+    process.exit(1);
+  }
+
+  if (isDevAccount(newName)) {
+    throw new Error(
+      `"${newName}" is a built-in dev account and cannot be used as a custom account name.`,
+    );
+  }
+
+  const accountsFile = await loadAccounts();
+
+  const source = findAccount(accountsFile, sourceName);
+  if (!source) {
+    throw new Error(`Source account "${sourceName}" not found.`);
+  }
+
+  if (findAccount(accountsFile, newName)) {
+    throw new Error(`Account "${newName}" already exists.`);
+  }
+
+  const path = opts.path;
+
+  if (isEnvSecret(source.secret)) {
+    const publicKey = tryDerivePublicKey(source.secret.env, path) ?? "";
+
+    accountsFile.accounts.push({
+      name: newName,
+      secret: source.secret,
+      publicKey,
+      derivationPath: path,
+    });
+    await saveAccounts(accountsFile);
+
+    printHeading("Account Derived");
+    console.log(`  ${BOLD}Name:${RESET}    ${newName}`);
+    console.log(`  ${BOLD}Source:${RESET}  ${sourceName}`);
+    console.log(`  ${BOLD}Path:${RESET}    ${path}`);
+    console.log(`  ${BOLD}Env:${RESET}     ${source.secret.env}`);
+    if (publicKey) {
+      console.log(`  ${BOLD}Address:${RESET} ${toSs58(publicKey)}`);
+    } else {
+      console.log(`  ${YELLOW}Address will resolve when $${source.secret.env} is set.${RESET}`);
+    }
+    console.log();
+  } else {
+    const { publicKey } = importAccount(source.secret, path);
+    const hexPub = publicKeyToHex(publicKey);
+    const address = toSs58(publicKey);
+
+    accountsFile.accounts.push({
+      name: newName,
+      secret: source.secret,
+      publicKey: hexPub,
+      derivationPath: path,
+    });
+    await saveAccounts(accountsFile);
+
+    printHeading("Account Derived");
+    console.log(`  ${BOLD}Name:${RESET}    ${newName}`);
+    console.log(`  ${BOLD}Source:${RESET}  ${sourceName}`);
+    console.log(`  ${BOLD}Path:${RESET}    ${path}`);
     console.log(`  ${BOLD}Address:${RESET} ${address}`);
     console.log();
   }
@@ -194,13 +301,16 @@ async function accountList() {
     printHeading("Stored Accounts");
     for (const account of accountsFile.accounts) {
       let displayName = account.name;
+      if (account.derivationPath) {
+        displayName += ` (${account.derivationPath})`;
+      }
       let address: string;
 
       if (isEnvSecret(account.secret)) {
         displayName += ` (env: ${account.secret.env})`;
         let pubKey = account.publicKey;
         if (!pubKey) {
-          pubKey = tryDerivePublicKey(account.secret.env) ?? "";
+          pubKey = tryDerivePublicKey(account.secret.env, account.derivationPath) ?? "";
         }
         address = pubKey ? toSs58(pubKey) : "n/a";
       } else {

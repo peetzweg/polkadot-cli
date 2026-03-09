@@ -83,7 +83,11 @@ dot account create my-validator
 dot account new my-validator
 ```
 
-`new` is an alias for `create`.
+`new` is an alias for `create`. Use `--path` to derive from a non-root path:
+
+```
+dot account create my-staking --path //staking
+```
 
 ### Import an account
 
@@ -94,7 +98,11 @@ dot account import treasury --secret "word1 word2 ... word12"
 dot account import raw-key --secret 0xabcdef...
 ```
 
-`add` is an alias for `import`.
+`add` is an alias for `import`. Use `--path` to import with a derivation path:
+
+```
+dot account import hot-wallet --secret "word1 word2 ... word12" --path //hot
+```
 
 ### Import an env-var-backed account
 
@@ -104,7 +112,11 @@ Store a reference to an environment variable instead of the secret itself. The s
 dot account import ci-signer --env MY_SECRET
 ```
 
-`--secret` and `--env` are mutually exclusive.
+`--secret` and `--env` are mutually exclusive. Both `--secret` and `--env` can be combined with `--path`:
+
+```
+dot account import ci-signer --env MY_SECRET --path //ci
+```
 
 At signing time, the CLI reads `$MY_SECRET` and derives the keypair. If the variable is not set, the CLI errors with a clear message.
 
@@ -119,6 +131,36 @@ Use the account like any other:
 
 ```
 MY_SECRET="word1 word2 ..." dot tx System.remark 0xdead --from ci-signer
+```
+
+### Derive a child account
+
+Create a new account from an existing one with a different derivation path. The derived account shares the same secret but produces a different keypair:
+
+```
+dot account derive treasury treasury-staking --path //staking
+```
+
+`derive` requires a source account name, a new account name, and `--path`. Works with env-backed accounts too — the derived account shares the same env var reference.
+
+### Derivation paths
+
+Use `--path` with `create`, `import`, or `derive` to derive child keys from the same secret. Different paths produce different keypairs, enabling key separation (e.g. staking vs. governance) without managing multiple mnemonics.
+
+Derivation paths use the Substrate convention: `//hard` for hard derivation, `/soft` for soft derivation. Paths can have multiple segments:
+
+```
+dot account create validator --path //staking
+dot account create multi --path //polkadot//0/wallet
+dot account import treasury --secret "..." --path //hot
+dot account derive treasury treasury-gov --path //governance
+```
+
+`account list` shows the derivation path next to the account name:
+
+```
+  treasury-staking (//staking)  5FHneW46...
+  ci-signer (//ci) (env: MY_SECRET)  5EPCUjPx...
 ```
 
 ### Remove an account

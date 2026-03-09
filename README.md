@@ -58,11 +58,20 @@ dot account list
 # Create a new account (generates a mnemonic)
 dot account create my-validator
 
+# Create with a derivation path
+dot account create my-staking --path //staking
+
 # Import from a BIP39 mnemonic
 dot account import treasury --secret "word1 word2 ... word12"
 
+# Import with a derivation path
+dot account import hot-wallet --secret "word1 word2 ... word12" --path //hot
+
 # Import an env-var-backed account (secret stays off disk)
 dot account import ci-signer --env MY_SECRET
+
+# Derive a child account from an existing one
+dot account derive treasury treasury-staking --path //staking
 
 # Use it — the env var is read at signing time
 MY_SECRET="word1 word2 ..." dot tx System.remark 0xdead --from ci-signer
@@ -82,6 +91,33 @@ dot account import ci-signer --env MY_SECRET
 `--secret` and `--env` are mutually exclusive. `add` is an alias for `import`.
 
 The secret is never written to disk. At signing time, the CLI reads `$MY_SECRET` and derives the keypair. If the variable is not set, the CLI errors with a clear message. `account list` shows an `(env: MY_SECRET)` badge and resolves the address live when the variable is available.
+
+#### Derivation paths
+
+Use `--path` with `create`, `import`, or the `derive` action to derive child keys from the same secret. Different paths produce different keypairs, enabling key separation (e.g. staking vs. governance) without managing multiple mnemonics.
+
+```bash
+# Create with a derivation path
+dot account create my-staking --path //staking
+
+# Multi-segment path (hard + soft junctions)
+dot account create multi --path //polkadot//0/wallet
+
+# Import with a path
+dot account import hot --secret "word1 word2 ..." --path //hot
+
+# Derive a child from an existing account
+dot account derive treasury treasury-staking --path //staking
+```
+
+`derive` copies the source account's secret and applies the given path. It requires both a source name, a new name, and `--path`. Works with env-backed accounts too — the derived account shares the same env var reference.
+
+`account list` shows the derivation path next to the account name:
+
+```
+  treasury-staking (//staking)  5FHneW46...
+  ci-signer (//ci) (env: MY_SECRET)  5EPCUjPx...
+```
 
 **Supported secret formats for import:**
 

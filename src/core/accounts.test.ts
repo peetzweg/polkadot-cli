@@ -232,3 +232,53 @@ describe("resolveAccountSigner", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// derivation paths (multi-segment)
+// ---------------------------------------------------------------------------
+
+describe("derivation paths", () => {
+  test("importAccount with path produces different key than root", () => {
+    const root = importAccount(TEST_MNEMONIC, "");
+    const derived = importAccount(TEST_MNEMONIC, "//a");
+    expect(publicKeyToHex(root.publicKey)).not.toBe(publicKeyToHex(derived.publicKey));
+  });
+
+  test("importAccount //a vs //a//b produce different keys", () => {
+    const a = importAccount(TEST_MNEMONIC, "//a");
+    const ab = importAccount(TEST_MNEMONIC, "//a//b");
+    expect(publicKeyToHex(a.publicKey)).not.toBe(publicKeyToHex(ab.publicKey));
+  });
+
+  test("importAccount //a//b (hard+hard) vs //a/b (hard+soft) produce different keys", () => {
+    const hardHard = importAccount(TEST_MNEMONIC, "//a//b");
+    const hardSoft = importAccount(TEST_MNEMONIC, "//a/b");
+    expect(publicKeyToHex(hardHard.publicKey)).not.toBe(publicKeyToHex(hardSoft.publicKey));
+  });
+
+  test("importAccount with //polkadot//0/wallet produces 32-byte key", () => {
+    const { publicKey } = importAccount(TEST_MNEMONIC, "//polkadot//0/wallet");
+    expect(publicKey).toBeInstanceOf(Uint8Array);
+    expect(publicKey).toHaveLength(32);
+  });
+
+  test("createNewAccount with path differs from root of same mnemonic", () => {
+    const { mnemonic, publicKey: derivedKey } = createNewAccount("//test");
+    const { publicKey: rootKey } = importAccount(mnemonic, "");
+    expect(publicKeyToHex(derivedKey)).not.toBe(publicKeyToHex(rootKey));
+  });
+
+  test("tryDerivePublicKey with path differs from root", () => {
+    const ENV_KEY = "__TEST_DERIV_PATH__";
+    process.env[ENV_KEY] = TEST_MNEMONIC;
+    try {
+      const root = tryDerivePublicKey(ENV_KEY, "");
+      const derived = tryDerivePublicKey(ENV_KEY, "//a");
+      expect(root).not.toBeNull();
+      expect(derived).not.toBeNull();
+      expect(root).not.toBe(derived);
+    } finally {
+      delete process.env[ENV_KEY];
+    }
+  });
+});
