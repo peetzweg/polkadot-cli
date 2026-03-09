@@ -22,6 +22,7 @@ ${BOLD}Usage:${RESET}
 
 ${BOLD}Examples:${RESET}
   $ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
+  $ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
   $ dot chain add westend --light-client
   $ dot chain default kusama
   $ dot chain list
@@ -38,7 +39,7 @@ export function registerChainCommands(cli: CAC) {
       async (
         action: string | undefined,
         name: string | undefined,
-        opts: { rpc?: string; lightClient?: boolean },
+        opts: { rpc?: string | string[]; lightClient?: boolean },
       ) => {
         if (!action) {
           if (process.argv[2] === "chains") return chainList();
@@ -65,7 +66,10 @@ export function registerChainCommands(cli: CAC) {
     );
 }
 
-async function chainAdd(name: string | undefined, opts: { rpc?: string; lightClient?: boolean }) {
+async function chainAdd(
+  name: string | undefined,
+  opts: { rpc?: string | string[]; lightClient?: boolean },
+) {
   if (!name) {
     console.error("Chain name is required.\n");
     console.error("Usage: dot chain add <name> --rpc <url>");
@@ -138,15 +142,20 @@ async function chainList() {
   for (const [name, chainConfig] of Object.entries(config.chains)) {
     const isDefault = name === config.defaultChain;
     const marker = isDefault ? ` ${BOLD}(default)${RESET}` : "";
-    const provider = chainConfig.lightClient
-      ? `${DIM}light-client${RESET}`
-      : `${DIM}${chainConfig.rpc}${RESET}`;
-    console.log(`  ${CYAN}${name}${RESET}${marker}  ${provider}`);
+    if (chainConfig.lightClient) {
+      console.log(`  ${CYAN}${name}${RESET}${marker}  ${DIM}light-client${RESET}`);
+    } else {
+      const rpcs = Array.isArray(chainConfig.rpc) ? chainConfig.rpc : [chainConfig.rpc];
+      console.log(`  ${CYAN}${name}${RESET}${marker}  ${DIM}${rpcs[0]}${RESET}`);
+      for (let i = 1; i < rpcs.length; i++) {
+        console.log(`    ${DIM}${rpcs[i]}${RESET}`);
+      }
+    }
   }
   console.log();
 }
 
-async function chainUpdate(name: string | undefined, opts: { rpc?: string }) {
+async function chainUpdate(name: string | undefined, opts: { rpc?: string | string[] }) {
   const config = await loadConfig();
   const { name: chainName, chain: chainConfig } = resolveChain(config, name);
 

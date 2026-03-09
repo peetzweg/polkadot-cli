@@ -4,7 +4,7 @@
 
 A command-line tool for interacting with Polkadot-ecosystem chains. Manage chains and accounts, query storage, look up constants, inspect metadata, submit extrinsics, and compute hashes — all from your terminal.
 
-Ships with Polkadot as the default chain. Add any Substrate-based chain by pointing to its RPC endpoint.
+Ships with Polkadot as the default chain with multiple fallback RPC endpoints. Add any Substrate-based chain by pointing to its RPC endpoint(s).
 
 ## Install
 
@@ -23,8 +23,13 @@ This installs the `dot` command globally.
 dot chain               # shows available actions
 dot chains              # shorthand, same as above
 
-# Add a chain
+# Add a chain (single RPC)
 dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
+
+# Add a chain with fallback RPCs (repeat --rpc for each endpoint)
+dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
+
+# Add a chain via light client
 dot chain add westend --light-client
 
 # List configured chains
@@ -340,7 +345,7 @@ dot hash --help         # same as `dot hash` — shows algorithms and examples
 |------|-------------|
 | `--help` | Show help (global or command-specific) |
 | `--chain <name>` | Target chain (default from config) |
-| `--rpc <url>` | Override RPC endpoint for this call |
+| `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback) |
 | `--light-client` | Use Smoldot light client |
 | `--output json` | Raw JSON output (default: pretty) |
 | `--limit <n>` | Max entries for map queries (0 = unlimited, default: 100) |

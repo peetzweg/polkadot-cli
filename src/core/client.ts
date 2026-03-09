@@ -43,7 +43,7 @@ function suppressWsNoise(): () => void {
 export async function createChainClient(
   chainName: string,
   chainConfig: ChainConfig,
-  rpcOverride?: string,
+  rpcOverride?: string | string[],
 ): Promise<ClientHandle> {
   const useLight = !rpcOverride && chainConfig.lightClient;
 

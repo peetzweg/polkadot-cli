@@ -10,7 +10,7 @@ Install globally via npm:
 npm install -g polkadot-cli@latest
 ```
 
-This installs the `dot` command globally. Ships with Polkadot as the default chain. Add any Substrate-based chain by pointing to its RPC endpoint.
+This installs the `dot` command globally. Ships with Polkadot as the default chain with multiple fallback RPC endpoints. Add any Substrate-based chain by pointing to its RPC endpoint(s).
 
 ## Chains
 
@@ -18,10 +18,16 @@ Manage chain connections. Polkadot is configured by default. Add any Substrate-b
 
 ### Add a chain
 
-Connect to a chain via WebSocket RPC or the embedded Smoldot light client:
+Connect to a chain via WebSocket RPC or the embedded Smoldot light client. Use repeated `--rpc` flags to configure multiple endpoints with automatic fallback — if the primary is unreachable, the CLI tries the next one:
 
 ```
+# Single RPC
 dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
+
+# Multiple RPCs with fallback
+dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
+
+# Light client
 dot chain add westend --light-client
 ```
 
@@ -465,7 +471,7 @@ These flags work with any command:
 |------|-------------|
 | `--help` | Show help (global or command-specific) |
 | `--chain <name>` | Target chain (default from config) |
-| `--rpc <url>` | Override RPC endpoint for this call |
+| `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback) |
 | `--light-client` | Use Smoldot light client |
 | `--output json` | Raw JSON output (default: pretty) |
 | `--limit <n>` | Max entries for map queries (0 = unlimited, default: 100) |

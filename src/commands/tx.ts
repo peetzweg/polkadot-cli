@@ -4,6 +4,7 @@ import type { CAC } from "cac";
 import type { TxEvent, TxFinalized } from "polkadot-api";
 import { Binary } from "polkadot-api";
 import { loadConfig, resolveChain } from "../config/store.ts";
+import { primaryRpc } from "../config/types.ts";
 import { resolveAccountSigner, toSs58 } from "../core/accounts.ts";
 import { type ClientHandle, createChainClient } from "../core/client.ts";
 import { papiLink, pjsAppsLink } from "../core/explorers.ts";
@@ -227,7 +228,7 @@ export function registerTxCommand(cli: CAC) {
             }
           }
 
-          const rpcUrl = opts.rpc ?? chainConfig.rpc;
+          const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc);
           if (rpcUrl) {
             const blockHash = result.block.hash;
             console.log(`  ${BOLD}Explorer:${RESET}`);

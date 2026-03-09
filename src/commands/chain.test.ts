@@ -58,6 +58,63 @@ describe("dot chain", () => {
     expect(stdout).toContain("westend");
   });
 
+  test("list with multi-RPC chain shows all endpoints", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"], {
+      config: {
+        chains: {
+          kusama: { rpc: ["wss://kusama-rpc.polkadot.io", "wss://kusama-rpc.dwellir.com"] },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("kusama");
+    expect(stdout).toContain("kusama-rpc.polkadot.io");
+    expect(stdout).toContain("kusama-rpc.dwellir.com");
+  });
+
+  test("list with single-string rpc still works (backward compat)", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"], {
+      config: {
+        chains: {
+          kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("kusama");
+    expect(stdout).toContain("kusama-rpc.polkadot.io");
+  });
+
+  test("list shows built-in chains with multiple RPCs", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"]);
+    expect(exitCode).toBe(0);
+    // polkadot should show primary + fallback RPCs
+    expect(stdout).toContain("rpc.polkadot.io");
+    expect(stdout).toContain("polkadot-rpc.dwellir.com");
+    expect(stdout).toContain("rpc.ibp.network/polkadot");
+  });
+
+  test("list with single-element array rpc", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"], {
+      config: {
+        chains: {
+          kusama: { rpc: ["wss://kusama-rpc.polkadot.io"] },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("kusama");
+    expect(stdout).toContain("kusama-rpc.polkadot.io");
+  });
+
+  test("help text shows multi-rpc example", async () => {
+    const { stdout, exitCode } = await runCli(["chain"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain(
+      "--rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com",
+    );
+  });
+
   test("list with light-client chain", async () => {
     const { stdout, exitCode } = await runCli(["chain", "list"], {
       config: {
