@@ -12,6 +12,15 @@ describe("dot hash", () => {
     expect(stdout).toContain("sha256");
   });
 
+  test("--help shows same custom help as bare command", async () => {
+    const bare = await runCli(["hash"]);
+    const help = await runCli(["hash", "--help"]);
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout).toContain("Algorithms:");
+    expect(help.stdout).toContain("blake2b256");
+    expect(help.stdout).toBe(bare.stdout);
+  });
+
   test("blake2b256 0xdeadbeef produces 64-char hex", async () => {
     const { stdout, exitCode } = await runCli(["hash", "blake2b256", "0xdeadbeef"]);
     expect(exitCode).toBe(0);

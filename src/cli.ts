@@ -34,7 +34,7 @@ registerAccountCommands(cli);
 registerTxCommand(cli);
 registerHashCommand(cli);
 
-cli.help();
+cli.option("--help, -h", "Display this message");
 cli.version(version);
 
 async function showUpdateAndExit(code: number): Promise<never> {
@@ -60,8 +60,19 @@ async function main() {
   try {
     cli.parse(process.argv, { run: false });
 
-    if (cli.options.version || cli.options.help) {
+    if (cli.options.version) {
       await showUpdateAndExit(0);
+    } else if (cli.options.help) {
+      if ((cli as any).matchedCommandName) {
+        // Let the command show its own custom help
+        const result = (cli as any).runMatchedCommand();
+        if (result && typeof result.then === "function") {
+          await result.then(() => showUpdateAndExit(0), handleError);
+        }
+      } else {
+        cli.outputHelp();
+        await showUpdateAndExit(0);
+      }
     } else if (!(cli as any).matchedCommandName) {
       cli.outputHelp();
       await showUpdateAndExit(0);

@@ -26,6 +26,13 @@ describe("global CLI", () => {
     expect(stdout).toContain("hash");
   });
 
+  test("--help and no args show the same global help", async () => {
+    const bare = await runCli([]);
+    const help = await runCli(["--help"]);
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout).toBe(bare.stdout);
+  });
+
   test("--version shows semver", async () => {
     const { stdout, exitCode } = await runCli(["--version"]);
     expect(exitCode).toBe(0);

@@ -17,6 +17,15 @@ describe("dot account", () => {
     expect(stdout).toContain("dot account list");
   });
 
+  test("--help shows same custom help as bare command", async () => {
+    const bare = await runCli(["account"]);
+    const help = await runCli(["account", "--help"]);
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout).toContain("dot account create");
+    expect(help.stdout).toContain("dot account list");
+    expect(help.stdout).toBe(bare.stdout);
+  });
+
   test("accounts shorthand lists accounts", async () => {
     const { stdout, exitCode } = await runCli(["accounts"]);
     expect(exitCode).toBe(0);

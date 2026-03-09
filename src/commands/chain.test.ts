@@ -9,6 +9,15 @@ describe("dot chain", () => {
     expect(stdout).toContain("dot chain list");
   });
 
+  test("--help shows same custom help as bare command", async () => {
+    const bare = await runCli(["chain"]);
+    const help = await runCli(["chain", "--help"]);
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout).toContain("dot chain add");
+    expect(help.stdout).toContain("dot chain list");
+    expect(help.stdout).toBe(bare.stdout);
+  });
+
   test("chains shorthand lists chains", async () => {
     const { stdout, exitCode } = await runCli(["chains"]);
     expect(exitCode).toBe(0);

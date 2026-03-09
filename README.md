@@ -322,10 +322,22 @@ dot hash blake2b256 0xdeadbeef --output json
 
 Run `dot hash` with no arguments to see all available algorithms.
 
+### Getting help
+
+Every command supports `--help` to show its detailed usage, available actions, and examples:
+
+```bash
+dot --help              # global help with all commands
+dot account --help      # same as `dot account` — shows account actions
+dot chain --help        # same as `dot chain` — shows chain actions
+dot hash --help         # same as `dot hash` — shows algorithms and examples
+```
+
 ### Global options
 
 | Flag | Description |
 |------|-------------|
+| `--help` | Show help (global or command-specific) |
 | `--chain <name>` | Target chain (default from config) |
 | `--rpc <url>` | Override RPC endpoint for this call |
 | `--light-client` | Use Smoldot light client |
