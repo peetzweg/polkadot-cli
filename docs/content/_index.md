@@ -418,6 +418,18 @@ echo $?  # 1
 
 This makes it easy to detect on-chain failures in scripts and CI pipelines.
 
+### Argument parsing errors
+
+When a call argument is invalid, the CLI shows a contextual error message with the argument name, the expected type, and a hint:
+
+```
+dot tx Balances.transferKeepAlive 5GrwvaEF... abc --encode
+# Error: Invalid value for argument 'value' (expected Compact<u128>): "abc"
+#   Hint: Compact<u128>
+```
+
+For struct-based calls (most extrinsics), the error identifies the specific field that failed. For tuple-based calls, it shows the argument index. The original parse error is preserved as the `cause` for programmatic access.
+
 ### Custom signed extensions
 
 Chains with non-standard signed extensions (e.g. `people-preview`) are auto-handled:

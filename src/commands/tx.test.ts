@@ -16,6 +16,7 @@ import {
   parseExtOption,
   parsePrimitive,
   parseTypedArg,
+  typeHint,
 } from "./tx.ts";
 
 const meta = getTestMetadata();
@@ -147,6 +148,56 @@ describe("parseCallArgs", () => {
 
   test("zero args for non-void call throws", () => {
     expect(() => parseCallArgs(meta, "System", "remark", [])).toThrow(/takes 1 argument/);
+  });
+
+  test("struct arg parse error includes field name and expected type", () => {
+    // Balances.transfer_keep_alive has struct fields: dest (MultiAddress), value (Compact<u128>)
+    // Passing "abc" for the amount should fail with contextual info
+    expect(() =>
+      parseCallArgs(meta, "Balances", "transfer_keep_alive", [
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "abc",
+      ]),
+    ).toThrow(/Invalid value for argument 'value'/);
+  });
+
+  test("struct arg parse error includes expected type description", () => {
+    expect(() =>
+      parseCallArgs(meta, "Balances", "transfer_keep_alive", [
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "abc",
+      ]),
+    ).toThrow(/expected/);
+  });
+
+  test("struct arg parse error includes the invalid value in the message", () => {
+    expect(() =>
+      parseCallArgs(meta, "Balances", "transfer_keep_alive", [
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "abc",
+      ]),
+    ).toThrow(/"abc"/);
+  });
+
+  test("struct arg parse error includes a hint", () => {
+    expect(() =>
+      parseCallArgs(meta, "Balances", "transfer_keep_alive", [
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "abc",
+      ]),
+    ).toThrow(/Hint:/);
+  });
+
+  test("struct arg parse error preserves original cause", () => {
+    try {
+      parseCallArgs(meta, "Balances", "transfer_keep_alive", [
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "abc",
+      ]);
+      throw new Error("should have thrown");
+    } catch (err: any) {
+      expect(err.cause).toBeDefined();
+    }
   });
 });
 
@@ -314,6 +365,68 @@ describe("parseTypedArg", () => {
       },
     };
     expect(parseTypedArg(meta, enumEntry, "Root")).toEqual({ type: "Root" });
+  });
+});
+
+describe("typeHint", () => {
+  test("enum with few variants lists them", () => {
+    const entry = {
+      type: "enum",
+      value: { A: { type: "void" }, B: { type: "void" }, C: { type: "void" } },
+    };
+    const hint = typeHint(entry, meta);
+    expect(hint).toContain("a variant:");
+    expect(hint).toContain("A | B | C");
+  });
+
+  test("enum with many variants shows count and examples", () => {
+    const variants: Record<string, any> = {};
+    for (let i = 0; i < 10; i++) {
+      variants[`Var${i}`] = { type: "void" };
+    }
+    const entry = { type: "enum", value: variants };
+    const hint = typeHint(entry, meta);
+    expect(hint).toContain("one of 10 variants");
+    expect(hint).toContain("e.g.");
+  });
+
+  test("struct lists field names", () => {
+    const entry = {
+      type: "struct",
+      value: { foo: { type: "primitive", value: "u32" }, bar: { type: "primitive", value: "str" } },
+    };
+    const hint = typeHint(entry, meta);
+    expect(hint).toContain("a JSON object with fields:");
+    expect(hint).toContain("foo");
+    expect(hint).toContain("bar");
+  });
+
+  test("tuple returns array hint", () => {
+    const entry = { type: "tuple", value: [] };
+    expect(typeHint(entry, meta)).toBe("a JSON array");
+  });
+
+  test("sequence returns array/hex hint", () => {
+    const entry = { type: "sequence", value: { type: "primitive", value: "u32" } };
+    expect(typeHint(entry, meta)).toBe("a JSON array or hex-encoded bytes");
+  });
+
+  test("array returns array/hex hint", () => {
+    const entry = { type: "array", value: { type: "primitive", value: "u8" }, len: 32 };
+    expect(typeHint(entry, meta)).toBe("a JSON array or hex-encoded bytes");
+  });
+
+  test("resolves lookupEntry indirection", () => {
+    const entry = {
+      type: "lookupEntry",
+      value: {
+        type: "struct",
+        value: { x: { type: "primitive", value: "u32" } },
+      },
+    };
+    const hint = typeHint(entry, meta);
+    expect(hint).toContain("a JSON object with fields:");
+    expect(hint).toContain("x");
   });
 });
 
@@ -1126,5 +1239,18 @@ describe("dot tx CLI integration", () => {
     ]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Chain specified both as prefix");
+  });
+
+  test("contextual error for invalid struct arg via CLI", async () => {
+    const { stderr, exitCode } = await runCli([
+      "tx",
+      "Balances.transfer_keep_alive",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "abc",
+      "--encode",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Invalid value for argument 'value'");
+    expect(stderr).toContain("expected");
   });
 });

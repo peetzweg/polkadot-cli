@@ -460,7 +460,15 @@ function parseCallArgs(
         `${palletName}.${callName} takes 1 argument (${describeType(meta.lookup, inner.id)}), but ${args.length} provided.`,
       );
     }
-    return parseTypedArg(meta, inner, args[0]!);
+    try {
+      return parseTypedArg(meta, inner, args[0]!);
+    } catch (err) {
+      const typeDesc = describeType(meta.lookup, inner.id);
+      throw new Error(
+        `Invalid value for argument 0 (expected ${typeDesc}): ${JSON.stringify(args[0])}`,
+        { cause: err },
+      );
+    }
   }
 
   if (variant.type === "tuple") {
@@ -470,7 +478,17 @@ function parseCallArgs(
         `${palletName}.${callName} takes ${entries.length} arguments, but ${args.length} provided.`,
       );
     }
-    return entries.map((entry: any, i: number) => parseTypedArg(meta, entry, args[i]!));
+    return entries.map((entry: any, i: number) => {
+      try {
+        return parseTypedArg(meta, entry, args[i]!);
+      } catch (err) {
+        const typeDesc = describeType(meta.lookup, entry.id);
+        throw new Error(
+          `Invalid value for argument ${i} (expected ${typeDesc}): ${JSON.stringify(args[i])}`,
+          { cause: err },
+        );
+      }
+    });
   }
 
   // Fallback: parse all args generically
@@ -497,9 +515,38 @@ function parseStructArgs(
   for (let i = 0; i < fieldNames.length; i++) {
     const name = fieldNames[i]!;
     const entry = fields[name];
-    result[name] = parseTypedArg(meta, entry, args[i]!);
+    try {
+      result[name] = parseTypedArg(meta, entry, args[i]!);
+    } catch (err) {
+      const typeDesc = describeType(meta.lookup, entry.id);
+      throw new Error(
+        `Invalid value for argument '${name}' (expected ${typeDesc}): ${JSON.stringify(args[i])}\n` +
+          `  Hint: ${typeHint(entry, meta)}`,
+        { cause: err },
+      );
+    }
   }
   return result;
+}
+
+function typeHint(entry: any, meta: MetadataBundle): string {
+  const resolved = entry.type === "lookupEntry" ? entry.value : entry;
+  switch (resolved.type) {
+    case "enum": {
+      const variants = Object.keys(resolved.value);
+      if (variants.length <= 6) return `a variant: ${variants.join(" | ")}`;
+      return `one of ${variants.length} variants (e.g. ${variants.slice(0, 3).join(", ")})`;
+    }
+    case "struct":
+      return `a JSON object with fields: ${Object.keys(resolved.value).join(", ")}`;
+    case "tuple":
+      return "a JSON array";
+    case "sequence":
+    case "array":
+      return "a JSON array or hex-encoded bytes";
+    default:
+      return describeType(meta.lookup, entry.id);
+  }
 }
 
 /**
@@ -951,4 +998,5 @@ export {
   parsePrimitive,
   parseStructArgs,
   parseTypedArg,
+  typeHint,
 };
