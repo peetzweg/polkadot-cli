@@ -5,8 +5,10 @@ import { runCli } from "./__fixtures__/run-cli.ts";
 import {
   autoDefaultForType,
   buildCustomSignedExtensions,
+  decodeCallFallback,
   formatDispatchError,
   formatEventValue,
+  formatRawDecoded,
   NO_DEFAULT,
   normalizeValue,
   parseCallArgs,
@@ -729,6 +731,196 @@ describe("buildCustomSignedExtensions", () => {
   test("returns empty for standard polkadot metadata (all extensions are builtins)", () => {
     const result = buildCustomSignedExtensions(meta, {});
     expect(Object.keys(result).length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatRawDecoded
+// ---------------------------------------------------------------------------
+
+describe("formatRawDecoded", () => {
+  test("null and undefined return 'null'", () => {
+    expect(formatRawDecoded(null)).toBe("null");
+    expect(formatRawDecoded(undefined)).toBe("null");
+  });
+
+  test("primitives format correctly", () => {
+    expect(formatRawDecoded("hello")).toBe("hello");
+    expect(formatRawDecoded(42)).toBe("42");
+    expect(formatRawDecoded(true)).toBe("true");
+    expect(formatRawDecoded(false)).toBe("false");
+  });
+
+  test("bigint formats as string", () => {
+    expect(formatRawDecoded(1000000000000n)).toBe("1000000000000");
+  });
+
+  test("Binary formats as hex", () => {
+    expect(formatRawDecoded(Binary.fromHex("0xdeadbeef"))).toBe("0xdeadbeef");
+  });
+
+  test("empty array formats as []", () => {
+    expect(formatRawDecoded([])).toBe("[]");
+  });
+
+  test("array of primitives formats correctly", () => {
+    expect(formatRawDecoded([1, 2, 3])).toBe("[1, 2, 3]");
+  });
+
+  test("enum-like object with void value shows type only", () => {
+    expect(formatRawDecoded({ type: "Unlimited", value: undefined })).toBe("Unlimited");
+  });
+
+  test("enum-like object with primitive value uses parens", () => {
+    expect(formatRawDecoded({ type: "Parachain", value: 1000 })).toBe("Parachain(1000)");
+  });
+
+  test("enum-like object with struct value uses space", () => {
+    expect(formatRawDecoded({ type: "AccountId32", value: { id: "0xabcd" } })).toBe(
+      "AccountId32 { id: 0xabcd }",
+    );
+  });
+
+  test("plain struct formats as { key: value }", () => {
+    expect(formatRawDecoded({ parents: 0, interior: "Here" })).toBe(
+      "{ parents: 0, interior: Here }",
+    );
+  });
+
+  test("empty object formats as {}", () => {
+    expect(formatRawDecoded({})).toBe("{}");
+  });
+
+  test("nested enum and struct combination", () => {
+    const value = {
+      type: "V3",
+      value: { parents: 1, interior: { type: "Here", value: undefined } },
+    };
+    expect(formatRawDecoded(value)).toBe("V3 { parents: 1, interior: Here }");
+  });
+
+  test("array of enum-like objects", () => {
+    const value = [
+      { type: "Parachain", value: 1000 },
+      { type: "AccountId32", value: { id: "0xab" } },
+    ];
+    expect(formatRawDecoded(value)).toBe("[Parachain(1000), AccountId32 { id: 0xab }]");
+  });
+
+  test("Binary inside nested structures", () => {
+    const value = {
+      type: "AccountId32",
+      value: {
+        id: Binary.fromHex("0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"),
+      },
+    };
+    const result = formatRawDecoded(value);
+    expect(result).toContain("AccountId32");
+    expect(result).toContain("0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// decodeCallFallback
+// ---------------------------------------------------------------------------
+
+describe("decodeCallFallback", () => {
+  test("decodes System.remark call", () => {
+    // Encode System.remark(0xdeadbeef) using buildCall
+    const { codec, location } = meta.builder.buildCall("System", "remark");
+    const callData = { remark: Binary.fromHex("0xdeadbeef") };
+    const encodedArgs = codec.enc(callData);
+    const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
+    const callHex = Binary.fromBytes(fullCall).asHex();
+
+    const result = decodeCallFallback(meta, callHex);
+    expect(result).toContain("System");
+    expect(result).toContain("remark");
+    expect(result).toContain("0xdeadbeef");
+  });
+
+  test("decodes Balances.transfer_keep_alive call", () => {
+    const { codec, location } = meta.builder.buildCall("Balances", "transfer_keep_alive");
+    const callData = {
+      dest: { type: "Id", value: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty" },
+      value: 1000000000000n,
+    };
+    const encodedArgs = codec.enc(callData);
+    const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
+    const callHex = Binary.fromBytes(fullCall).asHex();
+
+    const result = decodeCallFallback(meta, callHex);
+    expect(result).toContain("Balances");
+    expect(result).toContain("transfer_keep_alive");
+    expect(result).toContain("1000000000000");
+  });
+
+  test("decodes XcmPallet.teleport_assets call (complex types that crash view-builder)", () => {
+    // This is the key test case — XCM calls crash view-builder's callDecoder
+    const { codec, location } = meta.builder.buildCall("XcmPallet", "teleport_assets");
+    const callData = {
+      dest: {
+        type: "V3",
+        value: {
+          parents: 0,
+          interior: { type: "X1", value: { type: "Parachain", value: 1000 } },
+        },
+      },
+      beneficiary: {
+        type: "V3",
+        value: {
+          parents: 0,
+          interior: {
+            type: "X1",
+            value: {
+              type: "AccountId32",
+              value: {
+                network: undefined,
+                id: Binary.fromHex(
+                  "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+                ),
+              },
+            },
+          },
+        },
+      },
+      assets: {
+        type: "V3",
+        value: [
+          {
+            id: { type: "Concrete", value: { parents: 0, interior: { type: "Here" } } },
+            fun: { type: "Fungible", value: 1000000000000n },
+          },
+        ],
+      },
+      fee_asset_item: 0,
+    };
+    const encodedArgs = codec.enc(callData);
+    const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
+    const callHex = Binary.fromBytes(fullCall).asHex();
+
+    const result = decodeCallFallback(meta, callHex);
+    expect(result).toContain("XcmPallet");
+    expect(result).toContain("teleport_assets");
+    expect(result).toContain("Parachain(1000)");
+    expect(result).toContain("AccountId32");
+    expect(result).toContain("Fungible(1000000000000)");
+  });
+
+  test("decodes void-arg calls (no arguments)", () => {
+    const { codec, location } = meta.builder.buildCall("Timestamp", "set");
+    const callData = { now: 1000n };
+    const encodedArgs = codec.enc(callData);
+    const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
+    const callHex = Binary.fromBytes(fullCall).asHex();
+
+    const result = decodeCallFallback(meta, callHex);
+    expect(result).toContain("Timestamp");
+    expect(result).toContain("set");
+  });
+
+  test("throws on invalid hex", () => {
+    expect(() => decodeCallFallback(meta, "0xff")).toThrow();
   });
 });
 

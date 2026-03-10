@@ -266,6 +266,7 @@ function formatDispatchError(err: { type: string; value?: unknown }): string {
 }
 
 function decodeCall(meta: MetadataBundle, callHex: string): string {
+  // Primary: view-builder (nicely structured output)
   try {
     const viewBuilder = getViewBuilder(meta.lookup);
     const decoded = viewBuilder.callDecoder(callHex);
@@ -274,8 +275,61 @@ function decodeCall(meta: MetadataBundle, callHex: string): string {
     const argsStr = formatDecodedArgs(decoded.args.value);
     return `${palletName}.${callName}${argsStr}`;
   } catch {
+    // Fallback: DynamicBuilder codec (handles XCM and other complex types)
+  }
+  try {
+    return decodeCallFallback(meta, callHex);
+  } catch {
     return "(unable to decode)";
   }
+}
+
+function decodeCallFallback(meta: MetadataBundle, callHex: string): string {
+  const callTypeId = meta.lookup.call;
+  if (callTypeId == null) throw new Error("No RuntimeCall type ID");
+  const codec = meta.builder.buildDefinition(callTypeId);
+  const decoded = codec.dec(Binary.fromHex(callHex as `0x${string}`).asBytes());
+  // decoded is { type: "PalletName", value: { type: "call_name", value: { ...args } } }
+  const palletName = decoded.type;
+  const call = decoded.value;
+  const callName = call.type;
+  const args = call.value;
+  if (args === undefined || args === null) {
+    return `${palletName}.${callName}`;
+  }
+  const argsStr = formatRawDecoded(args);
+  return `${palletName}.${callName} ${argsStr}`;
+}
+
+function formatRawDecoded(value: unknown): string {
+  if (value === undefined || value === null) return "null";
+  if (value instanceof Binary) return value.asHex();
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return value.toString();
+  if (typeof value === "boolean") return value.toString();
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+    return `[${value.map(formatRawDecoded).join(", ")}]`;
+  }
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    // Enum-like: { type, value }
+    if ("type" in obj && typeof obj.type === "string") {
+      const inner = obj.value;
+      if (inner === undefined || inner === null) return obj.type;
+      const innerStr = formatRawDecoded(inner);
+      // If inner formatted as struct "{ ... }", show Type { ... }
+      if (innerStr.startsWith("{")) return `${obj.type} ${innerStr}`;
+      return `${obj.type}(${innerStr})`;
+    }
+    // Plain struct
+    const entries = Object.entries(obj);
+    if (entries.length === 0) return "{}";
+    const fields = entries.map(([k, v]) => `${k}: ${formatRawDecoded(v)}`).join(", ");
+    return `{ ${fields} }`;
+  }
+  return String(value);
 }
 
 function formatDecodedArgs(decoded: { codec: string; value: any }): string {
@@ -885,8 +939,10 @@ function watchTransaction(observable: import("rxjs").Observable<TxEvent>): Promi
 export {
   autoDefaultForType,
   buildCustomSignedExtensions,
+  decodeCallFallback,
   formatDispatchError,
   formatEventValue,
+  formatRawDecoded,
   NO_DEFAULT,
   normalizeValue,
   parseCallArgs,

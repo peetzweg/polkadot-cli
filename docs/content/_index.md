@@ -399,6 +399,12 @@ Both dry-run and submission display the encoded call hex and a decoded human-rea
   Status: ok
 ```
 
+Complex calls (e.g. XCM teleports) that the primary decoder cannot handle are automatically decoded via a fallback path:
+
+```
+  Decode: PolkadotXcm.limited_teleport_assets { dest: V3 { parents: 1, interior: X1(Parachain(5140)) }, beneficiary: V3 { ... }, assets: V3 [...], fee_asset_item: 0, weight_limit: Unlimited }
+```
+
 ### Exit codes
 
 The CLI exits with code **1** when a finalized transaction has a dispatch error (e.g. insufficient balance, bad origin). The full transaction output (events, explorer links) is still printed before the error so you can debug the failure. Module errors are formatted as `PalletName.ErrorVariant` (e.g. `Balances.InsufficientBalance`).
