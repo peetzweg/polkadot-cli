@@ -103,6 +103,45 @@ MY_SECRET="word1 word2 ..." dot tx System.remark 0xdead --from ci-signer
 # Remove one or more accounts
 dot account remove my-validator
 dot account delete my-validator stale-key
+
+# Inspect an account — show public key and SS58 address
+dot account inspect alice
+dot account alice                    # shorthand (same as inspect)
+dot account inspect 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+dot account inspect 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+dot account inspect alice --prefix 0         # Polkadot mainnet prefix
+dot account inspect alice --output json      # JSON output
+```
+
+#### Inspect accounts
+
+Convert between SS58 addresses, hex public keys, and account names. Accepts any of:
+
+- **Dev account name** (`alice`, `bob`, etc.) — resolves to public key and SS58
+- **Stored account name** — looks up the public key from the accounts file
+- **SS58 address** — decodes to the underlying public key
+- **Hex public key** (`0x` + 64 hex chars) — encodes to SS58
+
+```bash
+dot account inspect alice
+dot account alice                    # shorthand — unknown subcommands fall through to inspect
+
+dot account inspect 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+dot account inspect 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+```
+
+Use `--prefix` to encode the SS58 address with a specific network prefix (default: 42):
+
+```bash
+dot account inspect alice --prefix 0     # Polkadot mainnet (prefix 0, starts with '1')
+dot account inspect alice --prefix 2     # Kusama (prefix 2)
+```
+
+JSON output:
+
+```bash
+dot account inspect alice --output json
+# {"publicKey":"0xd435...a27d","ss58":"5Grw...utQY","prefix":42,"name":"Alice"}
 ```
 
 #### Env-var-backed accounts

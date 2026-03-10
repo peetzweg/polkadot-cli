@@ -4,14 +4,16 @@ import { isEnvSecret } from "../config/accounts-types.ts";
 import {
   createNewAccount,
   DEV_NAMES,
+  fromSs58,
   getDevAddress,
   importAccount,
   isDevAccount,
+  isHexPublicKey,
   publicKeyToHex,
   toSs58,
   tryDerivePublicKey,
 } from "../core/accounts.ts";
-import { BOLD, printHeading, printItem, RESET, YELLOW } from "../core/output.ts";
+import { BOLD, formatJson, printHeading, printItem, RESET, YELLOW } from "../core/output.ts";
 
 const ACCOUNT_HELP = `
 ${BOLD}Usage:${RESET}
@@ -19,6 +21,7 @@ ${BOLD}Usage:${RESET}
   $ dot account import|add <name> --secret <s> [--path <derivation>] Import from BIP39 mnemonic
   $ dot account import|add <name> --env <VAR> [--path <derivation>]  Import account backed by env variable
   $ dot account derive <source> <new-name> --path <derivation>       Derive a child account
+  $ dot account inspect <input> [--prefix <N>]                       Inspect an account/address/key
   $ dot account list                                                 List all accounts
   $ dot account remove|delete <name> [name2] ...                     Remove stored account(s)
 
@@ -29,6 +32,9 @@ ${BOLD}Examples:${RESET}
   $ dot account import treasury --secret "word1 word2 ... word12"
   $ dot account import ci-signer --env MY_SECRET --path //ci
   $ dot account derive treasury treasury-staking --path //staking
+  $ dot account inspect alice
+  $ dot account inspect 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+  $ dot account inspect 0xd435...a27d --prefix 0
   $ dot account list
   $ dot account remove my-validator stale-key
 
@@ -44,11 +50,12 @@ export function registerAccountCommands(cli: CAC) {
     .option("--secret <value>", "Secret key (mnemonic or hex seed) for import")
     .option("--env <varName>", "Environment variable name holding the secret")
     .option("--path <derivation>", "Derivation path (e.g. //staking, //polkadot//0/wallet)")
+    .option("--prefix <number>", "SS58 prefix for address encoding (default: 42)")
     .action(
       async (
         action: string | undefined,
         names: string[],
-        opts: { secret?: string; env?: string; path?: string },
+        opts: { secret?: string; env?: string; path?: string; prefix?: string; output?: string },
       ) => {
         if (!action) {
           if (process.argv[2] === "accounts") return accountList();
@@ -69,10 +76,10 @@ export function registerAccountCommands(cli: CAC) {
           case "delete":
           case "remove":
             return accountRemove(names);
+          case "inspect":
+            return accountInspect(names[0], opts);
           default:
-            console.error(`Unknown action "${action}".\n`);
-            console.log(ACCOUNT_HELP);
-            process.exit(1);
+            return accountInspect(action, opts);
         }
       },
     );
@@ -362,5 +369,87 @@ async function accountRemove(names: string[]) {
 
   for (const name of names) {
     console.log(`Account "${name}" removed.`);
+  }
+}
+
+async function accountInspect(
+  input: string | undefined,
+  opts: { prefix?: string; output?: string },
+) {
+  if (!input) {
+    console.error("Input is required.\n");
+    console.error("Usage: dot account inspect <name|ss58-address|0x-public-key> [--prefix <N>]");
+    process.exit(1);
+  }
+
+  const prefix = opts.prefix != null ? Number(opts.prefix) : 42;
+  if (Number.isNaN(prefix) || prefix < 0) {
+    console.error(`Invalid prefix "${opts.prefix}". Must be a non-negative integer.`);
+    process.exit(1);
+  }
+
+  let name: string | undefined;
+  let publicKeyHex: string;
+
+  // 1. Dev account name
+  if (isDevAccount(input)) {
+    name = input.charAt(0).toUpperCase() + input.slice(1).toLowerCase();
+    const devAddr = getDevAddress(input);
+    publicKeyHex = publicKeyToHex(fromSs58(devAddr));
+  }
+  // 2. Stored account name
+  else {
+    const accountsFile = await loadAccounts();
+    const account = findAccount(accountsFile, input);
+    if (account) {
+      name = account.name;
+      if (account.publicKey) {
+        publicKeyHex = account.publicKey;
+      } else if (isEnvSecret(account.secret)) {
+        const derived = tryDerivePublicKey(account.secret.env, account.derivationPath);
+        if (!derived) {
+          console.error(
+            `Cannot derive public key for "${account.name}": $${account.secret.env} is not set.`,
+          );
+          process.exit(1);
+        }
+        publicKeyHex = derived;
+      } else {
+        // Should not happen for well-formed accounts
+        console.error(`Account "${account.name}" has no public key.`);
+        process.exit(1);
+      }
+    }
+    // 3. Hex public key
+    else if (isHexPublicKey(input)) {
+      publicKeyHex = input;
+    }
+    // 4. Try SS58 decode
+    else {
+      try {
+        const decoded = fromSs58(input);
+        publicKeyHex = publicKeyToHex(decoded);
+      } catch {
+        console.error(
+          `Cannot identify "${input}" as an account name, SS58 address, or hex public key.`,
+        );
+        process.exit(1);
+      }
+    }
+  }
+
+  const ss58 = toSs58(publicKeyHex!, prefix);
+
+  if (opts.output === "json") {
+    const result: Record<string, unknown> = { publicKey: publicKeyHex!, ss58, prefix };
+    if (name) result.name = name;
+    console.log(formatJson(result));
+  } else {
+    printHeading("Account Info");
+    if (name) console.log(`  ${BOLD}Name:${RESET}        ${name}`);
+    console.log(`  ${BOLD}Public Key:${RESET}  ${publicKeyHex!}`);
+    console.log(`  ${BOLD}SS58:${RESET}        ${ss58}`);
+    console.log(`  ${BOLD}Prefix:${RESET}      ${prefix}`);
+    console.log();
   }
 }

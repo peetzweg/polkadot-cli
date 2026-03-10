@@ -5,6 +5,7 @@ import {
   generateMnemonic,
   mnemonicToEntropy,
   ss58Address,
+  ss58Decode,
   validateMnemonic,
 } from "@polkadot-labs/hdkd-helpers";
 import type { PolkadotSigner } from "polkadot-api/signer";
@@ -104,6 +105,15 @@ export function toSs58(publicKey: Uint8Array | string, prefix = 42): string {
     return ss58Address(bytes, prefix);
   }
   return ss58Address(publicKey, prefix);
+}
+
+export function fromSs58(address: string): Uint8Array {
+  const [payload] = ss58Decode(address);
+  return payload;
+}
+
+export function isHexPublicKey(input: string): boolean {
+  return /^0x[0-9a-fA-F]{64}$/.test(input);
 }
 
 export function resolveSecret(secret: string | EnvSecret): string {

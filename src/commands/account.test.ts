@@ -33,10 +33,10 @@ describe("dot account", () => {
     expect(stdout).toContain("Alice");
   });
 
-  test("unknown action foo errors", async () => {
+  test("unknown input foo falls through to inspect and errors", async () => {
     const { stderr, exitCode } = await runCli(["account", "foo"]);
     expect(exitCode).toBe(1);
-    expect(stderr).toContain('Unknown action "foo"');
+    expect(stderr).toContain("Cannot identify");
   });
 
   test("create my-test succeeds", async () => {
@@ -551,5 +551,115 @@ describe("dot account", () => {
     expect(stdout).toContain("multi-child");
     expect(stdout).toContain("//polkadot//0/wallet");
     expect(stdout).toContain("Address:");
+  });
+
+  // inspect tests
+
+  test("inspect alice shows public key and SS58", async () => {
+    const { stdout, exitCode } = await runCli(["account", "inspect", "alice"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Info");
+    expect(stdout).toContain("Alice");
+    expect(stdout).toContain("0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
+    expect(stdout).toContain("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+  });
+
+  test("inspect alice (implicit, no inspect keyword) works", async () => {
+    const { stdout, exitCode } = await runCli(["account", "alice"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Info");
+    expect(stdout).toContain("Alice");
+    expect(stdout).toContain("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+  });
+
+  test("inspect stored account by name", async () => {
+    const { stdout, exitCode } = await runCli(["account", "inspect", "my-account"], {
+      accounts: [STORED_ACCOUNT],
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Info");
+    expect(stdout).toContain("my-account");
+    expect(stdout).toContain(STORED_ACCOUNT.publicKey);
+  });
+
+  test("inspect SS58 address decodes to public key", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "inspect",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Info");
+    expect(stdout).toContain("0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
+    expect(stdout).toContain("SS58:");
+  });
+
+  test("inspect hex public key shows SS58", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "inspect",
+      "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Info");
+    expect(stdout).toContain("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+  });
+
+  test("inspect with --prefix 0 encodes Polkadot address", async () => {
+    const { stdout, exitCode } = await runCli(["account", "inspect", "alice", "--prefix", "0"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Prefix:      0");
+    // Polkadot prefix=0 addresses start with '1'
+    expect(stdout).toMatch(/SS58:\s+1\S+/);
+  });
+
+  test("inspect with --output json returns valid JSON", async () => {
+    const { stdout, exitCode } = await runCli(["account", "inspect", "alice", "--output", "json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.name).toBe("Alice");
+    expect(parsed.publicKey).toBe(
+      "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+    );
+    expect(parsed.ss58).toBe("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+    expect(parsed.prefix).toBe(42);
+  });
+
+  test("inspect invalid input errors", async () => {
+    const { stderr, exitCode } = await runCli(["account", "inspect", "garbage!!!"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Cannot identify");
+  });
+
+  test("inspect env-backed account with env set resolves", async () => {
+    const envAccount: StoredAccount = {
+      name: "env-acct",
+      secret: { env: "MY_SECRET" },
+      publicKey: "",
+      derivationPath: "",
+    };
+    const { stdout, exitCode } = await runCli(["account", "inspect", "env-acct"], {
+      accounts: [envAccount],
+      env: { MY_SECRET: TEST_MNEMONIC },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Info");
+    expect(stdout).toContain("env-acct");
+    expect(stdout).toContain("Public Key:");
+  });
+
+  test("inspect env-backed account without env errors", async () => {
+    const envAccount: StoredAccount = {
+      name: "env-acct",
+      secret: { env: "MY_SECRET" },
+      publicKey: "",
+      derivationPath: "",
+    };
+    const { stderr, exitCode } = await runCli(["account", "inspect", "env-acct"], {
+      accounts: [envAccount],
+      env: { MY_SECRET: "" },
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Cannot derive");
   });
 });

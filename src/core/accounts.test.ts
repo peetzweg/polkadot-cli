@@ -3,9 +3,11 @@ import { TEST_MNEMONIC } from "../commands/__fixtures__/run-cli.ts";
 import { isEnvSecret } from "../config/accounts-types.ts";
 import {
   createNewAccount,
+  fromSs58,
   getDevAddress,
   importAccount,
   isDevAccount,
+  isHexPublicKey,
   publicKeyToHex,
   resolveAccountSigner,
   resolveSecret,
@@ -248,6 +250,56 @@ describe("derivation paths", () => {
     const a = importAccount(TEST_MNEMONIC, "//a");
     const ab = importAccount(TEST_MNEMONIC, "//a//b");
     expect(publicKeyToHex(a.publicKey)).not.toBe(publicKeyToHex(ab.publicKey));
+  });
+
+  describe("fromSs58", () => {
+    test("decodes SS58 address to public key bytes", () => {
+      const address = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
+      const publicKey = fromSs58(address);
+      expect(publicKey).toBeInstanceOf(Uint8Array);
+      expect(publicKey).toHaveLength(32);
+      expect(publicKeyToHex(publicKey)).toBe(
+        "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+      );
+    });
+
+    test("roundtrips with toSs58", () => {
+      const original = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+      const ss58 = toSs58(original);
+      const decoded = publicKeyToHex(fromSs58(ss58));
+      expect(decoded).toBe(original);
+    });
+
+    test("throws on invalid address", () => {
+      expect(() => fromSs58("notanaddress")).toThrow();
+    });
+  });
+
+  describe("isHexPublicKey", () => {
+    test("accepts valid 0x + 64 hex chars", () => {
+      expect(
+        isHexPublicKey("0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"),
+      ).toBe(true);
+    });
+
+    test("rejects without 0x prefix", () => {
+      expect(
+        isHexPublicKey("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"),
+      ).toBe(false);
+    });
+
+    test("rejects wrong length", () => {
+      expect(isHexPublicKey("0xd43593c715fdd31c")).toBe(false);
+      expect(isHexPublicKey(`0x${"aa".repeat(33)}`)).toBe(false);
+    });
+
+    test("rejects non-hex characters", () => {
+      expect(isHexPublicKey(`0x${"zz".repeat(32)}`)).toBe(false);
+    });
+
+    test("rejects empty string", () => {
+      expect(isHexPublicKey("")).toBe(false);
+    });
   });
 
   test("importAccount //a//b (hard+hard) vs //a/b (hard+soft) produce different keys", () => {

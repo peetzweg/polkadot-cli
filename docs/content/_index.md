@@ -201,6 +201,48 @@ dot account delete my-validator stale-key
 
 `delete` is an alias for `remove`.
 
+### Inspect accounts
+
+Convert between SS58 addresses, hex public keys, and account names. Accepts any of:
+
+- **Dev account name** (`alice`, `bob`, etc.) — resolves to public key and SS58
+- **Stored account name** — looks up the public key from the accounts file
+- **SS58 address** — decodes to the underlying public key
+- **Hex public key** (`0x` + 64 hex chars) — encodes to SS58
+
+```
+dot account inspect alice
+dot account alice                    # shorthand — unknown subcommands fall through to inspect
+
+dot account inspect 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+dot account inspect 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+```
+
+Use `--prefix` to encode the SS58 address with a specific network prefix (default: 42):
+
+```
+dot account inspect alice --prefix 0     # Polkadot mainnet (prefix 0, starts with '1')
+dot account inspect alice --prefix 2     # Kusama (prefix 2)
+```
+
+Output:
+
+```
+  Account Info
+
+  Name:        Alice
+  Public Key:  0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+  SS58:        5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+  Prefix:      42
+```
+
+JSON output:
+
+```
+dot account inspect alice --output json
+# {"publicKey":"0xd435...a27d","ss58":"5Grw...utQY","prefix":42,"name":"Alice"}
+```
+
 ## Chain Prefix
 
 Instead of the `--chain` flag, you can prefix any target with the chain name using dot notation:
