@@ -3,7 +3,7 @@ import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
 import type { MetadataBundle } from "../core/metadata.ts";
 import { describeType, findPallet, getOrFetchMetadata, getPalletNames } from "../core/metadata.ts";
-import { CYAN, DIM, printHeading, printResult, RESET } from "../core/output.ts";
+import { CYAN, DIM, firstSentence, printHeading, printResult, RESET } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseTarget, resolveTargetChain } from "../utils/parse-target.ts";
 
@@ -70,8 +70,9 @@ export function registerConstCommand(cli: CAC) {
           for (const c of palletInfo.constants) {
             const typeStr = describeType(meta.lookup, c.typeId);
             console.log(`  ${CYAN}${c.name}${RESET}${DIM}: ${typeStr}${RESET}`);
-            if (c.docs[0]) {
-              console.log(`      ${DIM}${c.docs[0].slice(0, 80)}${RESET}`);
+            const summary = firstSentence(c.docs);
+            if (summary) {
+              console.log(`      ${DIM}${summary}${RESET}`);
             }
           }
           console.log();

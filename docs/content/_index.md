@@ -357,7 +357,7 @@ When inspecting a pallet (e.g. `dot inspect Balances`), each item shows type inf
 ```
   Constants:
     ExistentialDeposit: u128
-        The minimum amount required to keep an account open. MUST BE GREATER THAN ZERO!
+        The minimum amount required to keep an account open.
     MaxLocks: u32
         The maximum number of locks that should exist on an account.
 ```
@@ -378,7 +378,7 @@ When inspecting a pallet (e.g. `dot inspect Balances`), each item shows type inf
     Transfer(from: AccountId32, to: AccountId32, amount: u128)
         Transfer succeeded.
     Deposit(who: AccountId32, amount: u128)
-        Some amount was deposited.
+        Some amount was deposited (e.g. for transaction fees).
 ```
 
 **Errors** show their name and documentation:
@@ -391,7 +391,7 @@ When inspecting a pallet (e.g. `dot inspect Balances`), each item shows type inf
         Vesting balance too high to send value.
 ```
 
-Documentation is shown on an indented line below each item (truncated to 80 characters). Long type strings are truncated at 60 characters.
+The first sentence of the documentation is shown below each item. Abbreviations like `e.g.`, `i.e.`, and `etc.` are handled correctly and don't cause early truncation. Drill into any item for the full documentation.
 
 ### Item detail
 

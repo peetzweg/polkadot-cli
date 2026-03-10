@@ -60,6 +60,15 @@ describe("dot const", () => {
     expect(stdout).toBeTruthy();
   });
 
+  test("listing shows first complete sentence from docs", async () => {
+    const { stdout, exitCode } = await runCli(["const", "Balances"]);
+    expect(exitCode).toBe(0);
+    // firstSentence extracts only the first sentence, not the full doc line
+    expect(stdout).toContain("The minimum amount required to keep an account open.");
+    // Multiple constants should each show their first sentence
+    expect(stdout).toContain("The maximum number of locks that should exist on an account.");
+  });
+
   test("json output has no progress messages on stdout", async () => {
     const { stdout, exitCode } = await runCli(["const", "System.SS58Prefix", "--output", "json"]);
     expect(exitCode).toBe(0);

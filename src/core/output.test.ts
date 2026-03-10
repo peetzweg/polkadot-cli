@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { Binary, FixedSizeBinary } from "polkadot-api";
-import { formatJson, formatPretty, Spinner, truncate } from "./output.ts";
+import { firstSentence, formatJson, formatPretty, Spinner } from "./output.ts";
 
 describe("formatJson", () => {
   test("formats object with 2-space indentation", () => {
@@ -88,28 +88,6 @@ describe("formatJson", () => {
   });
 });
 
-describe("truncate", () => {
-  test("returns short strings unchanged", () => {
-    expect(truncate("hello", 10)).toBe("hello");
-  });
-
-  test("returns string at exact limit unchanged", () => {
-    expect(truncate("12345", 5)).toBe("12345");
-  });
-
-  test("truncates long strings with ellipsis", () => {
-    expect(truncate("hello world!", 8)).toBe("hello...");
-  });
-
-  test("handles empty string", () => {
-    expect(truncate("", 5)).toBe("");
-  });
-
-  test("truncates to minimum length of 3", () => {
-    expect(truncate("abcdef", 3)).toBe("...");
-  });
-});
-
 describe("Spinner", () => {
   test("succeed writes to stderr, not stdout", () => {
     const errorSpy = spyOn(console, "error").mockImplementation(() => {});
@@ -153,6 +131,80 @@ describe("Spinner", () => {
 
     errorSpy.mockRestore();
     logSpy.mockRestore();
+  });
+});
+
+describe("firstSentence", () => {
+  test("single sentence", () => {
+    expect(firstSentence(["Transfer succeeded."])).toBe("Transfer succeeded.");
+  });
+
+  test("multi-line sentence joined", () => {
+    expect(firstSentence(["The runtime can be supplied", "later."])).toBe(
+      "The runtime can be supplied later.",
+    );
+  });
+
+  test("multiple sentences returns first", () => {
+    expect(firstSentence(["First sentence. Second sentence."])).toBe("First sentence.");
+  });
+
+  test("sentence ending with exclamation mark", () => {
+    expect(firstSentence(["MUST BE GREATER THAN ZERO!"])).toBe("MUST BE GREATER THAN ZERO!");
+  });
+
+  test("sentence ending with question mark", () => {
+    expect(firstSentence(["Is this valid?"])).toBe("Is this valid?");
+  });
+
+  test("no punctuation returns full text", () => {
+    expect(firstSentence(["No period here"])).toBe("No period here");
+  });
+
+  test("empty docs returns empty string", () => {
+    expect(firstSentence([])).toBe("");
+  });
+
+  test("whitespace-only docs returns empty string", () => {
+    expect(firstSentence(["  ", "  "])).toBe("");
+  });
+
+  test("sentence ending at end of string (no trailing space)", () => {
+    expect(firstSentence(["Done."])).toBe("Done.");
+  });
+
+  test("skips e.g. abbreviation", () => {
+    expect(firstSentence(["Some amount was deposited (e.g. for transaction fees)."])).toBe(
+      "Some amount was deposited (e.g. for transaction fees).",
+    );
+  });
+
+  test("skips i.e. abbreviation", () => {
+    expect(firstSentence(["The value (i.e. the amount) must be positive."])).toBe(
+      "The value (i.e. the amount) must be positive.",
+    );
+  });
+
+  test("skips etc. abbreviation", () => {
+    expect(firstSentence(["Handles fees, tips, etc. in a single call."])).toBe(
+      "Handles fees, tips, etc. in a single call.",
+    );
+  });
+
+  test("multi-line with e.g. abbreviation", () => {
+    expect(firstSentence(["Some amount was deposited (e.g.", "for transaction fees)."])).toBe(
+      "Some amount was deposited (e.g. for transaction fees).",
+    );
+  });
+
+  test("e.g. at end of text with no sentence terminator", () => {
+    expect(firstSentence(["See the docs, e.g."])).toBe("See the docs, e.g.");
+  });
+
+  test("abbreviation followed by real sentence boundary", () => {
+    expect(firstSentence(["Use e.g. this method. Then do something else."])).toBe(
+      "Use e.g. this method.",
+    );
   });
 });
 

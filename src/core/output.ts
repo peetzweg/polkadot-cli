@@ -105,9 +105,12 @@ class Spinner {
   }
 }
 
-export function truncate(str: string, maxLen: number): string {
-  if (str.length <= maxLen) return str;
-  return `${str.slice(0, maxLen - 3)}...`;
+export function firstSentence(docs: string[]): string {
+  const text = docs.join(" ").trim();
+  if (!text) return "";
+  // Match sentence-ending punctuation, but skip common abbreviations like e.g. and i.e.
+  const match = text.match(/^.*?(?<![ei]\.g|[ei]\.[eg])(?<!\betc)[.!?](?:\s|$)/);
+  return match ? match[0].trim() : text;
 }
 
 export { BOLD, CHECK_MARK, CYAN, DIM, GREEN, isTTY, MAGENTA, RED, RESET, Spinner, YELLOW };

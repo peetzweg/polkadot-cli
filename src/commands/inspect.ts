@@ -15,11 +15,11 @@ import {
   BOLD,
   CYAN,
   DIM,
+  firstSentence,
   printDocs,
   printHeading,
   printItem,
   RESET,
-  truncate,
 } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseTarget, resolveTargetChain } from "../utils/parse-target.ts";
@@ -98,17 +98,18 @@ export function registerInspectCommand(cli: CAC) {
         if (pallet.storage.length) {
           console.log(`  ${BOLD}Storage Items:${RESET}`);
           for (const s of pallet.storage) {
-            const valueType = truncate(describeType(meta.lookup, s.valueTypeId), 60);
+            const valueType = describeType(meta.lookup, s.valueTypeId);
             let typeSuffix: string;
             if (s.keyTypeId != null) {
-              const keyType = truncate(describeType(meta.lookup, s.keyTypeId), 60);
+              const keyType = describeType(meta.lookup, s.keyTypeId);
               typeSuffix = `: ${keyType} → ${valueType}    [map]`;
             } else {
               typeSuffix = `: ${valueType}`;
             }
             console.log(`    ${CYAN}${s.name}${RESET}${DIM}${typeSuffix}${RESET}`);
-            if (s.docs[0]) {
-              console.log(`        ${DIM}${s.docs[0].slice(0, 80)}${RESET}`);
+            const summary = firstSentence(s.docs);
+            if (summary) {
+              console.log(`        ${DIM}${summary}${RESET}`);
             }
           }
           console.log();
@@ -117,10 +118,11 @@ export function registerInspectCommand(cli: CAC) {
         if (pallet.constants.length) {
           console.log(`  ${BOLD}Constants:${RESET}`);
           for (const c of pallet.constants) {
-            const typeStr = truncate(describeType(meta.lookup, c.typeId), 60);
+            const typeStr = describeType(meta.lookup, c.typeId);
             console.log(`    ${CYAN}${c.name}${RESET}${DIM}: ${typeStr}${RESET}`);
-            if (c.docs[0]) {
-              console.log(`        ${DIM}${c.docs[0].slice(0, 80)}${RESET}`);
+            const summary = firstSentence(c.docs);
+            if (summary) {
+              console.log(`        ${DIM}${summary}${RESET}`);
             }
           }
           console.log();
@@ -131,8 +133,9 @@ export function registerInspectCommand(cli: CAC) {
           for (const c of pallet.calls) {
             const args = describeCallArgs(meta, pallet.name, c.name);
             console.log(`    ${CYAN}${c.name}${RESET}${DIM}${args}${RESET}`);
-            if (c.docs[0]) {
-              console.log(`        ${DIM}${c.docs[0].slice(0, 80)}${RESET}`);
+            const summary = firstSentence(c.docs);
+            if (summary) {
+              console.log(`        ${DIM}${summary}${RESET}`);
             }
           }
           console.log();
@@ -143,8 +146,9 @@ export function registerInspectCommand(cli: CAC) {
           for (const e of pallet.events) {
             const fields = describeEventFields(meta, pallet.name, e.name);
             console.log(`    ${CYAN}${e.name}${RESET}${DIM}${fields}${RESET}`);
-            if (e.docs[0]) {
-              console.log(`        ${DIM}${e.docs[0].slice(0, 80)}${RESET}`);
+            const summary = firstSentence(e.docs);
+            if (summary) {
+              console.log(`        ${DIM}${summary}${RESET}`);
             }
           }
           console.log();
@@ -154,8 +158,9 @@ export function registerInspectCommand(cli: CAC) {
           console.log(`  ${BOLD}Errors:${RESET}`);
           for (const e of pallet.errors) {
             console.log(`    ${CYAN}${e.name}${RESET}`);
-            if (e.docs[0]) {
-              console.log(`        ${DIM}${e.docs[0].slice(0, 80)}${RESET}`);
+            const summary = firstSentence(e.docs);
+            if (summary) {
+              console.log(`        ${DIM}${summary}${RESET}`);
             }
           }
           console.log();

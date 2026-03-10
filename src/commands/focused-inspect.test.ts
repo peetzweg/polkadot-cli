@@ -189,6 +189,47 @@ describe("dot pallets", () => {
   });
 });
 
+describe("no truncation", () => {
+  test("call docs show first complete sentence", async () => {
+    const { stdout, exitCode } = await runCli(["calls", "Balances"]);
+    expect(exitCode).toBe(0);
+    // force_transfer docs span multiple metadata lines — listing should show the full first sentence
+    expect(stdout).toContain(
+      "Exactly as `transfer_allow_death`, except the origin must be root and the source account may be specified.",
+    );
+  });
+
+  test("event docs show complete sentence with e.g. abbreviation", async () => {
+    const { stdout, exitCode } = await runCli(["events", "Balances"]);
+    expect(exitCode).toBe(0);
+    // Deposit event doc contains "e.g." — should not be cut off at the abbreviation
+    expect(stdout).toContain("Some amount was deposited (e.g. for transaction fees).");
+    // Withdraw has same pattern
+    expect(stdout).toContain(
+      "Some amount was withdrawn from the account (e.g. for transaction fees).",
+    );
+  });
+
+  test("storage type strings are not truncated at 60 chars", async () => {
+    const { stdout, exitCode } = await runCli(["storage", "System"]);
+    expect(exitCode).toBe(0);
+    // Account value type contains "sufficients: u32, data:" which is past the 60-char mark
+    expect(stdout).toContain("sufficients: u32, data:");
+    const lines = stdout.split("\n");
+    const accountLine = lines.find((l: string) => l.includes("Account") && l.includes("[map]"));
+    expect(accountLine).toBeDefined();
+    expect(accountLine).not.toMatch(/\.\.\./);
+  });
+
+  test("error docs show complete first sentence", async () => {
+    const { stdout, exitCode } = await runCli(["errors", "Balances"]);
+    expect(exitCode).toBe(0);
+    // Error docs should show complete first sentences
+    expect(stdout).toContain("Balance too low to send value.");
+    expect(stdout).toContain("Vesting balance too high to send value.");
+  });
+});
+
 describe("stdout/stderr separation (pipe-safe output)", () => {
   test("dot calls stdout has no progress messages", async () => {
     const { stdout, exitCode } = await runCli(["calls", "Balances"]);

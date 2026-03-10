@@ -321,6 +321,44 @@ describe("dot inspect", () => {
     expect(stderr).toContain("InsufficientBalance");
   });
 
+  // --- No truncation ---
+
+  test("doc strings show first complete sentence", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "Balances"]);
+    expect(exitCode).toBe(0);
+    // firstSentence extracts only the first sentence — "MUST BE GREATER THAN ZERO!" is sentence #2
+    expect(stdout).toContain("The minimum amount required to keep an account open.");
+    // force_transfer listing should show full first sentence joined from multiple doc lines
+    expect(stdout).toContain(
+      "Exactly as `transfer_allow_death`, except the origin must be root and the source account may be specified.",
+    );
+  });
+
+  test("event docs handle e.g. abbreviation without truncation", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "Balances"]);
+    expect(exitCode).toBe(0);
+    // Deposit/Withdraw/Slashed events contain "e.g." — should not be cut at the abbreviation
+    expect(stdout).toContain("Some amount was deposited (e.g. for transaction fees).");
+  });
+
+  test("error docs show complete first sentence in listing", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "Balances"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Balance too low to send value.");
+  });
+
+  test("type strings are not truncated at 60 chars", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "System"]);
+    expect(exitCode).toBe(0);
+    // Account value type is well over 60 chars — should not end with "..."
+    expect(stdout).toContain("sufficients: u32, data:");
+    // Verify no "..." truncation artifacts in type strings
+    const lines = stdout.split("\n");
+    const accountLine = lines.find((l: string) => l.includes("Account") && l.includes("[map]"));
+    expect(accountLine).toBeDefined();
+    expect(accountLine).not.toMatch(/\.\.\./);
+  });
+
   test("stdout has no progress messages (pipe-safe)", async () => {
     const { stdout, exitCode } = await runCli(["inspect", "System"]);
     expect(exitCode).toBe(0);
