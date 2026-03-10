@@ -13,6 +13,8 @@ export interface PalletInfo {
   storage: StorageItemInfo[];
   constants: ConstantInfo[];
   calls: CallInfo[];
+  events: EventInfo[];
+  errors: ErrorInfo[];
 }
 
 export interface StorageItemInfo {
@@ -33,6 +35,17 @@ export interface CallInfo {
   name: string;
   docs: string[];
   typeId: number | null; // lookup ID for the call variant's inner type
+}
+
+export interface EventInfo {
+  name: string;
+  docs: string[];
+  typeId: number | null;
+}
+
+export interface ErrorInfo {
+  name: string;
+  docs: string[];
 }
 
 export type UnifiedMeta = ReturnType<typeof unifyMetadata>;
@@ -123,26 +136,28 @@ export function listPallets(meta: MetadataBundle): PalletInfo[] {
       docs: c.docs ?? [],
       typeId: c.type,
     })),
-    calls: extractCalls(meta, p.calls),
+    calls: extractEnumVariants(meta, p.calls),
+    events: extractEnumVariants(meta, p.events),
+    errors: extractEnumVariants(meta, p.errors).map(({ name, docs }) => ({ name, docs })),
   }));
 }
 
-function extractCalls(meta: MetadataBundle, callsRef: { type: number } | undefined): CallInfo[] {
-  if (!callsRef) return [];
+function extractEnumVariants(meta: MetadataBundle, ref: { type: number } | undefined): CallInfo[] {
+  if (!ref) return [];
   try {
-    const entry = meta.lookup(callsRef.type);
+    const entry = meta.lookup(ref.type);
     if (entry.type !== "enum") return [];
     return Object.entries(entry.value as Record<string, any>).map(([name, variant]) => ({
       name,
-      docs: (variant as any).docs ?? [],
-      typeId: resolveCallTypeId(variant),
+      docs: (entry as any).innerDocs?.[name] ?? [],
+      typeId: resolveVariantTypeId(variant),
     }));
   } catch {
     return [];
   }
 }
 
-function resolveCallTypeId(variant: any): number | null {
+function resolveVariantTypeId(variant: any): number | null {
   if (variant.type === "lookupEntry") return variant.value?.id ?? null;
   if (variant.type === "struct") return null; // inline struct, no single typeId
   if (variant.type === "void" || variant.type === "empty") return null;
@@ -228,6 +243,53 @@ export function describeCallArgs(
     if (callsEntry.type !== "enum") return "";
 
     const variant = (callsEntry.value as Record<string, any>)[callName];
+    if (!variant) return "";
+
+    if (variant.type === "void") return "()";
+
+    if (variant.type === "struct") {
+      const fields = Object.entries(variant.value as Record<string, any>)
+        .map(([k, v]) => `${k}: ${formatLookupEntry(v)}`)
+        .join(", ");
+      return `(${fields})`;
+    }
+
+    if (variant.type === "lookupEntry") {
+      const inner = variant.value;
+      if (inner.type === "void") return "()";
+      if (inner.type === "struct") {
+        const fields = Object.entries(inner.value as Record<string, any>)
+          .map(([k, v]) => `${k}: ${formatLookupEntry(v)}`)
+          .join(", ");
+        return `(${fields})`;
+      }
+      return `(${formatLookupEntry(inner)})`;
+    }
+
+    if (variant.type === "tuple") {
+      const types = (variant.value as any[]).map(formatLookupEntry).join(", ");
+      return `(${types})`;
+    }
+
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+export function describeEventFields(
+  meta: MetadataBundle,
+  palletName: string,
+  eventName: string,
+): string {
+  try {
+    const palletMeta = meta.unified.pallets.find((p) => p.name === palletName);
+    if (!palletMeta?.events) return "";
+
+    const eventsEntry = meta.lookup(palletMeta.events.type);
+    if (eventsEntry.type !== "enum") return "";
+
+    const variant = (eventsEntry.value as Record<string, any>)[eventName];
     if (!variant) return "";
 
     if (variant.type === "void") return "()";

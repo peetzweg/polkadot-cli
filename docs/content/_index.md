@@ -312,13 +312,13 @@ dot const Balances.ExistentialDeposit --output json | jq
 
 ## Inspect
 
-Browse chain metadata offline (uses the cached copy after the first fetch). Shows storage items, constants, and calls for each pallet.
+Browse chain metadata offline (uses the cached copy after the first fetch). Shows storage items, constants, calls, events, and errors for each pallet.
 
 ```
-# List all pallets (shows storage, constants, and calls counts)
+# List all pallets (shows storage, constants, calls, events, and errors counts)
 dot inspect
 
-# List a pallet's storage items, constants, and calls
+# List a pallet's storage items, constants, calls, events, and errors
 dot inspect System
 
 # Detailed type info for a specific storage item or constant
@@ -327,12 +327,152 @@ dot inspect System.Account
 # Call detail — shows argument signature and docs
 dot inspect Balances.transfer_allow_death
 
+# Event detail — shows field signature and docs
+dot inspect Balances.Transfer
+
+# Error detail — shows docs
+dot inspect Balances.InsufficientBalance
+
 # Inspect a specific chain using chain prefix
 dot inspect kusama.System
 dot inspect kusama.System.Account
 ```
 
-Use call inspection to discover argument names and types before constructing `dot tx` commands. For example, `dot inspect Balances.transfer_allow_death` shows `Args: (dest: AccountId32, value: Compact<u128>)` — so you know to pass an address and an amount.
+### Pallet listing
+
+When inspecting a pallet (e.g. `dot inspect Balances`), each item shows type information inline so you can understand the shape without drilling into the detail view:
+
+**Storage items** show key and value types. Map items include a `[map]` tag:
+
+```
+  Storage Items:
+    Account: AccountId32 → { free: u128, reserved: u128, frozen: u128, flags: u128 }    [map]
+        The Balances pallet example of storing the balance of an account.
+    TotalIssuance: u128
+        The total units issued in the system.
+```
+
+**Constants** show their type:
+
+```
+  Constants:
+    ExistentialDeposit: u128
+        The minimum amount required to keep an account open. MUST BE GREATER THAN ZERO!
+    MaxLocks: u32
+        The maximum number of locks that should exist on an account.
+```
+
+**Calls** show their full argument signature:
+
+```
+  Calls:
+    transfer_allow_death(dest: enum(5 variants), value: Compact<u128>)
+        Transfer some liquid free balance to another account.
+    force_transfer(source: enum(5 variants), dest: enum(5 variants), value: Compact<u128>)
+```
+
+**Events** show their field signature:
+
+```
+  Events:
+    Transfer(from: AccountId32, to: AccountId32, amount: u128)
+        Transfer succeeded.
+    Deposit(who: AccountId32, amount: u128)
+        Some amount was deposited.
+```
+
+**Errors** show their name and documentation:
+
+```
+  Errors:
+    InsufficientBalance
+        Balance too low to send value.
+    VestingBalance
+        Vesting balance too high to send value.
+```
+
+Documentation is shown on an indented line below each item (truncated to 80 characters). Long type strings are truncated at 60 characters.
+
+### Item detail
+
+Drill into any item for full details. For example, `dot inspect Balances.transfer_allow_death` shows the argument signature and full documentation from the runtime metadata:
+
+```
+  Balances.transfer_allow_death (Call)
+
+  Args: (dest: AccountId32, value: Compact<u128>)
+
+  Transfer some liquid free balance to another account.
+  ...
+```
+
+Event and error detail views follow the same pattern:
+
+```
+  Balances.Transfer (Event)
+
+  Fields: (from: AccountId32, to: AccountId32, amount: u128)
+
+  Transfer succeeded.
+```
+
+```
+  Balances.InsufficientBalance (Error)
+
+  Balance too low to send value.
+```
+
+Use call inspection to discover argument names, types, and documentation before constructing `dot tx` commands.
+
+## Focused Commands
+
+Browse specific metadata categories directly. Each command supports `--chain <name>`, `--rpc <url>`, and chain prefix syntax. Singular and plural forms are interchangeable (`dot call` = `dot calls`).
+
+### Calls
+
+```
+dot calls Balances                         # list calls with arg signatures
+dot calls Balances.transfer_allow_death    # call detail
+```
+
+### Events
+
+```
+dot events Balances                        # list events with field signatures
+dot events Balances.Transfer               # event detail
+```
+
+### Errors
+
+```
+dot errors Balances                        # list errors with docs
+dot errors Balances.InsufficientBalance    # error detail
+```
+
+### Storage
+
+```
+dot storage System                         # list storage items with types
+dot storage System.Account                 # storage detail
+```
+
+### Pallets
+
+```
+dot pallets                                # list all pallets with counts
+dot pallets Balances                       # pallet summary
+```
+
+### Constants (listing mode)
+
+`dot const` now works as both a value lookup and a listing command:
+
+```
+dot const Balances                         # list constants (offline)
+dot const Balances.ExistentialDeposit      # look up value (connects to chain)
+```
+
+`consts` and `constants` are aliases for `const`.
 
 ## Transactions
 

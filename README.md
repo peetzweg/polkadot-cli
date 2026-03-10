@@ -258,10 +258,10 @@ dot const Balances.ExistentialDeposit --output json | jq
 Works offline from cached metadata after the first fetch.
 
 ```bash
-# List all pallets (shows storage, constants, and calls counts)
+# List all pallets (shows storage, constants, calls, events, and errors counts)
 dot inspect
 
-# List a pallet's storage items, constants, and calls
+# List a pallet's storage items, constants, calls, events, and errors
 dot inspect System
 
 # Detailed type info for a specific storage item or constant
@@ -270,12 +270,57 @@ dot inspect System.Account
 # Call detail — shows argument signature and docs
 dot inspect Balances.transfer_allow_death
 
+# Event detail — shows field signature and docs
+dot inspect Balances.Transfer
+
+# Error detail — shows docs
+dot inspect Balances.InsufficientBalance
+
 # Inspect a specific chain using chain prefix
 dot inspect kusama.System
 dot inspect kusama.System.Account
 ```
 
-Use call inspection to discover argument names and types before constructing `dot tx` commands.
+The pallet listing view shows type information inline so you can understand item shapes at a glance:
+
+- **Storage**: key/value types with `[map]` tag for map items (e.g. `Account: AccountId32 → { nonce: u32, ... }    [map]`)
+- **Constants**: the constant's type (e.g. `ExistentialDeposit: u128`)
+- **Calls**: full argument signature (e.g. `transfer_allow_death(dest: enum(5 variants), value: Compact<u128>)`)
+- **Events**: field signature (e.g. `Transfer(from: AccountId32, to: AccountId32, amount: u128)`)
+- **Errors**: name and documentation (e.g. `InsufficientBalance`)
+
+Documentation from the runtime metadata is shown on an indented line below each item. The detail view (`dot inspect Balances.transfer_allow_death`) shows the full argument signature and complete documentation text. Use call inspection to discover argument names, types, and docs before constructing `dot tx` commands.
+
+### Focused commands
+
+Browse specific metadata categories directly without using `dot inspect`:
+
+```bash
+# List all pallets
+dot pallets
+
+# List pallet calls with argument signatures
+dot calls Balances
+dot calls Balances.transfer_allow_death   # call detail
+
+# List pallet events with field signatures
+dot events Balances
+dot events Balances.Transfer              # event detail
+
+# List pallet errors
+dot errors Balances
+dot errors Balances.InsufficientBalance   # error detail
+
+# List pallet storage items with types
+dot storage System
+dot storage System.Account               # storage detail
+
+# List pallet constants (dual-purpose — also works as value lookup)
+dot const Balances                        # list constants
+dot const Balances.ExistentialDeposit     # look up value
+```
+
+Each command supports `--chain <name>`, `--rpc <url>`, and chain prefix syntax. Singular and plural forms are interchangeable (e.g. `dot call` = `dot calls`, `dot event` = `dot events`).
 
 ### Submit extrinsics
 

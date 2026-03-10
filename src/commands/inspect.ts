@@ -4,19 +4,32 @@ import { createChainClient } from "../core/client.ts";
 import type { MetadataBundle } from "../core/metadata.ts";
 import {
   describeCallArgs,
+  describeEventFields,
   describeType,
   findPallet,
   getOrFetchMetadata,
   getPalletNames,
   listPallets,
 } from "../core/metadata.ts";
-import { BOLD, CYAN, DIM, printDocs, printHeading, printItem, RESET } from "../core/output.ts";
+import {
+  BOLD,
+  CYAN,
+  DIM,
+  printDocs,
+  printHeading,
+  printItem,
+  RESET,
+  truncate,
+} from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseTarget, resolveTargetChain } from "../utils/parse-target.ts";
 
 export function registerInspectCommand(cli: CAC) {
   cli
-    .command("inspect [target]", "Inspect chain metadata (pallets, storage, constants)")
+    .command(
+      "inspect [target]",
+      "Inspect chain metadata (pallets, storage, constants, calls, events, errors)",
+    )
     .option("--chain <name>", "Target chain")
     .option("--rpc <url>", "Override RPC endpoint")
     .action(async (target: string | undefined, opts: { chain?: string; rpc?: string }) => {
@@ -59,6 +72,8 @@ export function registerInspectCommand(cli: CAC) {
           if (p.storage.length) counts.push(`${p.storage.length} storage`);
           if (p.constants.length) counts.push(`${p.constants.length} constants`);
           if (p.calls.length) counts.push(`${p.calls.length} calls`);
+          if (p.events.length) counts.push(`${p.events.length} events`);
+          if (p.errors.length) counts.push(`${p.errors.length} errors`);
           printItem(p.name, counts.join(", "));
         }
         console.log();
@@ -83,8 +98,18 @@ export function registerInspectCommand(cli: CAC) {
         if (pallet.storage.length) {
           console.log(`  ${BOLD}Storage Items:${RESET}`);
           for (const s of pallet.storage) {
-            const doc = s.docs[0] ? ` — ${s.docs[0].slice(0, 80)}` : "";
-            console.log(`    ${CYAN}${s.name}${RESET}${DIM}${doc}${RESET}`);
+            const valueType = truncate(describeType(meta.lookup, s.valueTypeId), 60);
+            let typeSuffix: string;
+            if (s.keyTypeId != null) {
+              const keyType = truncate(describeType(meta.lookup, s.keyTypeId), 60);
+              typeSuffix = `: ${keyType} → ${valueType}    [map]`;
+            } else {
+              typeSuffix = `: ${valueType}`;
+            }
+            console.log(`    ${CYAN}${s.name}${RESET}${DIM}${typeSuffix}${RESET}`);
+            if (s.docs[0]) {
+              console.log(`        ${DIM}${s.docs[0].slice(0, 80)}${RESET}`);
+            }
           }
           console.log();
         }
@@ -92,8 +117,11 @@ export function registerInspectCommand(cli: CAC) {
         if (pallet.constants.length) {
           console.log(`  ${BOLD}Constants:${RESET}`);
           for (const c of pallet.constants) {
-            const doc = c.docs[0] ? ` — ${c.docs[0].slice(0, 80)}` : "";
-            console.log(`    ${CYAN}${c.name}${RESET}${DIM}${doc}${RESET}`);
+            const typeStr = truncate(describeType(meta.lookup, c.typeId), 60);
+            console.log(`    ${CYAN}${c.name}${RESET}${DIM}: ${typeStr}${RESET}`);
+            if (c.docs[0]) {
+              console.log(`        ${DIM}${c.docs[0].slice(0, 80)}${RESET}`);
+            }
           }
           console.log();
         }
@@ -101,8 +129,34 @@ export function registerInspectCommand(cli: CAC) {
         if (pallet.calls.length) {
           console.log(`  ${BOLD}Calls:${RESET}`);
           for (const c of pallet.calls) {
-            const doc = c.docs[0] ? ` — ${c.docs[0].slice(0, 80)}` : "";
-            console.log(`    ${CYAN}${c.name}${RESET}${DIM}${doc}${RESET}`);
+            const args = describeCallArgs(meta, pallet.name, c.name);
+            console.log(`    ${CYAN}${c.name}${RESET}${DIM}${args}${RESET}`);
+            if (c.docs[0]) {
+              console.log(`        ${DIM}${c.docs[0].slice(0, 80)}${RESET}`);
+            }
+          }
+          console.log();
+        }
+
+        if (pallet.events.length) {
+          console.log(`  ${BOLD}Events:${RESET}`);
+          for (const e of pallet.events) {
+            const fields = describeEventFields(meta, pallet.name, e.name);
+            console.log(`    ${CYAN}${e.name}${RESET}${DIM}${fields}${RESET}`);
+            if (e.docs[0]) {
+              console.log(`        ${DIM}${e.docs[0].slice(0, 80)}${RESET}`);
+            }
+          }
+          console.log();
+        }
+
+        if (pallet.errors.length) {
+          console.log(`  ${BOLD}Errors:${RESET}`);
+          for (const e of pallet.errors) {
+            console.log(`    ${CYAN}${e.name}${RESET}`);
+            if (e.docs[0]) {
+              console.log(`        ${DIM}${e.docs[0].slice(0, 80)}${RESET}`);
+            }
           }
           console.log();
         }
@@ -166,11 +220,38 @@ export function registerInspectCommand(cli: CAC) {
         return;
       }
 
+      // Search in events
+      const eventItem = pallet.events.find((e) => e.name.toLowerCase() === itemName.toLowerCase());
+      if (eventItem) {
+        printHeading(`${pallet.name}.${eventItem.name} (Event)`);
+        const fields = describeEventFields(meta, pallet.name, eventItem.name);
+        console.log(`  ${BOLD}Fields:${RESET} ${fields}`);
+        if (eventItem.docs.length) {
+          console.log();
+          printDocs(eventItem.docs);
+        }
+        console.log();
+        return;
+      }
+
+      // Search in errors
+      const errorItem = pallet.errors.find((e) => e.name.toLowerCase() === itemName.toLowerCase());
+      if (errorItem) {
+        printHeading(`${pallet.name}.${errorItem.name} (Error)`);
+        if (errorItem.docs.length) {
+          printDocs(errorItem.docs);
+        }
+        console.log();
+        return;
+      }
+
       // Not found — suggest
       const allItems = [
         ...pallet.storage.map((s) => s.name),
         ...pallet.constants.map((c) => c.name),
         ...pallet.calls.map((c) => c.name),
+        ...pallet.events.map((e) => e.name),
+        ...pallet.errors.map((e) => e.name),
       ];
       throw new Error(suggestMessage(`item in ${pallet.name}`, itemName, allItems));
     });
