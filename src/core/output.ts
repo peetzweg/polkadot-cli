@@ -80,7 +80,7 @@ class Spinner {
   start(msg: string): void {
     this.stop();
     if (!isTTY) {
-      console.log(msg);
+      console.error(msg);
       return;
     }
     process.stdout.write(`${SPINNER_FRAMES[0]} ${msg}`);
@@ -101,8 +101,13 @@ class Spinner {
 
   succeed(msg: string): void {
     this.stop();
-    console.log(`${GREEN}${CHECK_MARK}${RESET} ${msg}`);
+    console.error(`${GREEN}${CHECK_MARK}${RESET} ${msg}`);
   }
+}
+
+export function truncate(str: string, maxLen: number): string {
+  if (str.length <= maxLen) return str;
+  return `${str.slice(0, maxLen - 3)}...`;
 }
 
 export { BOLD, CHECK_MARK, CYAN, DIM, GREEN, isTTY, MAGENTA, RED, RESET, Spinner, YELLOW };

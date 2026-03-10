@@ -275,7 +275,7 @@ dot query System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 # All map entries (default limit: 100)
 dot query System.Account --limit 10
 
-# Pipe to jq — stdout is clean JSON, no extra text
+# Pipe-safe — stdout is clean data, progress messages go to stderr
 dot query System.Account --limit 5 | jq '.[0].value.data.free'
 dot query System.Number --output json | jq '.+1'
 
@@ -306,7 +306,7 @@ dot const Balances.ExistentialDeposit
 dot const System.SS58Prefix --chain kusama
 dot const kusama.Balances.ExistentialDeposit
 
-# Pipe to jq — stdout is clean JSON, no extra text
+# Pipe-safe — stdout is clean JSON, progress messages go to stderr
 dot const Balances.ExistentialDeposit --output json | jq
 ```
 
@@ -701,6 +701,17 @@ These flags work with any command:
 | `--light-client` | Use Smoldot light client |
 | `--output json` | Raw JSON output (default: pretty) |
 | `--limit <n>` | Max entries for map queries (0 = unlimited, default: 100) |
+
+### Pipe-safe output
+
+All commands follow Unix conventions: **data goes to stdout, progress goes to stderr**. This means you can safely pipe `--output json` into `jq` or other tools without progress messages ("Fetching metadata...", spinner output, "Connecting...") corrupting the data stream:
+
+```
+dot const System.SS58Prefix --output json | jq '.+1'
+dot query System.Number --output json | jq
+```
+
+In an interactive terminal, both streams render together so you see progress and results normally.
 
 ## Update Notifications
 

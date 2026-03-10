@@ -59,6 +59,14 @@ describe("dot query", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toBeTruthy();
   });
+
+  test("json output has no progress messages on stdout", async () => {
+    const { stdout, exitCode } = await runCli(["query", "System.Number", "--output", "json"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("Fetching metadata");
+    expect(stdout).not.toContain("Connecting");
+    expect(() => JSON.parse(stdout)).not.toThrow();
+  });
 });
 
 // ---------------------------------------------------------------------------

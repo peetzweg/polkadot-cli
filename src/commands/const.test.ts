@@ -59,4 +59,13 @@ describe("dot const", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toBeTruthy();
   });
+
+  test("json output has no progress messages on stdout", async () => {
+    const { stdout, exitCode } = await runCli(["const", "System.SS58Prefix", "--output", "json"]);
+    expect(exitCode).toBe(0);
+    // stdout should be pure JSON — no "Fetching metadata" or spinner text
+    expect(stdout).not.toContain("Fetching metadata");
+    expect(stdout).not.toContain("Connecting");
+    expect(() => JSON.parse(stdout)).not.toThrow();
+  });
 });

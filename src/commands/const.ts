@@ -46,7 +46,7 @@ export function registerConstCommand(cli: CAC) {
           try {
             meta = await getOrFetchMetadata(chainName);
           } catch {
-            console.log(`Fetching metadata from ${chainName}...`);
+            console.error(`Fetching metadata from ${chainName}...`);
             const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
             try {
               meta = await getOrFetchMetadata(chainName, clientHandle);

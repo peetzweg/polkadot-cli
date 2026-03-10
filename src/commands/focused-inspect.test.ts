@@ -189,6 +189,43 @@ describe("dot pallets", () => {
   });
 });
 
+describe("stdout/stderr separation (pipe-safe output)", () => {
+  test("dot calls stdout has no progress messages", async () => {
+    const { stdout, exitCode } = await runCli(["calls", "Balances"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("Fetching metadata");
+    expect(stdout).not.toContain("Connecting");
+  });
+
+  test("dot events stdout has no progress messages", async () => {
+    const { stdout, exitCode } = await runCli(["events", "Balances"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("Fetching metadata");
+    expect(stdout).not.toContain("Connecting");
+  });
+
+  test("dot errors stdout has no progress messages", async () => {
+    const { stdout, exitCode } = await runCli(["errors", "Balances"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("Fetching metadata");
+    expect(stdout).not.toContain("Connecting");
+  });
+
+  test("dot storage stdout has no progress messages", async () => {
+    const { stdout, exitCode } = await runCli(["storage", "System"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("Fetching metadata");
+    expect(stdout).not.toContain("Connecting");
+  });
+
+  test("dot pallets stdout has no progress messages", async () => {
+    const { stdout, exitCode } = await runCli(["pallets"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("Fetching metadata");
+    expect(stdout).not.toContain("Connecting");
+  });
+});
+
 describe("dot const (dual-purpose)", () => {
   test("lists constants when pallet only", async () => {
     const { stdout, exitCode } = await runCli(["const", "Balances"]);

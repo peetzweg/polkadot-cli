@@ -320,4 +320,18 @@ describe("dot inspect", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("InsufficientBalance");
   });
+
+  test("stdout has no progress messages (pipe-safe)", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "System"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("Fetching metadata");
+    expect(stdout).not.toContain("Connecting");
+  });
+
+  test("pallet list stdout has no progress messages", async () => {
+    const { stdout, exitCode } = await runCli(["inspect"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("Fetching metadata");
+    expect(stdout).not.toContain("Connecting");
+  });
 });

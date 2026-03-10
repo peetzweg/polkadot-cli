@@ -88,11 +88,11 @@ async function chainAdd(
     ...(opts.lightClient ? { lightClient: true } : {}),
   };
 
-  console.log(`Connecting to ${name}...`);
+  console.error(`Connecting to ${name}...`);
   const clientHandle = await createChainClient(name, chainConfig, opts.rpc);
 
   try {
-    console.log("Fetching metadata...");
+    console.error("Fetching metadata...");
     await fetchMetadataFromChain(clientHandle, name);
 
     // Only save config after successful connection + metadata fetch
@@ -159,11 +159,11 @@ async function chainUpdate(name: string | undefined, opts: { rpc?: string | stri
   const config = await loadConfig();
   const { name: chainName, chain: chainConfig } = resolveChain(config, name);
 
-  console.log(`Connecting to ${chainName}...`);
+  console.error(`Connecting to ${chainName}...`);
   const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
 
   try {
-    console.log("Fetching metadata...");
+    console.error("Fetching metadata...");
     await fetchMetadataFromChain(clientHandle, chainName);
     console.log(`Metadata for "${chainName}" updated.`);
   } finally {

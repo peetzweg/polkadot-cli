@@ -1,6 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { Binary, FixedSizeBinary } from "polkadot-api";
-import { formatJson, formatPretty } from "./output.ts";
+import { formatJson, formatPretty, Spinner, truncate } from "./output.ts";
 
 describe("formatJson", () => {
   test("formats object with 2-space indentation", () => {
@@ -85,6 +85,74 @@ describe("formatJson", () => {
 
   test("returns 'null' for null input", () => {
     expect(formatJson(null)).toBe("null");
+  });
+});
+
+describe("truncate", () => {
+  test("returns short strings unchanged", () => {
+    expect(truncate("hello", 10)).toBe("hello");
+  });
+
+  test("returns string at exact limit unchanged", () => {
+    expect(truncate("12345", 5)).toBe("12345");
+  });
+
+  test("truncates long strings with ellipsis", () => {
+    expect(truncate("hello world!", 8)).toBe("hello...");
+  });
+
+  test("handles empty string", () => {
+    expect(truncate("", 5)).toBe("");
+  });
+
+  test("truncates to minimum length of 3", () => {
+    expect(truncate("abcdef", 3)).toBe("...");
+  });
+});
+
+describe("Spinner", () => {
+  test("succeed writes to stderr, not stdout", () => {
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+
+    const spinner = new Spinner();
+    spinner.succeed("done");
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls[0]![0]).toContain("done");
+    expect(logSpy).not.toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  test("succeed includes check mark", () => {
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+
+    const spinner = new Spinner();
+    spinner.succeed("Finalized");
+
+    expect(errorSpy.mock.calls[0]![0]).toContain("✓");
+    expect(errorSpy.mock.calls[0]![0]).toContain("Finalized");
+
+    errorSpy.mockRestore();
+  });
+
+  test("start writes to stderr in non-TTY (piped) mode", () => {
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+
+    // In test environment, stdout.isTTY is typically false (non-TTY)
+    const spinner = new Spinner();
+    spinner.start("Loading...");
+    spinner.stop();
+
+    // In non-TTY mode, start() should use console.error
+    // In TTY mode, it writes to process.stdout directly (not console.log)
+    expect(logSpy).not.toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });
 
