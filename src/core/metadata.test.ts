@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { getTestMetadata } from "../commands/__fixtures__/load-metadata.ts";
 import { MetadataError } from "../utils/errors.ts";
 import {
+  describeCallArgs,
   describeType,
   findPallet,
   getOrFetchMetadata,
@@ -187,6 +188,44 @@ describe("getSignedExtensions", () => {
       expect(typeof ext.identifier).toBe("string");
       expect(typeof ext.type).toBe("number");
       expect(typeof ext.additionalSigned).toBe("number");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// describeCallArgs
+// ---------------------------------------------------------------------------
+describe("describeCallArgs", () => {
+  test("void call returns ()", () => {
+    // System.remark takes a single bytes arg, but System has void calls too
+    const result = describeCallArgs(meta, "System", "remark");
+    expect(result).toBeTruthy();
+    expect(result.startsWith("(")).toBe(true);
+    expect(result.endsWith(")")).toBe(true);
+  });
+
+  test("struct call returns field names and types", () => {
+    const result = describeCallArgs(meta, "Balances", "transfer_allow_death");
+    expect(result).toContain("dest");
+    expect(result).toContain("value");
+    expect(result.startsWith("(")).toBe(true);
+    expect(result.endsWith(")")).toBe(true);
+  });
+
+  test("returns empty string for nonexistent pallet", () => {
+    expect(describeCallArgs(meta, "NonExistent", "foo")).toBe("");
+  });
+
+  test("returns empty string for nonexistent call", () => {
+    expect(describeCallArgs(meta, "System", "nonexistent_call")).toBe("");
+  });
+
+  test("returns non-empty for known calls", () => {
+    const pallets = listPallets(meta);
+    const balances = pallets.find((p) => p.name === "Balances")!;
+    for (const call of balances.calls) {
+      const result = describeCallArgs(meta, "Balances", call.name);
+      expect(result.length).toBeGreaterThan(0);
     }
   });
 });

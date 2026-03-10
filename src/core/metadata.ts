@@ -215,6 +215,53 @@ function formatLookupEntry(entry: any): string {
   }
 }
 
+export function describeCallArgs(
+  meta: MetadataBundle,
+  palletName: string,
+  callName: string,
+): string {
+  try {
+    const palletMeta = meta.unified.pallets.find((p) => p.name === palletName);
+    if (!palletMeta?.calls) return "";
+
+    const callsEntry = meta.lookup(palletMeta.calls.type);
+    if (callsEntry.type !== "enum") return "";
+
+    const variant = (callsEntry.value as Record<string, any>)[callName];
+    if (!variant) return "";
+
+    if (variant.type === "void") return "()";
+
+    if (variant.type === "struct") {
+      const fields = Object.entries(variant.value as Record<string, any>)
+        .map(([k, v]) => `${k}: ${formatLookupEntry(v)}`)
+        .join(", ");
+      return `(${fields})`;
+    }
+
+    if (variant.type === "lookupEntry") {
+      const inner = variant.value;
+      if (inner.type === "void") return "()";
+      if (inner.type === "struct") {
+        const fields = Object.entries(inner.value as Record<string, any>)
+          .map(([k, v]) => `${k}: ${formatLookupEntry(v)}`)
+          .join(", ");
+        return `(${fields})`;
+      }
+      return `(${formatLookupEntry(inner)})`;
+    }
+
+    if (variant.type === "tuple") {
+      const types = (variant.value as any[]).map(formatLookupEntry).join(", ");
+      return `(${types})`;
+    }
+
+    return "";
+  } catch {
+    return "";
+  }
+}
+
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
   const bytes = new Uint8Array(clean.length / 2);

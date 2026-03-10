@@ -3,6 +3,7 @@ import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
 import type { MetadataBundle } from "../core/metadata.ts";
 import {
+  describeCallArgs,
   describeType,
   findPallet,
   getOrFetchMetadata,
@@ -57,6 +58,7 @@ export function registerInspectCommand(cli: CAC) {
           const counts = [];
           if (p.storage.length) counts.push(`${p.storage.length} storage`);
           if (p.constants.length) counts.push(`${p.constants.length} constants`);
+          if (p.calls.length) counts.push(`${p.calls.length} calls`);
           printItem(p.name, counts.join(", "));
         }
         console.log();
@@ -90,6 +92,15 @@ export function registerInspectCommand(cli: CAC) {
         if (pallet.constants.length) {
           console.log(`  ${BOLD}Constants:${RESET}`);
           for (const c of pallet.constants) {
+            const doc = c.docs[0] ? ` — ${c.docs[0].slice(0, 80)}` : "";
+            console.log(`    ${CYAN}${c.name}${RESET}${DIM}${doc}${RESET}`);
+          }
+          console.log();
+        }
+
+        if (pallet.calls.length) {
+          console.log(`  ${BOLD}Calls:${RESET}`);
+          for (const c of pallet.calls) {
             const doc = c.docs[0] ? ` — ${c.docs[0].slice(0, 80)}` : "";
             console.log(`    ${CYAN}${c.name}${RESET}${DIM}${doc}${RESET}`);
           }
@@ -141,10 +152,25 @@ export function registerInspectCommand(cli: CAC) {
         return;
       }
 
+      // Search in calls
+      const callItem = pallet.calls.find((c) => c.name.toLowerCase() === itemName.toLowerCase());
+      if (callItem) {
+        printHeading(`${pallet.name}.${callItem.name} (Call)`);
+        const args = describeCallArgs(meta, pallet.name, callItem.name);
+        console.log(`  ${BOLD}Args:${RESET} ${args}`);
+        if (callItem.docs.length) {
+          console.log();
+          printDocs(callItem.docs);
+        }
+        console.log();
+        return;
+      }
+
       // Not found — suggest
       const allItems = [
         ...pallet.storage.map((s) => s.name),
         ...pallet.constants.map((c) => c.name),
+        ...pallet.calls.map((c) => c.name),
       ];
       throw new Error(suggestMessage(`item in ${pallet.name}`, itemName, allItems));
     });

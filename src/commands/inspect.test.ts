@@ -114,4 +114,42 @@ describe("dot inspect", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain("System Pallet");
   });
+
+  test("no-target view shows calls count", async () => {
+    const { stdout, exitCode } = await runCli(["inspect"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("calls");
+  });
+
+  test("pallet overview shows Calls section", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "Balances"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Calls:");
+  });
+
+  test("call listing shows call names", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "Balances"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("transfer_allow_death");
+  });
+
+  test("call detail view", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "Balances.transfer_allow_death"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Call)");
+    expect(stdout).toContain("Args:");
+  });
+
+  test("void call detail", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "System.remark"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Call)");
+    expect(stdout).toContain("Args:");
+  });
+
+  test("call typo suggests correct name", async () => {
+    const { stderr, exitCode } = await runCli(["inspect", "Balances.transfer_alow_death"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("transfer_allow_death");
+  });
 });

@@ -219,19 +219,24 @@ dot const Balances.ExistentialDeposit --output json | jq
 Works offline from cached metadata after the first fetch.
 
 ```bash
-# List all pallets
+# List all pallets (shows storage, constants, and calls counts)
 dot inspect
 
-# List a pallet's storage items and constants
+# List a pallet's storage items, constants, and calls
 dot inspect System
 
-# Detailed type info for a specific item
+# Detailed type info for a specific storage item or constant
 dot inspect System.Account
+
+# Call detail — shows argument signature and docs
+dot inspect Balances.transfer_allow_death
 
 # Inspect a specific chain using chain prefix
 dot inspect kusama.System
 dot inspect kusama.System.Account
 ```
+
+Use call inspection to discover argument names and types before constructing `dot tx` commands.
 
 ### Submit extrinsics
 
