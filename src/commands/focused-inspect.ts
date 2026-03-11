@@ -21,6 +21,7 @@ import {
   RESET,
 } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
+import type { DotCategory } from "../utils/parse-dot-path.ts";
 
 export async function loadMeta(
   chainName: string,
@@ -314,4 +315,162 @@ export async function handleStorage(
     printDocs(storageItem.docs);
   }
   console.log();
+}
+
+export async function showItemHelp(
+  category: DotCategory,
+  target: string,
+  opts: { chain?: string; rpc?: string },
+): Promise<void> {
+  const config = await loadConfig();
+  const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
+  const meta = await loadMeta(chainName, chainConfig, opts.rpc);
+
+  const dotIdx = target.indexOf(".");
+  const palletName = dotIdx === -1 ? target : target.slice(0, dotIdx);
+  const itemName = dotIdx === -1 ? undefined : target.slice(dotIdx + 1);
+
+  const pallet = resolvePallet(meta, palletName);
+
+  if (!itemName) {
+    // Pallet-level: delegate to existing listing handlers
+    switch (category) {
+      case "tx":
+        await handleCalls(target, opts);
+        return;
+      case "query":
+        await handleStorage(target, opts);
+        return;
+      case "const":
+        // No handleConst listing here — caller should not reach this for pallet-only
+        return;
+      case "events":
+        await handleEvents(target, opts);
+        return;
+      case "errors":
+        await handleErrors(target, opts);
+        return;
+    }
+  }
+
+  switch (category) {
+    case "tx": {
+      const callItem = pallet.calls.find((c) => c.name.toLowerCase() === itemName!.toLowerCase());
+      if (!callItem) {
+        const names = pallet.calls.map((c) => c.name);
+        throw new Error(suggestMessage(`call in ${pallet.name}`, itemName!, names));
+      }
+      printHeading(`${pallet.name}.${callItem.name} (Call)`);
+      const args = describeCallArgs(meta, pallet.name, callItem.name);
+      console.log(`  ${BOLD}Args:${RESET} ${args}`);
+      if (callItem.docs.length) {
+        console.log();
+        printDocs(callItem.docs);
+      }
+      console.log();
+      console.log(`${BOLD}Usage:${RESET}`);
+      console.log(`  dot tx.${pallet.name}.${callItem.name} --from <account>`);
+      console.log(`  dot tx.${pallet.name}.${callItem.name} --encode`);
+      console.log();
+      console.log(`${BOLD}Options:${RESET}`);
+      console.log(`  --from <name>    Account to sign with`);
+      console.log(`  --dry-run        Estimate fees without submitting`);
+      console.log(`  --encode         Encode call to hex without signing`);
+      console.log(`  --ext <json>     Custom signed extension values as JSON`);
+      console.log();
+      return;
+    }
+
+    case "query": {
+      const storageItem = pallet.storage.find(
+        (s) => s.name.toLowerCase() === itemName!.toLowerCase(),
+      );
+      if (!storageItem) {
+        const names = pallet.storage.map((s) => s.name);
+        throw new Error(suggestMessage(`storage item in ${pallet.name}`, itemName!, names));
+      }
+      printHeading(`${pallet.name}.${storageItem.name} (Storage)`);
+      console.log(`  ${BOLD}Type:${RESET} ${storageItem.type}`);
+      console.log(`  ${BOLD}Value:${RESET} ${describeType(meta.lookup, storageItem.valueTypeId)}`);
+      if (storageItem.keyTypeId != null) {
+        console.log(`  ${BOLD}Key:${RESET} ${describeType(meta.lookup, storageItem.keyTypeId)}`);
+      }
+      if (storageItem.docs.length) {
+        console.log();
+        printDocs(storageItem.docs);
+      }
+      console.log();
+      if (storageItem.keyTypeId != null) {
+        console.log(`${BOLD}Usage:${RESET}`);
+        console.log(`  dot query.${pallet.name}.${storageItem.name} <key>`);
+        console.log(`  dot query.${pallet.name}.${storageItem.name}              # all entries`);
+      } else {
+        console.log(`${BOLD}Usage:${RESET}`);
+        console.log(`  dot query.${pallet.name}.${storageItem.name}`);
+      }
+      console.log();
+      console.log(`${BOLD}Options:${RESET}`);
+      console.log(`  --limit <n>      Max entries for map queries (0 = unlimited, default: 100)`);
+      console.log();
+      return;
+    }
+
+    case "const": {
+      const constItem = pallet.constants.find(
+        (c) => c.name.toLowerCase() === itemName!.toLowerCase(),
+      );
+      if (!constItem) {
+        const names = pallet.constants.map((c) => c.name);
+        throw new Error(suggestMessage(`constant in ${pallet.name}`, itemName!, names));
+      }
+      printHeading(`${pallet.name}.${constItem.name} (Constant)`);
+      console.log(`  ${BOLD}Type:${RESET} ${describeType(meta.lookup, constItem.typeId)}`);
+      if (constItem.docs.length) {
+        console.log();
+        printDocs(constItem.docs);
+      }
+      console.log();
+      console.log(`${BOLD}Usage:${RESET}`);
+      console.log(`  dot const.${pallet.name}.${constItem.name}`);
+      console.log();
+      return;
+    }
+
+    case "events": {
+      const eventItem = pallet.events.find((e) => e.name.toLowerCase() === itemName!.toLowerCase());
+      if (!eventItem) {
+        const names = pallet.events.map((e) => e.name);
+        throw new Error(suggestMessage(`event in ${pallet.name}`, itemName!, names));
+      }
+      printHeading(`${pallet.name}.${eventItem.name} (Event)`);
+      const fields = describeEventFields(meta, pallet.name, eventItem.name);
+      console.log(`  ${BOLD}Fields:${RESET} ${fields}`);
+      if (eventItem.docs.length) {
+        console.log();
+        printDocs(eventItem.docs);
+      }
+      console.log();
+      console.log(`${BOLD}Usage:${RESET}`);
+      console.log(`  dot events.${pallet.name}.${eventItem.name}`);
+      console.log();
+      return;
+    }
+
+    case "errors": {
+      const errorItem = pallet.errors.find((e) => e.name.toLowerCase() === itemName!.toLowerCase());
+      if (!errorItem) {
+        const names = pallet.errors.map((e) => e.name);
+        throw new Error(suggestMessage(`error in ${pallet.name}`, itemName!, names));
+      }
+      printHeading(`${pallet.name}.${errorItem.name} (Error)`);
+      if (errorItem.docs.length) {
+        printDocs(errorItem.docs);
+      }
+      console.log();
+      console.log(`${BOLD}Usage:${RESET}`);
+      console.log(`  dot errors.${pallet.name}.${errorItem.name}`);
+      console.log();
+      return;
+    }
+  }
 }

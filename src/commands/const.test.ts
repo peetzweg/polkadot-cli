@@ -107,6 +107,14 @@ describe("dot const", () => {
     expect(stdout).toContain("BlockWeights");
   });
 
+  test("const.Balances.ExistentialDeposit --help shows constant help", async () => {
+    const { stdout, exitCode } = await runCli(["const.Balances.ExistentialDeposit", "--help"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Constant)");
+    expect(stdout).toContain("Type:");
+    expect(stdout).toContain("Usage:");
+  });
+
   test("unknown pallet in const listing suggests alternatives", async () => {
     const { stderr, exitCode } = await runCli(["const.Systm"]);
     expect(exitCode).toBe(1);

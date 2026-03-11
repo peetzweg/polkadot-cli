@@ -33,7 +33,7 @@ import {
 import { CliError } from "../utils/errors.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseValue } from "../utils/parse-value.ts";
-import { loadMeta, resolvePallet } from "./focused-inspect.ts";
+import { loadMeta, resolvePallet, showItemHelp } from "./focused-inspect.ts";
 
 export async function handleTx(
   target: string | undefined,
@@ -92,7 +92,11 @@ export async function handleTx(
   }
 
   if (!opts.from && !opts.encode) {
-    throw new Error("--from is required (or use --encode to output hex without signing)");
+    if (isRawCall) {
+      throw new Error("--from is required (or use --encode to output hex without signing)");
+    }
+    await showItemHelp("tx", target, opts);
+    return;
   }
 
   if (opts.encode && opts.dryRun) {

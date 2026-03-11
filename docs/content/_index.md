@@ -698,6 +698,47 @@ dot chain --help        # same as `dot chain` — shows chain actions
 dot hash --help         # same as `dot hash` — shows algorithms and examples
 ```
 
+### Item-level help
+
+Use `--help` on any fully-qualified dot-path to see metadata detail (argument types, documentation) and category-specific usage hints. This works entirely offline from cached metadata — no chain connection required.
+
+```
+dot tx.System.remark --help
+```
+
+```
+── System.remark (Call) ──
+
+  Args: (remark: Vec<u8>)
+
+  Make some on-chain remark.
+
+Usage:
+  dot tx.System.remark --from <account>
+  dot tx.System.remark --encode
+
+Options:
+  --from <name>    Account to sign with
+  --dry-run        Estimate fees without submitting
+  --encode         Encode call to hex without signing
+  --ext <json>     Custom signed extension values as JSON
+```
+
+Other categories work the same way:
+
+```
+dot query.System.Account --help           # storage type, key/value info, query options
+dot const.Balances.ExistentialDeposit --help  # constant type and docs
+dot events.Balances.Transfer --help       # event fields and docs
+dot errors.Balances.InsufficientBalance --help  # error docs
+```
+
+For `tx` commands, omitting both `--from` and `--encode` shows this same help output instead of an error — so you can explore calls without remembering the exact flags:
+
+```
+dot tx.System.remark 0xdead               # shows call help (no error)
+```
+
 ## Global Options
 
 These flags work with any command:

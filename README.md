@@ -465,6 +465,24 @@ dot chain --help        # same as `dot chain` — shows chain actions
 dot hash --help         # same as `dot hash` — shows algorithms and examples
 ```
 
+#### Item-level help
+
+Use `--help` on any fully-qualified dot-path to see metadata detail and category-specific usage hints — all offline, no chain connection required:
+
+```bash
+dot tx.System.remark --help               # call args, docs, and tx options
+dot query.System.Account --help           # storage type, key/value info, and query options
+dot const.Balances.ExistentialDeposit --help  # constant type and docs
+dot events.Balances.Transfer --help       # event fields and docs
+dot errors.Balances.InsufficientBalance --help  # error docs
+```
+
+For `tx` commands, omitting both `--from` and `--encode` shows this same help output instead of an error:
+
+```bash
+dot tx.System.remark 0xdead               # shows call help (no error)
+```
+
 ### Global options
 
 | Flag | Description |

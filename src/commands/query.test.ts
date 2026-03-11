@@ -102,6 +102,15 @@ describe("dot query", () => {
     expect(numberLine).not.toContain("[map]");
   });
 
+  test("query.System.Account --help shows storage help", async () => {
+    const { stdout, exitCode } = await runCli(["query.System.Account", "--help"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Storage)");
+    expect(stdout).toContain("Type:");
+    expect(stdout).toContain("Usage:");
+    expect(stdout).toContain("--limit");
+  });
+
   test("unknown pallet in query listing suggests alternatives", async () => {
     const { stderr, exitCode } = await runCli(["query.Systm"]);
     expect(exitCode).toBe(1);

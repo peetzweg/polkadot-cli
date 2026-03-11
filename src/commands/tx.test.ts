@@ -1096,10 +1096,24 @@ describe("dot tx CLI integration", () => {
     expect(stderr).toMatch(/remark/i);
   });
 
-  test("missing --from without --encode errors", async () => {
-    const { stderr, exitCode } = await runCli(["tx.System.remark", "0xaa"]);
-    expect(exitCode).toBe(1);
-    expect(stderr).toContain("--from");
+  test("missing --from without --encode shows call help", async () => {
+    const { stdout, exitCode } = await runCli(["tx.System.remark", "0xaa"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Call)");
+    expect(stdout).toContain("Args:");
+    expect(stdout).toContain("--from");
+    expect(stdout).toContain("Usage:");
+  });
+
+  test("tx.System.remark --help shows call help", async () => {
+    const { stdout, exitCode } = await runCli(["tx.System.remark", "--help"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Call)");
+    expect(stdout).toContain("Args:");
+    expect(stdout).toContain("Usage:");
+    expect(stdout).toContain("--from");
+    expect(stdout).toContain("--encode");
+    expect(stdout).toContain("--dry-run");
   });
 
   test("--encode Balances.transfer_keep_alive produces valid hex", async () => {

@@ -77,6 +77,14 @@ describe("global CLI", () => {
     expect(stdout).toContain("explore");
   });
 
+  test("dot-path with --help shows item help not global help", async () => {
+    const { stdout, exitCode } = await runCli(["tx.System.remark", "--help"]);
+    expect(exitCode).toBe(0);
+    // Should show item-level help, not global help
+    expect(stdout).toContain("(Call)");
+    expect(stdout).not.toContain("Categories:");
+  });
+
   test("unknown dot-path with chain prefix errors", async () => {
     const { stderr, exitCode } = await runCli(["polkadot.foobar"]);
     expect(exitCode).toBe(1);

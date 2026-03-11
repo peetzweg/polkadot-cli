@@ -4,7 +4,7 @@ import { version } from "../package.json";
 import { registerAccountCommands } from "./commands/account.ts";
 import { registerChainCommands } from "./commands/chain.ts";
 import { handleConst } from "./commands/const.ts";
-import { handleErrors, handleEvents } from "./commands/focused-inspect.ts";
+import { handleErrors, handleEvents, showItemHelp } from "./commands/focused-inspect.ts";
 import { registerHashCommand } from "./commands/hash.ts";
 import { registerInspectCommand } from "./commands/inspect.ts";
 import { handleQuery } from "./commands/query.ts";
@@ -91,6 +91,12 @@ cli
           ? `${parsed.pallet}.${parsed.item}`
           : parsed.pallet
         : undefined;
+
+      // Item-level help: show metadata + usage instead of executing
+      if (cli.options.help && parsed.pallet && parsed.item) {
+        await showItemHelp(parsed.category, target!, handlerOpts);
+        return;
+      }
 
       switch (parsed.category) {
         case "query":
