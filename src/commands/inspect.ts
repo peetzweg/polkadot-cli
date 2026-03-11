@@ -30,6 +30,7 @@ export function registerInspectCommand(cli: CAC) {
       "inspect [target]",
       "Inspect chain metadata (pallets, storage, constants, calls, events, errors)",
     )
+    .alias("explore")
     .option("--chain <name>", "Target chain")
     .option("--rpc <url>", "Override RPC endpoint")
     .action(async (target: string | undefined, opts: { chain?: string; rpc?: string }) => {

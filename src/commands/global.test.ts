@@ -5,25 +5,29 @@ describe("global CLI", () => {
   test("no command shows help", async () => {
     const { stdout, exitCode } = await runCli([]);
     expect(exitCode).toBe(0);
+    expect(stdout).toContain("inspect");
     expect(stdout).toContain("chain");
     expect(stdout).toContain("account");
-    expect(stdout).toContain("inspect");
+    expect(stdout).toContain("hash");
     expect(stdout).toContain("query");
     expect(stdout).toContain("const");
     expect(stdout).toContain("tx");
-    expect(stdout).toContain("hash");
+    expect(stdout).toContain("events");
+    expect(stdout).toContain("errors");
   });
 
-  test("--help shows help with all commands", async () => {
+  test("--help shows help with all categories and commands", async () => {
     const { stdout, exitCode } = await runCli(["--help"]);
     expect(exitCode).toBe(0);
+    expect(stdout).toContain("inspect");
     expect(stdout).toContain("chain");
     expect(stdout).toContain("account");
-    expect(stdout).toContain("inspect");
+    expect(stdout).toContain("hash");
     expect(stdout).toContain("query");
     expect(stdout).toContain("const");
     expect(stdout).toContain("tx");
-    expect(stdout).toContain("hash");
+    expect(stdout).toContain("events");
+    expect(stdout).toContain("errors");
   });
 
   test("--help and no args show the same global help", async () => {
@@ -51,5 +55,31 @@ describe("global CLI", () => {
     const parsed = JSON.parse(stdout);
     expect(parsed).toHaveProperty("algorithm");
     expect(parsed).toHaveProperty("hash");
+  });
+
+  test("unknown dot-path shows error: dot foobar", async () => {
+    const { stderr, exitCode } = await runCli(["foobar"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Unknown command");
+  });
+
+  test("explore alias works as command", async () => {
+    const { stdout, exitCode } = await runCli(["explore"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System");
+    expect(stdout).toContain("Balances");
+    expect(stdout).toContain("Pallets on polkadot");
+  });
+
+  test("explore alias appears in help output", async () => {
+    const { stdout, exitCode } = await runCli(["--help"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("explore");
+  });
+
+  test("unknown dot-path with chain prefix errors", async () => {
+    const { stderr, exitCode } = await runCli(["polkadot.foobar"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Unknown command");
   });
 });

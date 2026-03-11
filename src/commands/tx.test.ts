@@ -1043,19 +1043,14 @@ describe("decodeCallFallback", () => {
 
 describe("dot tx CLI integration", () => {
   test("System.remark --encode outputs hex", async () => {
-    const { stdout, exitCode } = await runCli(["tx", "System.remark", "0xdeadbeef", "--encode"]);
+    const { stdout, exitCode } = await runCli(["tx.System.remark", "0xdeadbeef", "--encode"]);
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/^0x[0-9a-f]+$/);
   });
 
   test("encode round-trip: encode then decode", async () => {
     // Encode
-    const { stdout: hex, exitCode } = await runCli([
-      "tx",
-      "System.remark",
-      "0xdeadbeef",
-      "--encode",
-    ]);
+    const { stdout: hex, exitCode } = await runCli(["tx.System.remark", "0xdeadbeef", "--encode"]);
     expect(exitCode).toBe(0);
 
     // The encoded hex should start with the System pallet index + remark call index
@@ -1066,14 +1061,13 @@ describe("dot tx CLI integration", () => {
   });
 
   test("--encode without --from succeeds", async () => {
-    const { exitCode } = await runCli(["tx", "System.remark", "0xaa", "--encode"]);
+    const { exitCode } = await runCli(["tx.System.remark", "0xaa", "--encode"]);
     expect(exitCode).toBe(0);
   });
 
   test("--encode --dry-run rejects", async () => {
     const { stderr, exitCode } = await runCli([
-      "tx",
-      "System.remark",
+      "tx.System.remark",
       "0xaa",
       "--encode",
       "--dry-run",
@@ -1084,34 +1078,33 @@ describe("dot tx CLI integration", () => {
     expect(stderr).toContain("mutually exclusive");
   });
 
-  test("--encode with raw hex 0x0001 rejects", async () => {
-    const { stderr, exitCode } = await runCli(["tx", "0x0001", "--encode"]);
+  test("--encode with raw hex tx.0x0001 rejects", async () => {
+    const { stderr, exitCode } = await runCli(["tx.0x0001", "--encode"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("already encoded");
   });
 
   test("unknown pallet gives suggestion", async () => {
-    const { stderr, exitCode } = await runCli(["tx", "Systm.remark", "0xaa", "--encode"]);
+    const { stderr, exitCode } = await runCli(["tx.Systm.remark", "0xaa", "--encode"]);
     expect(exitCode).toBe(1);
     expect(stderr).toMatch(/System/i);
   });
 
   test("unknown call gives suggestion", async () => {
-    const { stderr, exitCode } = await runCli(["tx", "System.remrk", "0xaa", "--encode"]);
+    const { stderr, exitCode } = await runCli(["tx.System.remrk", "0xaa", "--encode"]);
     expect(exitCode).toBe(1);
     expect(stderr).toMatch(/remark/i);
   });
 
   test("missing --from without --encode errors", async () => {
-    const { stderr, exitCode } = await runCli(["tx", "System.remark", "0xaa"]);
+    const { stderr, exitCode } = await runCli(["tx.System.remark", "0xaa"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("--from");
   });
 
   test("--encode Balances.transfer_keep_alive produces valid hex", async () => {
     const { stdout, exitCode } = await runCli([
-      "tx",
-      "Balances.transfer_keep_alive",
+      "tx.Balances.transfer_keep_alive",
       "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
       "1000000000000",
       "--encode",
@@ -1123,7 +1116,7 @@ describe("dot tx CLI integration", () => {
   });
 
   test("--encode with wrong arg count errors", async () => {
-    const { stderr, exitCode } = await runCli(["tx", "System.remark", "--encode"]);
+    const { stderr, exitCode } = await runCli(["tx.System.remark", "--encode"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("takes 1 argument");
   });
@@ -1136,8 +1129,7 @@ describe("dot tx CLI integration", () => {
     const assets =
       '{"type":"V5","value":[{"id":{"parents":0,"interior":{"type":"Here"}},"fun":{"type":"Fungible","value":1000000000000}}]}';
     const { stdout, exitCode, stderr } = await runCli([
-      "tx",
-      "XcmPallet.teleport_assets",
+      "tx.XcmPallet.teleport_assets",
       dest,
       beneficiary,
       assets,
@@ -1158,8 +1150,7 @@ describe("dot tx CLI integration", () => {
     const assets =
       '{"type":"V5","value":[{"id":{"parents":0,"interior":{"type":"Here"}},"fun":{"type":"Fungible","value":"100000000000000000"}}]}';
     const { stdout, exitCode, stderr } = await runCli([
-      "tx",
-      "XcmPallet.teleport_assets",
+      "tx.XcmPallet.teleport_assets",
       dest,
       beneficiary,
       assets,
@@ -1179,8 +1170,7 @@ describe("dot tx CLI integration", () => {
     const assets =
       '{"type":"V3","value":[{"id":{"type":"Concrete","value":{"parents":0,"interior":{"type":"Here"}}},"fun":{"type":"Fungible","value":1000000000000}}]}';
     const { stdout, exitCode, stderr } = await runCli([
-      "tx",
-      "XcmPallet.teleport_assets",
+      "tx.XcmPallet.teleport_assets",
       dest,
       beneficiary,
       assets,
@@ -1192,10 +1182,9 @@ describe("dot tx CLI integration", () => {
     expect(stdout).toMatch(/^0x[0-9a-f]+$/);
   });
 
-  test("chain prefix --encode works (3-segment)", async () => {
+  test("chain prefix --encode works (4-segment)", async () => {
     const { stdout, exitCode } = await runCli([
-      "tx",
-      "polkadot.System.remark",
+      "polkadot.tx.System.remark",
       "0xdeadbeef",
       "--encode",
     ]);
@@ -1205,22 +1194,21 @@ describe("dot tx CLI integration", () => {
 
   test("--encode Utility.dispatch_as with enum shorthand system(Authorized)", async () => {
     // First encode a remark to use as the call arg
-    const { stdout: remarkHex } = await runCli(["tx", "System.remark", "0xcafe", "--encode"]);
+    const { stdout: remarkHex } = await runCli(["tx.System.remark", "0xcafe", "--encode"]);
 
     // Use shorthand syntax for the OriginCaller enum
     const {
       stdout: shorthandHex,
       exitCode,
       stderr,
-    } = await runCli(["tx", "Utility.dispatch_as", "system(Authorized)", remarkHex, "--encode"]);
+    } = await runCli(["tx.Utility.dispatch_as", "system(Authorized)", remarkHex, "--encode"]);
     expect(stderr).toBe("");
     expect(exitCode).toBe(0);
     expect(shorthandHex).toMatch(/^0x[0-9a-f]+$/);
 
     // Verify it produces the same output as the JSON format
     const { stdout: jsonHex } = await runCli([
-      "tx",
-      "Utility.dispatch_as",
+      "tx.Utility.dispatch_as",
       '{"type":"system","value":{"type":"Authorized"}}',
       remarkHex,
       "--encode",
@@ -1230,8 +1218,7 @@ describe("dot tx CLI integration", () => {
 
   test("chain prefix + --chain flag errors", async () => {
     const { stderr, exitCode } = await runCli([
-      "tx",
-      "polkadot.System.remark",
+      "polkadot.tx.System.remark",
       "0xaa",
       "--encode",
       "--chain",
@@ -1243,8 +1230,7 @@ describe("dot tx CLI integration", () => {
 
   test("contextual error for invalid struct arg via CLI", async () => {
     const { stderr, exitCode } = await runCli([
-      "tx",
-      "Balances.transfer_keep_alive",
+      "tx.Balances.transfer_keep_alive",
       "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
       "abc",
       "--encode",
@@ -1252,5 +1238,32 @@ describe("dot tx CLI integration", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Invalid value for argument 'value'");
     expect(stderr).toContain("expected");
+  });
+
+  test("dot tx.System shows pallet call listing via dot-path", async () => {
+    const { stdout, exitCode } = await runCli(["tx.System"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System Calls");
+    expect(stdout).toContain("remark");
+  });
+
+  test("dot tx shows pallet list (category-only mode)", async () => {
+    const { stdout, exitCode } = await runCli(["tx"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Pallets with calls");
+    expect(stdout).toContain("System");
+    expect(stdout).toContain("Balances");
+  });
+
+  test("raw hex via dot-path tx.0x rejects with --encode", async () => {
+    const { stderr, exitCode } = await runCli(["tx.0x0001", "--encode"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("already encoded");
+  });
+
+  test("raw hex via dot-path tx.0x errors without --from", async () => {
+    const { stderr, exitCode } = await runCli(["tx.0x0001"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("--from");
   });
 });

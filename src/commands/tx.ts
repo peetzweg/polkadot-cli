@@ -1,6 +1,5 @@
 import type { Decoded } from "@polkadot-api/view-builder";
 import { getViewBuilder } from "@polkadot-api/view-builder";
-import type { CAC } from "cac";
 import type { TxEvent, TxFinalized } from "polkadot-api";
 import { Binary } from "polkadot-api";
 import { loadConfig, resolveChain } from "../config/store.ts";
@@ -10,241 +9,262 @@ import { type ClientHandle, createChainClient } from "../core/client.ts";
 import { papiLink, pjsAppsLink } from "../core/explorers.ts";
 import type { Lookup, MetadataBundle } from "../core/metadata.ts";
 import {
+  describeCallArgs,
   describeType,
   findPallet,
   getOrFetchMetadata,
   getPalletNames,
   getSignedExtensions,
+  listPallets,
 } from "../core/metadata.ts";
-import { BOLD, CYAN, DIM, GREEN, RED, RESET, Spinner, YELLOW } from "../core/output.ts";
+import {
+  BOLD,
+  CYAN,
+  DIM,
+  firstSentence,
+  GREEN,
+  printHeading,
+  printItem,
+  RED,
+  RESET,
+  Spinner,
+  YELLOW,
+} from "../core/output.ts";
 import { CliError } from "../utils/errors.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
-import { parseTarget, resolveTargetChain } from "../utils/parse-target.ts";
 import { parseValue } from "../utils/parse-value.ts";
+import { loadMeta, resolvePallet } from "./focused-inspect.ts";
 
-export function registerTxCommand(cli: CAC) {
-  cli
-    .command(
-      "tx [target] [...args]",
-      "Submit an extrinsic (e.g. Balances.transferKeepAlive <dest> <amount>)",
-    )
-    .option("--from <name>", "Account to sign with (required)")
-    .option("--dry-run", "Estimate fees without submitting")
-    .option("--encode", "Encode call to hex without signing or submitting")
-    .option(
-      "--ext <json>",
-      'Custom signed extension values as JSON, e.g. \'{"ExtName":{"value":...}}\'',
-    )
+export async function handleTx(
+  target: string | undefined,
+  args: string[],
+  opts: {
+    chain?: string;
+    rpc?: string;
+    from?: string;
+    dryRun?: boolean;
+    encode?: boolean;
+    output?: string;
+    ext?: string;
+  },
+) {
+  if (!target) {
+    // List all pallets with call counts
+    const config = await loadConfig();
+    const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
+    const meta = await loadMeta(chainName, chainConfig, opts.rpc);
+    const pallets = listPallets(meta);
+    const withCalls = pallets.filter((p) => p.calls.length > 0);
+    printHeading(`Pallets with calls on ${chainName} (${withCalls.length})`);
+    for (const p of withCalls) {
+      printItem(p.name, `${p.calls.length} calls`);
+    }
+    console.log();
+    return;
+  }
 
-    .action(
-      async (
-        target: string | undefined,
-        args: string[],
-        opts: {
-          chain?: string;
-          rpc?: string;
-          from?: string;
-          dryRun?: boolean;
-          encode?: boolean;
-          output?: string;
-          ext?: string;
-        },
-      ) => {
-        if (!target) {
-          console.log(
-            "Usage: dot tx <[Chain.]Pallet.Call|0xCallHex> [...args] --from <account> [--dry-run] [--encode]",
-          );
-          console.log("");
-          console.log("Examples:");
-          console.log("  $ dot tx Balances.transferKeepAlive 5FHn... 1000000000000 --from alice");
-          console.log("  $ dot tx System.remark 0xdeadbeef --from alice --dry-run");
-          console.log("  $ dot tx 0x0001076465616462656566 --from alice");
-          console.log("  $ dot tx Assets.force_create 4 owner true 10 --encode --chain people");
-          console.log(
-            "  $ dot tx kusama.Balances.transferKeepAlive 5FHn... 1000000000000 --from alice",
-          );
-          return;
+  // Check if this is a raw hex call
+  const isRawCall = /^0x[0-9a-fA-F]+$/.test(target);
+
+  // Check if target is pallet-only (no dot, not hex)
+  if (!isRawCall && target.indexOf(".") === -1) {
+    // Listing mode: show calls in the pallet
+    const config = await loadConfig();
+    const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
+    const meta = await loadMeta(chainName, chainConfig, opts.rpc);
+    const pallet = resolvePallet(meta, target);
+
+    if (pallet.calls.length === 0) {
+      console.log(`No calls in ${pallet.name}.`);
+      return;
+    }
+    printHeading(`${pallet.name} Calls`);
+    for (const c of pallet.calls) {
+      const callArgs = describeCallArgs(meta, pallet.name, c.name);
+      console.log(`  ${CYAN}${c.name}${RESET}${DIM}${callArgs}${RESET}`);
+      const summary = firstSentence(c.docs);
+      if (summary) {
+        console.log(`      ${DIM}${summary}${RESET}`);
+      }
+    }
+    console.log();
+    return;
+  }
+
+  if (!opts.from && !opts.encode) {
+    throw new Error("--from is required (or use --encode to output hex without signing)");
+  }
+
+  if (opts.encode && opts.dryRun) {
+    throw new Error("--encode and --dry-run are mutually exclusive");
+  }
+
+  if (opts.encode && isRawCall) {
+    throw new Error("--encode cannot be used with raw call hex (already encoded)");
+  }
+
+  const config = await loadConfig();
+  const effectiveChain: string | undefined = opts.chain;
+  let pallet: string | undefined;
+  let callName: string | undefined;
+
+  if (!isRawCall) {
+    // Parse Pallet.Call from the target
+    const dotIdx = target.indexOf(".");
+    pallet = target.slice(0, dotIdx);
+    callName = target.slice(dotIdx + 1);
+  }
+
+  const { name: chainName, chain: chainConfig } = resolveChain(config, effectiveChain);
+
+  const signer = opts.encode ? undefined : await resolveAccountSigner(opts.from!);
+
+  let clientHandle: ClientHandle | undefined;
+
+  if (!opts.encode) {
+    clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
+  }
+
+  try {
+    let meta: MetadataBundle;
+    if (clientHandle) {
+      meta = await getOrFetchMetadata(chainName, clientHandle);
+    } else {
+      try {
+        meta = await getOrFetchMetadata(chainName);
+      } catch {
+        clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
+        meta = await getOrFetchMetadata(chainName, clientHandle);
+      }
+    }
+
+    // Build custom signed extensions for non-standard chains
+    let unsafeApi: any;
+    let txOptions: { customSignedExtensions: Record<string, any> } | undefined;
+
+    if (!opts.encode) {
+      const userExtOverrides = parseExtOption(opts.ext);
+      const customSignedExtensions = buildCustomSignedExtensions(meta, userExtOverrides);
+      txOptions =
+        Object.keys(customSignedExtensions).length > 0 ? { customSignedExtensions } : undefined;
+      unsafeApi = clientHandle?.client.getUnsafeApi();
+    }
+
+    let tx: any;
+    let callHex: string;
+
+    if (isRawCall) {
+      if (args.length > 0) {
+        throw new Error(
+          "Extra arguments are not allowed when submitting a raw call hex.\n" +
+            "Usage: dot tx 0x<call_hex> --from <account>",
+        );
+      }
+      const callBinary = Binary.fromHex(target as `0x${string}`);
+      tx = await (unsafeApi as any).txFromCallData(callBinary);
+      callHex = target;
+    } else {
+      // Validate pallet
+      const palletNames = getPalletNames(meta);
+      const palletInfo = findPallet(meta, pallet!);
+      if (!palletInfo) {
+        throw new Error(suggestMessage("pallet", pallet!, palletNames));
+      }
+
+      // Validate call
+      const callInfo = palletInfo.calls.find(
+        (c) => c.name.toLowerCase() === callName!.toLowerCase(),
+      );
+      if (!callInfo) {
+        const callNames = palletInfo.calls.map((c) => c.name);
+        throw new Error(suggestMessage(`call in ${palletInfo.name}`, callName!, callNames));
+      }
+
+      // Parse args against metadata
+      const callData = parseCallArgs(meta, palletInfo.name, callInfo.name, args);
+
+      if (opts.encode) {
+        const { codec, location } = meta.builder.buildCall(palletInfo.name, callInfo.name);
+        const encodedArgs = codec.enc(callData);
+        const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
+        console.log(Binary.fromBytes(fullCall).asHex());
+        return;
+      }
+
+      tx = (unsafeApi as any).tx[palletInfo.name][callInfo.name](callData);
+
+      const encodedCall = await tx.getEncodedData();
+      callHex = encodedCall.asHex();
+    }
+
+    // Decode for display (works for both paths)
+    const decodedStr = decodeCall(meta, callHex);
+
+    if (opts.dryRun) {
+      const signerAddress = toSs58(signer!.publicKey);
+      console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
+      console.log(`  ${BOLD}From:${RESET}   ${opts.from} (${signerAddress})`);
+      console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
+      console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
+
+      try {
+        const fees = await tx.getEstimatedFees(signer?.publicKey, txOptions);
+        console.log(`  ${BOLD}Estimated fees:${RESET} ${fees}`);
+      } catch (err: any) {
+        console.log(`  ${BOLD}Estimated fees:${RESET} ${YELLOW}unable to estimate${RESET}`);
+        console.log(`  ${DIM}${err.message ?? err}${RESET}`);
+      }
+      return;
+    }
+
+    const result = await watchTransaction(tx.signSubmitAndWatch(signer, txOptions));
+
+    console.log();
+    console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
+    console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
+    console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
+    console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
+
+    let dispatchErrorMsg: string | undefined;
+    if (result.ok) {
+      console.log(`  ${BOLD}Status:${RESET} ${GREEN}ok${RESET}`);
+    } else {
+      dispatchErrorMsg = formatDispatchError(result.dispatchError);
+      console.log(`  ${BOLD}Status:${RESET} ${RED}dispatch error${RESET}`);
+      console.log(`  ${BOLD}Error:${RESET}  ${dispatchErrorMsg}`);
+    }
+
+    if (result.events && result.events.length > 0) {
+      console.log(`  ${BOLD}Events:${RESET}`);
+      for (const event of result.events) {
+        const name = `${CYAN}${event.type}${RESET}.${CYAN}${event.value?.type ?? ""}${RESET}`;
+        const payload = event.value?.value;
+        if (payload && typeof payload === "object") {
+          const fields = Object.entries(payload)
+            .map(([k, v]) => `${k}: ${formatEventValue(v)}`)
+            .join(", ");
+          console.log(`    ${name} { ${fields} }`);
+        } else {
+          console.log(`    ${name}`);
         }
+      }
+    }
 
-        if (!opts.from && !opts.encode) {
-          throw new Error("--from is required (or use --encode to output hex without signing)");
-        }
+    const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc);
+    if (rpcUrl) {
+      const blockHash = result.block.hash;
+      console.log(`  ${BOLD}Explorer:${RESET}`);
+      console.log(`    ${DIM}PolkadotJS${RESET}  ${pjsAppsLink(rpcUrl, blockHash)}`);
+      console.log(`    ${DIM}PAPI${RESET}        ${papiLink(rpcUrl, blockHash)}`);
+    }
+    console.log();
 
-        if (opts.encode && opts.dryRun) {
-          throw new Error("--encode and --dry-run are mutually exclusive");
-        }
-
-        const isRawCall = /^0x[0-9a-fA-F]+$/.test(target);
-
-        if (opts.encode && isRawCall) {
-          throw new Error("--encode cannot be used with raw call hex (already encoded)");
-        }
-
-        const config = await loadConfig();
-        let effectiveChain: string | undefined = opts.chain;
-        let parsedTarget: ReturnType<typeof parseTarget> | undefined;
-        if (!isRawCall) {
-          const knownChains = Object.keys(config.chains);
-          parsedTarget = parseTarget(target, { knownChains });
-          effectiveChain = resolveTargetChain(parsedTarget, opts.chain);
-        }
-        const { name: chainName, chain: chainConfig } = resolveChain(config, effectiveChain);
-
-        const signer = opts.encode ? undefined : await resolveAccountSigner(opts.from!);
-
-        let clientHandle: ClientHandle | undefined;
-
-        if (!opts.encode) {
-          clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
-        }
-
-        try {
-          let meta: MetadataBundle;
-          if (clientHandle) {
-            meta = await getOrFetchMetadata(chainName, clientHandle);
-          } else {
-            try {
-              meta = await getOrFetchMetadata(chainName);
-            } catch {
-              clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
-              meta = await getOrFetchMetadata(chainName, clientHandle);
-            }
-          }
-
-          // Build custom signed extensions for non-standard chains
-          let unsafeApi: any;
-          let txOptions: { customSignedExtensions: Record<string, any> } | undefined;
-
-          if (!opts.encode) {
-            const userExtOverrides = parseExtOption(opts.ext);
-            const customSignedExtensions = buildCustomSignedExtensions(meta, userExtOverrides);
-            txOptions =
-              Object.keys(customSignedExtensions).length > 0
-                ? { customSignedExtensions }
-                : undefined;
-            unsafeApi = clientHandle?.client.getUnsafeApi();
-          }
-
-          let tx: any;
-          let callHex: string;
-
-          if (isRawCall) {
-            if (args.length > 0) {
-              throw new Error(
-                "Extra arguments are not allowed when submitting a raw call hex.\n" +
-                  "Usage: dot tx 0x<call_hex> --from <account>",
-              );
-            }
-            const callBinary = Binary.fromHex(target as `0x${string}`);
-            tx = await (unsafeApi as any).txFromCallData(callBinary);
-            callHex = target;
-          } else {
-            const pallet = parsedTarget!.pallet;
-            const callName = parsedTarget!.item!;
-
-            // Validate pallet
-            const palletNames = getPalletNames(meta);
-            const palletInfo = findPallet(meta, pallet);
-            if (!palletInfo) {
-              throw new Error(suggestMessage("pallet", pallet, palletNames));
-            }
-
-            // Validate call
-            const callInfo = palletInfo.calls.find(
-              (c) => c.name.toLowerCase() === callName.toLowerCase(),
-            );
-            if (!callInfo) {
-              const callNames = palletInfo.calls.map((c) => c.name);
-              throw new Error(suggestMessage(`call in ${palletInfo.name}`, callName, callNames));
-            }
-
-            // Parse args against metadata
-            const callData = parseCallArgs(meta, palletInfo.name, callInfo.name, args);
-
-            if (opts.encode) {
-              const { codec, location } = meta.builder.buildCall(palletInfo.name, callInfo.name);
-              const encodedArgs = codec.enc(callData);
-              const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
-              console.log(Binary.fromBytes(fullCall).asHex());
-              return;
-            }
-
-            tx = (unsafeApi as any).tx[palletInfo.name][callInfo.name](callData);
-
-            const encodedCall = await tx.getEncodedData();
-            callHex = encodedCall.asHex();
-          }
-
-          // Decode for display (works for both paths)
-          const decodedStr = decodeCall(meta, callHex);
-
-          if (opts.dryRun) {
-            const signerAddress = toSs58(signer!.publicKey);
-            console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
-            console.log(`  ${BOLD}From:${RESET}   ${opts.from} (${signerAddress})`);
-            console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
-            console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
-
-            try {
-              const fees = await tx.getEstimatedFees(signer?.publicKey, txOptions);
-              console.log(`  ${BOLD}Estimated fees:${RESET} ${fees}`);
-            } catch (err: any) {
-              console.log(`  ${BOLD}Estimated fees:${RESET} ${YELLOW}unable to estimate${RESET}`);
-              console.log(`  ${DIM}${err.message ?? err}${RESET}`);
-            }
-            return;
-          }
-
-          const result = await watchTransaction(tx.signSubmitAndWatch(signer, txOptions));
-
-          console.log();
-          console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
-          console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
-          console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
-          console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
-
-          let dispatchErrorMsg: string | undefined;
-          if (result.ok) {
-            console.log(`  ${BOLD}Status:${RESET} ${GREEN}ok${RESET}`);
-          } else {
-            dispatchErrorMsg = formatDispatchError(result.dispatchError);
-            console.log(`  ${BOLD}Status:${RESET} ${RED}dispatch error${RESET}`);
-            console.log(`  ${BOLD}Error:${RESET}  ${dispatchErrorMsg}`);
-          }
-
-          if (result.events && result.events.length > 0) {
-            console.log(`  ${BOLD}Events:${RESET}`);
-            for (const event of result.events) {
-              const name = `${CYAN}${event.type}${RESET}.${CYAN}${event.value?.type ?? ""}${RESET}`;
-              const payload = event.value?.value;
-              if (payload && typeof payload === "object") {
-                const fields = Object.entries(payload)
-                  .map(([k, v]) => `${k}: ${formatEventValue(v)}`)
-                  .join(", ");
-                console.log(`    ${name} { ${fields} }`);
-              } else {
-                console.log(`    ${name}`);
-              }
-            }
-          }
-
-          const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc);
-          if (rpcUrl) {
-            const blockHash = result.block.hash;
-            console.log(`  ${BOLD}Explorer:${RESET}`);
-            console.log(`    ${DIM}PolkadotJS${RESET}  ${pjsAppsLink(rpcUrl, blockHash)}`);
-            console.log(`    ${DIM}PAPI${RESET}        ${papiLink(rpcUrl, blockHash)}`);
-          }
-          console.log();
-
-          if (!result.ok) {
-            throw new CliError(`Transaction dispatch error: ${dispatchErrorMsg}`);
-          }
-        } finally {
-          clientHandle?.destroy();
-        }
-      },
-    );
+    if (!result.ok) {
+      throw new CliError(`Transaction dispatch error: ${dispatchErrorMsg}`);
+    }
+  } finally {
+    clientHandle?.destroy();
+  }
 }
 
 function formatDispatchError(err: { type: string; value?: unknown }): string {

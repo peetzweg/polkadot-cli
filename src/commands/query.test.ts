@@ -7,40 +7,35 @@ import { parseStorageKeys } from "./query.ts";
 const meta = getTestMetadata();
 
 describe("dot query", () => {
-  test("no target shows help", async () => {
+  test("category-only lists pallets with storage", async () => {
     const { stdout, exitCode } = await runCli(["query"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("Usage: dot query");
+    expect(stdout).toContain("Pallets with storage");
+    expect(stdout).toContain("System");
   });
 
-  test("chain prefix works (3-segment)", async () => {
-    const { stdout, exitCode } = await runCli(["query", "polkadot.System.Number"]);
+  test("chain prefix works (4-segment)", async () => {
+    const { stdout, exitCode } = await runCli(["polkadot.query.System.Number"]);
     expect(exitCode).toBe(0);
     expect(stdout).toBeTruthy();
   });
 
   test("stdout does not contain chain info prefix", async () => {
-    const { stdout, exitCode } = await runCli(["query", "polkadot.System.Number"]);
+    const { stdout, exitCode } = await runCli(["polkadot.query.System.Number"]);
     expect(exitCode).toBe(0);
     expect(stdout).not.toContain("chain:");
     expect(stdout).not.toContain("chain: polkadot");
   });
 
   test("json output is valid JSON with no extra text", async () => {
-    const { stdout, exitCode } = await runCli([
-      "query",
-      "polkadot.System.Number",
-      "--output",
-      "json",
-    ]);
+    const { stdout, exitCode } = await runCli(["polkadot.query.System.Number", "--output", "json"]);
     expect(exitCode).toBe(0);
     expect(() => JSON.parse(stdout)).not.toThrow();
   });
 
   test("chain prefix + --chain flag errors", async () => {
     const { stderr, exitCode } = await runCli([
-      "query",
-      "polkadot.System.Number",
+      "polkadot.query.System.Number",
       "--chain",
       "polkadot",
     ]);
@@ -49,23 +44,75 @@ describe("dot query", () => {
   });
 
   test("case-insensitive chain prefix resolves correctly", async () => {
-    const { stdout, exitCode } = await runCli(["query", "Polkadot.System.Number"]);
+    const { stdout, exitCode } = await runCli(["Polkadot.query.System.Number"]);
     expect(exitCode).toBe(0);
     expect(stdout).toBeTruthy();
   });
 
   test("case-insensitive --chain flag resolves correctly", async () => {
-    const { stdout, exitCode } = await runCli(["query", "System.Number", "--chain", "POLKADOT"]);
+    const { stdout, exitCode } = await runCli(["query.System.Number", "--chain", "POLKADOT"]);
     expect(exitCode).toBe(0);
     expect(stdout).toBeTruthy();
   });
 
   test("json output has no progress messages on stdout", async () => {
-    const { stdout, exitCode } = await runCli(["query", "System.Number", "--output", "json"]);
+    const { stdout, exitCode } = await runCli(["query.System.Number", "--output", "json"]);
     expect(exitCode).toBe(0);
     expect(stdout).not.toContain("Fetching metadata");
     expect(stdout).not.toContain("Connecting");
     expect(() => JSON.parse(stdout)).not.toThrow();
+  });
+
+  test("pallet-only lists storage items", async () => {
+    const { stdout, exitCode } = await runCli(["query.System"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System Storage");
+    expect(stdout).toContain("Account");
+    expect(stdout).toContain("[map]");
+  });
+
+  test("dot query.System shows pallet storage listing", async () => {
+    const { stdout, exitCode } = await runCli(["query.System"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System Storage");
+    // Should list known storage items
+    expect(stdout).toContain("Number");
+    expect(stdout).toContain("BlockHash");
+  });
+
+  test("dot query shows pallet list (category-only mode)", async () => {
+    const { stdout, exitCode } = await runCli(["query"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Pallets with storage");
+    expect(stdout).toContain("Balances");
+    expect(stdout).toContain("Staking");
+  });
+
+  test("storage listing shows [map] tag for map items", async () => {
+    const { stdout, exitCode } = await runCli(["query.System"]);
+    expect(exitCode).toBe(0);
+    // Account is a map — should show [map]
+    const lines = stdout.split("\n");
+    const accountLine = lines.find((l: string) => l.includes("Account"));
+    expect(accountLine).toBeDefined();
+    expect(accountLine).toContain("[map]");
+    // Number is a plain — should NOT show [map]
+    const numberLine = lines.find((l: string) => l.includes("Number") && !l.includes("Block"));
+    expect(numberLine).toBeDefined();
+    expect(numberLine).not.toContain("[map]");
+  });
+
+  test("unknown pallet in query listing suggests alternatives", async () => {
+    const { stderr, exitCode } = await runCli(["query.Systm"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("System");
+  });
+
+  test("dot query.System.Number executes query via dot-path", async () => {
+    const { stdout, exitCode } = await runCli(["query.System.Number"]);
+    expect(exitCode).toBe(0);
+    // Should return a numeric block number
+    expect(stdout).toBeTruthy();
   });
 });
 

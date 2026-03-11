@@ -1,116 +1,141 @@
-import type { CAC } from "cac";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { createChainClient } from "../core/client.ts";
 import type { MetadataBundle, StorageItemInfo } from "../core/metadata.ts";
-import { describeType, findPallet, getOrFetchMetadata, getPalletNames } from "../core/metadata.ts";
-import { DIM, printResult, RESET } from "../core/output.ts";
+import {
+  describeType,
+  findPallet,
+  getOrFetchMetadata,
+  getPalletNames,
+  listPallets,
+} from "../core/metadata.ts";
+import {
+  CYAN,
+  DIM,
+  firstSentence,
+  printHeading,
+  printItem,
+  printResult,
+  RESET,
+} from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
-import { parseTarget, resolveTargetChain } from "../utils/parse-target.ts";
 import { parseValue } from "../utils/parse-value.ts";
+import { loadMeta, resolvePallet } from "./focused-inspect.ts";
 import { parseStructArgs, parseTypedArg } from "./tx.ts";
 
-const DEFAULT_LIMIT = 100;
+export async function handleQuery(
+  target: string | undefined,
+  keys: string[],
+  opts: { chain?: string; rpc?: string; output?: string; limit: number },
+) {
+  if (!target) {
+    // List all pallets with storage item counts
+    const config = await loadConfig();
+    const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
+    const meta = await loadMeta(chainName, chainConfig, opts.rpc);
+    const pallets = listPallets(meta);
+    const withStorage = pallets.filter((p) => p.storage.length > 0);
+    printHeading(`Pallets with storage on ${chainName} (${withStorage.length})`);
+    for (const p of withStorage) {
+      printItem(p.name, `${p.storage.length} storage items`);
+    }
+    console.log();
+    return;
+  }
 
-export function registerQueryCommand(cli: CAC) {
-  cli
-    .command(
-      "query [target] [...keys]",
-      "Query on-chain storage (e.g. System.Number, System.Account <addr>)",
-    )
-    .option("--limit <n>", "Max entries to return for map queries (0 = unlimited)", {
-      default: DEFAULT_LIMIT,
-    })
-    .action(
-      async (
-        target: string | undefined,
-        keys: string[],
-        opts: { chain?: string; rpc?: string; output?: string; limit: number },
-      ) => {
-        if (!target) {
-          console.log(
-            "Usage: dot query <[Chain.]Pallet.Item> [...keys] [--chain <name>] [--output json]",
-          );
-          console.log("");
-          console.log("Examples:");
-          console.log("  $ dot query System.Number                         # plain storage value");
-          console.log("  $ dot query System.Account 5Grw...                # single map entry");
-          console.log(
-            "  $ dot query System.Account                        # all entries (limit 100)",
-          );
-          console.log("  $ dot query System.Account --limit 10             # first 10 entries");
-          console.log(
-            "  $ dot query System.Account --limit 0              # all entries (no limit)",
-          );
-          console.log("  $ dot query Assets.Metadata 42 --chain asset-hub");
-          console.log("  $ dot query kusama.System.Account 5Grw...         # chain prefix");
-          return;
-        }
+  // Check if target is pallet-only (no dot)
+  const dotIdx = target.indexOf(".");
+  if (dotIdx === -1) {
+    // Listing mode: show storage items in the pallet
+    const config = await loadConfig();
+    const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
+    const meta = await loadMeta(chainName, chainConfig, opts.rpc);
+    const pallet = resolvePallet(meta, palletName(target));
 
-        const config = await loadConfig();
-        const knownChains = Object.keys(config.chains);
-        const parsed = parseTarget(target, { knownChains });
-        const effectiveChain = resolveTargetChain(parsed, opts.chain);
-        const { name: chainName, chain: chainConfig } = resolveChain(config, effectiveChain);
-        const pallet = parsed.pallet;
-        const item = parsed.item!;
+    if (pallet.storage.length === 0) {
+      console.log(`No storage items in ${pallet.name}.`);
+      return;
+    }
+    printHeading(`${pallet.name} Storage`);
+    for (const s of pallet.storage) {
+      const valueType = describeType(meta.lookup, s.valueTypeId);
+      let typeSuffix: string;
+      if (s.keyTypeId != null) {
+        const keyType = describeType(meta.lookup, s.keyTypeId);
+        typeSuffix = `: ${keyType} → ${valueType}    [map]`;
+      } else {
+        typeSuffix = `: ${valueType}`;
+      }
+      console.log(`  ${CYAN}${s.name}${RESET}${DIM}${typeSuffix}${RESET}`);
+      const summary = firstSentence(s.docs);
+      if (summary) {
+        console.log(`      ${DIM}${summary}${RESET}`);
+      }
+    }
+    console.log();
+    return;
+  }
 
-        const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
+  const pallet = target.slice(0, dotIdx);
+  const item = target.slice(dotIdx + 1);
 
-        try {
-          const meta = await getOrFetchMetadata(chainName, clientHandle);
-          const palletNames = getPalletNames(meta);
-          const palletInfo = findPallet(meta, pallet);
-          if (!palletInfo) {
-            throw new Error(suggestMessage("pallet", pallet, palletNames));
-          }
+  const config = await loadConfig();
+  const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
 
-          const storageItem = palletInfo.storage.find(
-            (s) => s.name.toLowerCase() === item.toLowerCase(),
-          );
-          if (!storageItem) {
-            const storageNames = palletInfo.storage.map((s) => s.name);
-            throw new Error(
-              suggestMessage(`storage item in ${palletInfo.name}`, item, storageNames),
-            );
-          }
+  const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
 
-          const unsafeApi = clientHandle.client.getUnsafeApi();
-          const storageApi = (unsafeApi as any).query[palletInfo.name][storageItem.name];
+  try {
+    const meta = await getOrFetchMetadata(chainName, clientHandle);
+    const palletNames = getPalletNames(meta);
+    const palletInfo = findPallet(meta, pallet);
+    if (!palletInfo) {
+      throw new Error(suggestMessage("pallet", pallet, palletNames));
+    }
 
-          const parsedKeys = parseStorageKeys(meta, palletInfo.name, storageItem, keys);
-          const format = opts.output ?? "pretty";
+    const storageItem = palletInfo.storage.find((s) => s.name.toLowerCase() === item.toLowerCase());
+    if (!storageItem) {
+      const storageNames = palletInfo.storage.map((s) => s.name);
+      throw new Error(suggestMessage(`storage item in ${palletInfo.name}`, item, storageNames));
+    }
 
-          if (storageItem.type === "map" && parsedKeys.length === 0) {
-            // Fetch all entries
-            const entries: Array<{ keyArgs: any; value: any }> = await storageApi.getEntries();
+    const unsafeApi = clientHandle.client.getUnsafeApi();
+    const storageApi = (unsafeApi as any).query[palletInfo.name][storageItem.name];
 
-            const limit = Number(opts.limit);
-            const truncated = limit > 0 && entries.length > limit;
-            const display = truncated ? entries.slice(0, limit) : entries;
+    const parsedKeys = parseStorageKeys(meta, palletInfo.name, storageItem, keys);
+    const format = opts.output ?? "pretty";
 
-            printResult(
-              display.map((e: any) => ({
-                keys: e.keyArgs,
-                value: e.value,
-              })),
-              format,
-            );
+    if (storageItem.type === "map" && parsedKeys.length === 0) {
+      // Fetch all entries
+      const entries: Array<{ keyArgs: any; value: any }> = await storageApi.getEntries();
 
-            if (truncated) {
-              console.error(
-                `\n${DIM}Showing ${limit} of ${entries.length} entries. Use --limit 0 for all.${RESET}`,
-              );
-            }
-          } else {
-            // Single value lookup
-            const result = await storageApi.getValue(...parsedKeys);
-            printResult(result, format);
-          }
-        } finally {
-          clientHandle.destroy();
-        }
-      },
-    );
+      const limit = Number(opts.limit);
+      const truncated = limit > 0 && entries.length > limit;
+      const display = truncated ? entries.slice(0, limit) : entries;
+
+      printResult(
+        display.map((e: any) => ({
+          keys: e.keyArgs,
+          value: e.value,
+        })),
+        format,
+      );
+
+      if (truncated) {
+        console.error(
+          `\n${DIM}Showing ${limit} of ${entries.length} entries. Use --limit 0 for all.${RESET}`,
+        );
+      }
+    } else {
+      // Single value lookup
+      const result = await storageApi.getValue(...parsedKeys);
+      printResult(result, format);
+    }
+  } finally {
+    clientHandle.destroy();
+  }
+}
+
+function palletName(name: string): string {
+  return name;
 }
 
 /**

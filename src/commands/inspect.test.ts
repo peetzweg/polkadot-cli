@@ -2,6 +2,21 @@ import { describe, expect, test } from "bun:test";
 import { runCli } from "./__fixtures__/run-cli.ts";
 
 describe("dot inspect", () => {
+  test("explore alias lists all pallets", async () => {
+    const { stdout, exitCode } = await runCli(["explore"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System");
+    expect(stdout).toContain("Balances");
+    expect(stdout).toContain("Pallets on polkadot");
+  });
+
+  test("explore alias with target works", async () => {
+    const { stdout, exitCode } = await runCli(["explore", "System"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System Pallet");
+    expect(stdout).toContain("Storage Items:");
+  });
+
   test("no target lists all pallets", async () => {
     const { stdout, exitCode } = await runCli(["inspect"]);
     expect(exitCode).toBe(0);
@@ -371,5 +386,31 @@ describe("dot inspect", () => {
     expect(exitCode).toBe(0);
     expect(stdout).not.toContain("Fetching metadata");
     expect(stdout).not.toContain("Connecting");
+  });
+
+  test("explore alias with chain prefix works: explore polkadot.System", async () => {
+    const { stdout, exitCode } = await runCli(["explore", "polkadot.System"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System Pallet");
+    expect(stdout).toContain("Storage Items:");
+  });
+
+  test("explore alias with item detail: explore System.Account", async () => {
+    const { stdout, exitCode } = await runCli(["explore", "System.Account"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Storage)");
+    expect(stdout).toContain("Type:");
+    expect(stdout).toContain("map");
+    expect(stdout).toContain("Key:");
+    expect(stdout).toContain("Value:");
+  });
+
+  test("explore alias with chain prefix and item detail", async () => {
+    const config = {
+      chains: { kusama: { rpc: "wss://kusama-rpc.polkadot.io" } },
+    };
+    const { stdout, exitCode } = await runCli(["explore", "kusama.System.Account"], { config });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Storage)");
   });
 });

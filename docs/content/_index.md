@@ -157,7 +157,7 @@ dot accounts
 Use the account like any other:
 
 ```
-MY_SECRET="word1 word2 ..." dot tx System.remark 0xdead --from ci-signer
+MY_SECRET="word1 word2 ..." dot tx.System.remark 0xdead --from ci-signer
 ```
 
 ### Derive a child account
@@ -245,42 +245,48 @@ dot account inspect alice --output json
 
 ## Chain Prefix
 
-Instead of the `--chain` flag, you can prefix any target with the chain name using dot notation:
+Prefix any dot-path with a chain name to target a specific chain instead of using the `--chain` flag:
 
 ```
-dot query kusama.System.Account 5GrwvaEF...
-dot const kusama.Balances.ExistentialDeposit
-dot tx kusama.Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice
+dot kusama.query.System.Account 5GrwvaEF...
+dot kusama.const.Balances.ExistentialDeposit
+dot kusama.tx.Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice
 dot inspect kusama.System
 dot inspect kusama.System.Account
 ```
 
-Chain names are case-insensitive — `Polkadot.System.Account`, `POLKADOT.System.Account`, and `polkadot.System.Account` all resolve the same way. The same applies to `--chain Polkadot` and `dot chain default Polkadot`.
+Chain names are case-insensitive — `polkadot.query.System.Account`, `Polkadot.query.System.Account`, and `POLKADOT.query.System.Account` all resolve the same way. The same applies to `--chain Polkadot` and `dot chain default Polkadot`.
 
-The `--chain` flag and default chain still work as before. Using `Pallet.Item` without a prefix continues to target the default chain. If both a chain prefix and `--chain` flag are provided, the CLI errors with a clear message.
+The `--chain` flag and default chain still work as before. Using a dot-path without a chain prefix continues to target the default chain. If both a chain prefix and `--chain` flag are provided, the CLI errors with a clear message.
 
 For `inspect`, a two-segment input like `kusama.System` is disambiguated by checking configured chain names. Chain names (lowercase, e.g. `kusama`) and pallet names (PascalCase, e.g. `System`) don't collide in practice. If they did, the chain prefix takes priority and `--chain` serves as an escape hatch.
 
 ## Query
 
-Read on-chain storage. Specify a `Pallet.Item` to fetch a plain value, or pass a key for map lookups. Omit the key to enumerate map entries.
+Read on-chain storage using dot-path syntax: `dot query.Pallet.Item`. Fetch plain values, look up map entries by key, or enumerate all entries. Use `dot query` to list pallets with storage items, or `dot query.Pallet` to list a pallet's storage items.
 
 ```
 # Plain storage value
-dot query System.Number
+dot query.System.Number
 
 # Map entry by key
-dot query System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+dot query.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 
 # All map entries (default limit: 100)
-dot query System.Account --limit 10
+dot query.System.Account --limit 10
 
 # Pipe-safe — stdout is clean data, progress messages go to stderr
-dot query System.Account --limit 5 | jq '.[0].value.data.free'
-dot query System.Number --output json | jq '.+1'
+dot query.System.Account --limit 5 | jq '.[0].value.data.free'
+dot query.System.Number --output json | jq '.+1'
 
 # Query a specific chain using chain prefix
-dot query kusama.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+dot kusama.query.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+
+# List pallets with storage items
+dot query
+
+# List storage items in a pallet
+dot query.System
 ```
 
 ### Output formatting
@@ -293,30 +299,39 @@ Query results automatically convert on-chain types for readability:
 
 ```
 # Token metadata — symbol and name display as text, not {}
-dot query assethub-paseo.Assets.Metadata 50000413
+dot assethub-paseo.query.Assets.Metadata 50000413
 # { "deposit": "6693666000", "name": "Paseo Token", "symbol": "PAS", ... }
 ```
 
 ## Constants
 
-Look up runtime constants by `Pallet.Constant`:
+Look up runtime constants using dot-path syntax: `dot const.Pallet.Constant`. Use `dot const` to list pallets with constants, or `dot const.Pallet` to list a pallet's constants.
 
 ```
-dot const Balances.ExistentialDeposit
-dot const System.SS58Prefix --chain kusama
-dot const kusama.Balances.ExistentialDeposit
+dot const.Balances.ExistentialDeposit
+dot const.System.SS58Prefix --chain kusama
+dot kusama.const.Balances.ExistentialDeposit
+
+# List pallets with constants
+dot const
+
+# List constants in a pallet (offline)
+dot const.Balances
 
 # Pipe-safe — stdout is clean JSON, progress messages go to stderr
-dot const Balances.ExistentialDeposit --output json | jq
+dot const.Balances.ExistentialDeposit --output json | jq
 ```
+
+`consts` and `constants` are aliases for `const`.
 
 ## Inspect
 
-Browse chain metadata offline (uses the cached copy after the first fetch). Shows storage items, constants, calls, events, and errors for each pallet.
+Browse chain metadata offline (uses the cached copy after the first fetch). Shows storage items, constants, calls, events, and errors for each pallet. `explore` is an alias for `inspect`.
 
 ```
 # List all pallets (shows storage, constants, calls, events, and errors counts)
 dot inspect
+dot explore                    # alias
 
 # List a pallet's storage items, constants, calls, events, and errors
 dot inspect System
@@ -424,68 +439,62 @@ Event and error detail views follow the same pattern:
 
 Use call inspection to discover argument names, types, and documentation before constructing `dot tx` commands.
 
-## Focused Commands
+## Focused Listing
 
-Browse specific metadata categories directly. Each command supports `--chain <name>`, `--rpc <url>`, and chain prefix syntax. Singular and plural forms are interchangeable (`dot call` = `dot calls`).
+Each category supports partial paths for browsing metadata. Category-only invocations list pallets; pallet-level invocations list items; item-level invocations show detail. All support `--chain <name>`, `--rpc <url>`, and chain prefix syntax. Singular and plural aliases work: `event` = `events`, `error` = `errors`.
 
-### Calls
+### Calls (tx listing)
 
 ```
-dot calls Balances                         # list calls with arg signatures
-dot calls Balances.transfer_allow_death    # call detail
+dot tx                                     # list pallets with calls
+dot tx.Balances                            # list calls with arg signatures
+dot tx.Balances.transfer_allow_death       # call detail
 ```
 
 ### Events
 
 ```
-dot events Balances                        # list events with field signatures
-dot events Balances.Transfer               # event detail
+dot events                                 # list pallets with events
+dot events.Balances                        # list events with field signatures
+dot events.Balances.Transfer               # event detail
 ```
 
 ### Errors
 
 ```
-dot errors Balances                        # list errors with docs
-dot errors Balances.InsufficientBalance    # error detail
+dot errors                                 # list pallets with errors
+dot errors.Balances                        # list errors with docs
+dot errors.Balances.InsufficientBalance    # error detail
 ```
 
-### Storage
+### Storage (query listing)
 
 ```
-dot storage System                         # list storage items with types
-dot storage System.Account                 # storage detail
+dot query                                  # list pallets with storage items
+dot query.System                           # list storage items with types
+dot query.System.Account                   # storage detail (fetches value)
 ```
 
-### Pallets
+### Constants (const listing)
 
 ```
-dot pallets                                # list all pallets with counts
-dot pallets Balances                       # pallet summary
+dot const                                  # list pallets with constants
+dot const.Balances                         # list constants (offline)
+dot const.Balances.ExistentialDeposit      # look up value (connects to chain)
 ```
-
-### Constants (listing mode)
-
-`dot const` now works as both a value lookup and a listing command:
-
-```
-dot const Balances                         # list constants (offline)
-dot const Balances.ExistentialDeposit      # look up value (connects to chain)
-```
-
-`consts` and `constants` are aliases for `const`.
 
 ## Transactions
 
-Build, sign, and submit extrinsics. Pass a `Pallet.Call` with arguments, or a raw SCALE-encoded call hex (e.g. from a multisig proposal or governance). Both forms display a decoded human-readable representation of the call.
+Build, sign, and submit extrinsics using dot-path syntax: `dot tx.Pallet.Call`. Pass arguments after the dot-path, or submit a raw SCALE-encoded call hex. Both forms display a decoded human-readable representation of the call.
 
 ### Basic usage
 
 ```
 # Simple remark
-dot tx System.remark 0xdeadbeef --from alice
+dot tx.System.remark 0xdeadbeef --from alice
 
 # Transfer (amount in plancks)
-dot tx Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice
+dot tx.Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice
 ```
 
 ### Dry run
@@ -493,7 +502,7 @@ dot tx Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice
 Estimate fees without submitting:
 
 ```
-dot tx Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice --dry-run
+dot tx.Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice --dry-run
 ```
 
 ### Raw call data
@@ -509,7 +518,7 @@ dot tx 0x0503008eaf04151687736326c9fea17e25fc528761369... --from alice
 Use `Utility.batchAll` to combine multiple calls into one transaction:
 
 ```
-dot tx Utility.batchAll '[
+dot tx.Utility.batchAll '[
   {
     "type": "Balances",
     "value": {
@@ -539,10 +548,10 @@ Enum arguments accept a concise `Variant(value)` syntax instead of verbose JSON.
 
 ```
 # Before (verbose JSON)
-dot tx Utility.dispatch_as '{"type":"system","value":{"type":"Authorized"}}' <call> --from alice
+dot tx.Utility.dispatch_as '{"type":"system","value":{"type":"Authorized"}}' <call> --from alice
 
 # After (shorthand)
-dot tx Utility.dispatch_as 'system(Authorized)' <call> --from alice
+dot tx.Utility.dispatch_as 'system(Authorized)' <call> --from alice
 ```
 
 The syntax supports:
@@ -564,13 +573,13 @@ Encode a call to hex without signing or submitting. This is useful for preparing
 
 ```
 # Encode a remark
-dot tx System.remark 0xdeadbeef --encode
+dot tx.System.remark 0xdeadbeef --encode
 
 # Encode a transfer
-dot tx Balances.transfer_keep_alive 5FHneW46... 1000000000000 --encode
+dot tx.Balances.transfer_keep_alive 5FHneW46... 1000000000000 --encode
 
 # Compose: encode a call, then wrap it with Sudo.sudo
-dot tx Sudo.sudo $(dot tx System.remark 0xcafe --encode) --from alice
+dot tx.Sudo.sudo $(dot tx.System.remark 0xcafe --encode) --from alice
 ```
 
 `--encode` and `--dry-run` are mutually exclusive. `--encode` cannot be used with raw call hex (it is already encoded).
@@ -597,7 +606,7 @@ Complex calls (e.g. XCM teleports) that the primary decoder cannot handle are au
 The CLI exits with code **1** when a finalized transaction has a dispatch error (e.g. insufficient balance, bad origin). The full transaction output (events, explorer links) is still printed before the error so you can debug the failure. Module errors are formatted as `PalletName.ErrorVariant` (e.g. `Balances.InsufficientBalance`).
 
 ```
-dot tx Balances.transferKeepAlive 5FHneW46... 999999999999999999 --from alice
+dot tx.Balances.transferKeepAlive 5FHneW46... 999999999999999999 --from alice
 # ... events and explorer links ...
 # Error: Transaction dispatch error: Balances.InsufficientBalance
 echo $?  # 1
@@ -610,7 +619,7 @@ This makes it easy to detect on-chain failures in scripts and CI pipelines.
 When a call argument is invalid, the CLI shows a contextual error message with the argument name, the expected type, and a hint:
 
 ```
-dot tx Balances.transferKeepAlive 5GrwvaEF... abc --encode
+dot tx.Balances.transferKeepAlive 5GrwvaEF... abc --encode
 # Error: Invalid value for argument 'value' (expected Compact<u128>): "abc"
 #   Hint: Compact<u128>
 ```
@@ -628,7 +637,7 @@ Chains with non-standard signed extensions (e.g. `people-preview`) are auto-hand
 For manual override, use `--ext` with a JSON object:
 
 ```
-dot tx System.remark 0xdeadbeef --from alice \
+dot tx.System.remark 0xdeadbeef --from alice \
   --ext '{"MyExtension":{"value":"..."}}'
 ```
 
@@ -707,8 +716,8 @@ These flags work with any command:
 All commands follow Unix conventions: **data goes to stdout, progress goes to stderr**. This means you can safely pipe `--output json` into `jq` or other tools without progress messages ("Fetching metadata...", spinner output, "Connecting...") corrupting the data stream:
 
 ```
-dot const System.SS58Prefix --output json | jq '.+1'
-dot query System.Number --output json | jq
+dot const.System.SS58Prefix --output json | jq '.+1'
+dot query.System.Number --output json | jq
 ```
 
 In an interactive terminal, both streams render together so you see progress and results normally.
