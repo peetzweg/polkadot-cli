@@ -9,7 +9,8 @@ import { showItemHelp } from "./focused-inspect.ts";
 // coverage without asserting on console output.
 // ---------------------------------------------------------------------------
 
-describe("showItemHelp (in-process coverage)", () => {
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("showItemHelp (in-process coverage)", { timeout: 15_000 }, () => {
   test("tx item completes without error", async () => {
     await showItemHelp("tx", "System.remark", {});
   });

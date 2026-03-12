@@ -786,6 +786,10 @@ The notification is automatically suppressed when:
 - `CI` environment variable is set (any value)
 - stderr is not a TTY (e.g. piped output)
 
+## Environment Compatibility
+
+The CLI works in Node.js, Bun, and sandboxed runtimes (e.g. LLM tool-use / MCP environments) that lack a native `globalThis.WebSocket`. WebSocket connections use the [`ws`](https://github.com/websockets/ws) package explicitly, so no global polyfill is required.
+
 ## Configuration
 
 Config and metadata caches live in `~/.polkadot/`:

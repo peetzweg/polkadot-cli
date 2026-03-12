@@ -2,6 +2,7 @@ import type { JsonRpcProvider } from "@polkadot-api/json-rpc-provider";
 import { createClient } from "polkadot-api";
 import { withPolkadotSdkCompat } from "polkadot-api/polkadot-sdk-compat";
 import { getWsProvider } from "polkadot-api/ws-provider";
+import { WebSocket } from "ws";
 import { loadMetadata, saveMetadata } from "../config/store.ts";
 import type { ChainConfig } from "../config/types.ts";
 import { ConnectionError } from "../utils/errors.ts";
@@ -66,7 +67,12 @@ export async function createChainClient(
         `No RPC endpoint configured for chain "${chainName}". Use --rpc or configure one with: dot chain add ${chainName} --rpc <url>`,
       );
     }
-    provider = withPolkadotSdkCompat(getWsProvider(rpc, { timeout: 10_000 }));
+    provider = withPolkadotSdkCompat(
+      getWsProvider(rpc, {
+        timeout: 10_000,
+        websocketClass: WebSocket as unknown as typeof globalThis.WebSocket,
+      }),
+    );
   }
 
   const client = createClient(provider, {

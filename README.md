@@ -559,6 +559,10 @@ Config and metadata caches live in `~/.polkadot/`:
 
 > **Warning:** `accounts.json` stores secrets (mnemonics and seeds) in **plain text**. Encrypted-at-rest storage is planned but not yet implemented. Keep appropriate file permissions (`chmod 600 ~/.polkadot/accounts.json`) and do not use this for high-value mainnet accounts.
 
+## Environment compatibility
+
+The CLI works in Node.js, Bun, and sandboxed runtimes (e.g. LLM tool-use / MCP environments) that lack a native `globalThis.WebSocket`. WebSocket connections use the [`ws`](https://github.com/websockets/ws) package explicitly, so no global polyfill is required.
+
 ## Development
 
 Requires [Bun](https://bun.sh).

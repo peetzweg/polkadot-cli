@@ -44,12 +44,14 @@
     "@polkadot-labs/hdkd": "^0.0.26",
     "@polkadot-labs/hdkd-helpers": "^0.0.27",
     "cac": "^6.7.14",
-    "polkadot-api": "^1.23.3"
+    "polkadot-api": "^1.23.3",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.5",
     "@changesets/cli": "^2.29.4",
     "@types/bun": "latest",
+    "@types/ws": "^8.18.1",
     "husky": "^9.1.7"
   }
 }
