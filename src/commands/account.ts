@@ -1,6 +1,6 @@
 import type { CAC } from "cac";
 import { findAccount, loadAccounts, saveAccounts } from "../config/accounts-store.ts";
-import { isEnvSecret } from "../config/accounts-types.ts";
+import { isEnvSecret, isWatchOnly } from "../config/accounts-types.ts";
 import {
   createNewAccount,
   DEV_NAMES,
@@ -17,15 +17,19 @@ import { BOLD, formatJson, printHeading, printItem, RESET, YELLOW } from "../cor
 
 const ACCOUNT_HELP = `
 ${BOLD}Usage:${RESET}
+  $ dot account add <name> <ss58|hex>                                Add a watch-only address (no secret)
+  $ dot account add <name> --secret <s> [--path <derivation>]        Import from BIP39 mnemonic
+  $ dot account add <name> --env <VAR> [--path <derivation>]         Import account backed by env variable
   $ dot account create|new <name> [--path <derivation>]              Create a new account
-  $ dot account import|add <name> --secret <s> [--path <derivation>] Import from BIP39 mnemonic
-  $ dot account import|add <name> --env <VAR> [--path <derivation>]  Import account backed by env variable
+  $ dot account import <name> --secret <s> [--path <derivation>]     Import from BIP39 mnemonic
+  $ dot account import <name> --env <VAR> [--path <derivation>]      Import account backed by env variable
   $ dot account derive <source> <new-name> --path <derivation>       Derive a child account
   $ dot account inspect <input> [--prefix <N>]                       Inspect an account/address/key
   $ dot account list                                                 List all accounts
   $ dot account remove|delete <name> [name2] ...                     Remove stored account(s)
 
 ${BOLD}Examples:${RESET}
+  $ dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
   $ dot account create my-validator
   $ dot account create my-staking --path //staking
   $ dot account create multi --path //polkadot//0/wallet
@@ -66,8 +70,10 @@ export function registerAccountCommands(cli: CAC) {
           case "new":
           case "create":
             return accountCreate(names[0], opts);
-          case "import":
           case "add":
+            if (opts.secret || opts.env) return accountImport(names[0], opts);
+            return accountAddWatchOnly(names[0], names[1]);
+          case "import":
             return accountImport(names[0], opts);
           case "derive":
             return accountDerive(names[0], names[1], opts);
@@ -205,6 +211,58 @@ async function accountImport(
   }
 }
 
+async function accountAddWatchOnly(name: string | undefined, address: string | undefined) {
+  if (!name) {
+    console.error("Account name is required.\n");
+    console.error("Usage: dot account add <name> <ss58-address|0x-public-key>");
+    process.exit(1);
+  }
+
+  if (!address) {
+    console.error("Address is required.\n");
+    console.error("Usage: dot account add <name> <ss58-address|0x-public-key>");
+    process.exit(1);
+  }
+
+  if (isDevAccount(name)) {
+    throw new Error(
+      `"${name}" is a built-in dev account and cannot be used as a custom account name.`,
+    );
+  }
+
+  const accountsFile = await loadAccounts();
+  if (findAccount(accountsFile, name)) {
+    throw new Error(`Account "${name}" already exists.`);
+  }
+
+  // Decode SS58 or hex to get publicKey hex
+  let hexPub: string;
+  if (isHexPublicKey(address)) {
+    hexPub = address;
+  } else {
+    try {
+      const decoded = fromSs58(address);
+      hexPub = publicKeyToHex(decoded);
+    } catch {
+      throw new Error(
+        `Invalid address "${address}". Expected an SS58 address or 0x-prefixed 32-byte hex public key.`,
+      );
+    }
+  }
+
+  accountsFile.accounts.push({
+    name,
+    publicKey: hexPub,
+    derivationPath: "",
+  });
+  await saveAccounts(accountsFile);
+
+  printHeading("Account Added (watch-only)");
+  console.log(`  ${BOLD}Name:${RESET}    ${name}`);
+  console.log(`  ${BOLD}Address:${RESET} ${toSs58(hexPub)}`);
+  console.log();
+}
+
 async function accountDerive(
   sourceName: string | undefined,
   newName: string | undefined,
@@ -241,18 +299,25 @@ async function accountDerive(
     throw new Error(`Source account "${sourceName}" not found.`);
   }
 
+  if (isWatchOnly(source)) {
+    throw new Error(`Cannot derive from "${sourceName}": watch-only, no secret.`);
+  }
+
   if (findAccount(accountsFile, newName)) {
     throw new Error(`Account "${newName}" already exists.`);
   }
 
   const path = opts.path;
 
-  if (isEnvSecret(source.secret)) {
-    const publicKey = tryDerivePublicKey(source.secret.env, path) ?? "";
+  // After the isWatchOnly guard, secret is guaranteed to be defined
+  const sourceSecret = source.secret!;
+
+  if (isEnvSecret(sourceSecret)) {
+    const publicKey = tryDerivePublicKey(sourceSecret.env, path) ?? "";
 
     accountsFile.accounts.push({
       name: newName,
-      secret: source.secret,
+      secret: sourceSecret,
       publicKey,
       derivationPath: path,
     });
@@ -262,21 +327,21 @@ async function accountDerive(
     console.log(`  ${BOLD}Name:${RESET}    ${newName}`);
     console.log(`  ${BOLD}Source:${RESET}  ${sourceName}`);
     console.log(`  ${BOLD}Path:${RESET}    ${path}`);
-    console.log(`  ${BOLD}Env:${RESET}     ${source.secret.env}`);
+    console.log(`  ${BOLD}Env:${RESET}     ${sourceSecret.env}`);
     if (publicKey) {
       console.log(`  ${BOLD}Address:${RESET} ${toSs58(publicKey)}`);
     } else {
-      console.log(`  ${YELLOW}Address will resolve when $${source.secret.env} is set.${RESET}`);
+      console.log(`  ${YELLOW}Address will resolve when $${sourceSecret.env} is set.${RESET}`);
     }
     console.log();
   } else {
-    const { publicKey } = importAccount(source.secret, path);
+    const { publicKey } = importAccount(sourceSecret, path);
     const hexPub = publicKeyToHex(publicKey);
     const address = toSs58(publicKey);
 
     accountsFile.accounts.push({
       name: newName,
-      secret: source.secret,
+      secret: sourceSecret,
       publicKey: hexPub,
       derivationPath: path,
     });
@@ -309,7 +374,10 @@ async function accountList() {
       }
       let address: string;
 
-      if (isEnvSecret(account.secret)) {
+      if (isWatchOnly(account)) {
+        displayName += " (watch-only)";
+        address = account.publicKey ? toSs58(account.publicKey) : "n/a";
+      } else if (account.secret !== undefined && isEnvSecret(account.secret)) {
         displayName += ` (env: ${account.secret.env})`;
         let pubKey = account.publicKey;
         if (!pubKey) {
@@ -405,7 +473,7 @@ async function accountInspect(
       name = account.name;
       if (account.publicKey) {
         publicKeyHex = account.publicKey;
-      } else if (isEnvSecret(account.secret)) {
+      } else if (account.secret !== undefined && isEnvSecret(account.secret)) {
         const derived = tryDerivePublicKey(account.secret.env, account.derivationPath);
         if (!derived) {
           console.error(

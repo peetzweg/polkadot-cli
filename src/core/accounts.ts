@@ -153,6 +153,12 @@ export async function resolveAccountSigner(name: string): Promise<PolkadotSigner
     throw new Error(`Unknown account "${name}". Available accounts: ${available.join(", ")}`);
   }
 
+  if (account.secret === undefined) {
+    throw new Error(
+      `Account "${name}" is watch-only (no secret). Cannot sign. Import with --secret or --env.`,
+    );
+  }
+
   const secret = resolveSecret(account.secret);
   const isHexSeed = /^0x[0-9a-fA-F]{64}$/.test(secret);
   const keypair = isHexSeed

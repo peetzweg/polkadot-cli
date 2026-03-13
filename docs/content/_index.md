@@ -116,6 +116,22 @@ dot account new my-validator
 dot account create my-staking --path //staking
 ```
 
+### Add a watch-only address
+
+Store a named address without a secret — useful for frequently-used recipients, multisig members, or query targets. Accepts SS58 addresses or hex public keys:
+
+```
+dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+dot account add council 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+```
+
+Watch-only accounts appear in `dot account list` with a `(watch-only)` badge. They can be inspected and removed like any other account but cannot be used with `--from` (signing) or as a source for `derive`.
+
+The `add` subcommand is context-sensitive:
+- `add <name> <address>` — creates a watch-only entry (no secret)
+- `add <name> --secret "..."` — imports a keyed account (same as `import`)
+- `add <name> --env VAR` — imports an env-backed account (same as `import`)
+
 ### Import an account
 
 Import from a BIP39 mnemonic or raw hex seed:
@@ -125,7 +141,7 @@ dot account import treasury --secret "word1 word2 ... word12"
 dot account import raw-key --secret 0xabcdef...
 ```
 
-`add` is an alias for `import`. Use `--path` to import with a derivation path:
+Use `--path` to import with a derivation path:
 
 ```
 dot account import hot-wallet --secret "word1 word2 ... word12" --path //hot
@@ -183,12 +199,38 @@ dot account import treasury --secret "..." --path //hot
 dot account derive treasury treasury-gov --path //governance
 ```
 
-`account list` shows the derivation path next to the account name:
+`account list` shows the derivation path, env badge, and watch-only badge next to the account name:
 
 ```
+  treasury (watch-only)  5GrwvaEF...
   treasury-staking (//staking)  5FHneW46...
   ci-signer (//ci) (env: MY_SECRET)  5EPCUjPx...
 ```
+
+### Named address resolution
+
+Named accounts — both watch-only and keyed — resolve automatically everywhere an AccountId32 or MultiAddress is expected. This works in `dot tx` arguments and `dot query` keys:
+
+```
+# Use a named account as transfer recipient
+dot tx.Balances.transferKeepAlive treasury 1000000000000 --from alice
+
+# Query by account name
+dot query.System.Account treasury
+
+# Dev accounts also resolve
+dot tx.Balances.transferKeepAlive bob 1000000000000 --from alice
+```
+
+Resolution order:
+
+1. **Dev account name** (`alice`, `bob`, etc.) — resolves to the dev account's SS58 address
+2. **Stored account name** — resolves to the account's SS58 address (works for both keyed and watch-only accounts)
+3. **SS58 address** — passed through as-is
+4. **Hex public key** (`0x` + 64 hex chars) — passed through as-is
+5. **Error** — shows available account names
+
+This means you can save commonly-used addresses once and reference them by name everywhere, avoiding copy-paste of long SS58 strings.
 
 ### Remove accounts
 

@@ -148,26 +148,26 @@ function getStorageItem(palletName: string, itemName: string): StorageItemInfo {
 describe("parseStorageKeys — single-hasher struct key", () => {
   const storageItem = getStorageItem("Hrmp", "HrmpChannels");
 
-  test("composes positional args into struct", () => {
-    const result = parseStorageKeys(meta, "Hrmp", storageItem, ["1000", "5140"]);
+  test("composes positional args into struct", async () => {
+    const result = await parseStorageKeys(meta, "Hrmp", storageItem, ["1000", "5140"]);
     expect(result).toEqual([{ sender: 1000, recipient: 5140 }]);
   });
 
-  test("accepts single JSON arg", () => {
-    const result = parseStorageKeys(meta, "Hrmp", storageItem, [
+  test("accepts single JSON arg", async () => {
+    const result = await parseStorageKeys(meta, "Hrmp", storageItem, [
       '{"sender":1000,"recipient":5140}',
     ]);
     expect(result).toEqual([{ sender: 1000, recipient: 5140 }]);
   });
 
-  test("throws on wrong arg count (3 args for 2-field struct)", () => {
-    expect(() => parseStorageKeys(meta, "Hrmp", storageItem, ["1000", "5140", "extra"])).toThrow(
+  test("throws on wrong arg count (3 args for 2-field struct)", async () => {
+    expect(parseStorageKeys(meta, "Hrmp", storageItem, ["1000", "5140", "extra"])).rejects.toThrow(
       /takes 2 argument/,
     );
   });
 
-  test("no args returns empty (for getEntries)", () => {
-    const result = parseStorageKeys(meta, "Hrmp", storageItem, []);
+  test("no args returns empty (for getEntries)", async () => {
+    const result = await parseStorageKeys(meta, "Hrmp", storageItem, []);
     expect(result).toEqual([]);
   });
 });
@@ -178,21 +178,21 @@ describe("parseStorageKeys — single-hasher struct key", () => {
 describe("parseStorageKeys — single-hasher non-struct key", () => {
   const storageItem = getStorageItem("System", "Account");
 
-  test("parses single AccountId arg", () => {
+  test("parses single AccountId arg", async () => {
     const addr = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
-    const result = parseStorageKeys(meta, "System", storageItem, [addr]);
+    const result = await parseStorageKeys(meta, "System", storageItem, [addr]);
     expect(result).toEqual([addr]);
   });
 
-  test("throws on multiple args for non-struct single-hasher", () => {
-    expect(() => parseStorageKeys(meta, "System", storageItem, ["addr1", "addr2"])).toThrow(
+  test("throws on multiple args for non-struct single-hasher", async () => {
+    expect(parseStorageKeys(meta, "System", storageItem, ["addr1", "addr2"])).rejects.toThrow(
       /Pass 1 argument/,
     );
   });
 
-  test("single primitive key (BlockHash)", () => {
+  test("single primitive key (BlockHash)", async () => {
     const storageItem = getStorageItem("System", "BlockHash");
-    const result = parseStorageKeys(meta, "System", storageItem, ["42"]);
+    const result = await parseStorageKeys(meta, "System", storageItem, ["42"]);
     expect(result).toEqual([42]);
   });
 });
@@ -203,21 +203,21 @@ describe("parseStorageKeys — single-hasher non-struct key", () => {
 describe("parseStorageKeys — multi-hasher NMap key", () => {
   const storageItem = getStorageItem("Staking", "ErasStakers");
 
-  test("parses era + account args", () => {
+  test("parses era + account args", async () => {
     const addr = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
-    const result = parseStorageKeys(meta, "Staking", storageItem, ["100", addr]);
+    const result = await parseStorageKeys(meta, "Staking", storageItem, ["100", addr]);
     expect(result).toEqual([100, addr]);
   });
 
-  test("throws on wrong arg count (1 arg for 2-key NMap)", () => {
-    expect(() => parseStorageKeys(meta, "Staking", storageItem, ["100"])).toThrow(
+  test("throws on wrong arg count (1 arg for 2-key NMap)", async () => {
+    expect(parseStorageKeys(meta, "Staking", storageItem, ["100"])).rejects.toThrow(
       /expects 2 key arg/,
     );
   });
 
-  test("throws on too many args", () => {
+  test("throws on too many args", async () => {
     const addr = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
-    expect(() => parseStorageKeys(meta, "Staking", storageItem, ["100", addr, "extra"])).toThrow(
+    expect(parseStorageKeys(meta, "Staking", storageItem, ["100", addr, "extra"])).rejects.toThrow(
       /expects 2 key arg/,
     );
   });
@@ -227,7 +227,7 @@ describe("parseStorageKeys — multi-hasher NMap key", () => {
 // parseStorageKeys — plain storage (no keys)
 // ---------------------------------------------------------------------------
 describe("parseStorageKeys — plain storage", () => {
-  test("returns empty for plain storage with no args", () => {
+  test("returns empty for plain storage with no args", async () => {
     const storageItem: StorageItemInfo = {
       name: "Number",
       docs: [],
@@ -235,7 +235,7 @@ describe("parseStorageKeys — plain storage", () => {
       keyTypeId: null,
       valueTypeId: 4,
     };
-    const result = parseStorageKeys(meta, "System", storageItem, []);
+    const result = await parseStorageKeys(meta, "System", storageItem, []);
     expect(result).toEqual([]);
   });
 });

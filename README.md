@@ -79,6 +79,10 @@ dot accounts            # shorthand, same as above
 # List all accounts (dev + stored)
 dot account list
 
+# Add a watch-only address (no secret — for use as tx recipient or query target)
+dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+dot account add council 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+
 # Create a new account (generates a mnemonic)
 dot account create my-validator
 
@@ -112,6 +116,36 @@ dot account inspect 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a5
 dot account inspect alice --prefix 0         # Polkadot mainnet prefix
 dot account inspect alice --output json      # JSON output
 ```
+
+#### Watch-only accounts
+
+Add named addresses without secrets — useful for saving frequently-used recipients, multisig members, or query targets:
+
+```bash
+dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+dot account add council 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+```
+
+Watch-only accounts appear in `dot account list` with a `(watch-only)` badge and can be inspected and removed like any other account. They cannot be used with `--from` (signing) or as a source for `derive`.
+
+The `add` subcommand is context-sensitive: bare `add <name> <address>` creates a watch-only entry, while `add --secret` or `add --env` imports a keyed account (same as `import`).
+
+#### Named address resolution
+
+Named accounts (both watch-only and keyed) resolve automatically everywhere an AccountId32 or MultiAddress is expected — in `dot tx` arguments and `dot query` keys:
+
+```bash
+# Use a named account as transfer recipient
+dot tx Balances.transferKeepAlive treasury 1000000000000 --from alice
+
+# Query by account name
+dot query System.Account treasury
+
+# Dev accounts also resolve
+dot tx Balances.transferKeepAlive bob 1000000000000 --from alice
+```
+
+Resolution order: dev account name > stored account name > SS58 address > hex public key. If the input doesn't match any, the CLI shows an error listing available account names.
 
 #### Inspect accounts
 

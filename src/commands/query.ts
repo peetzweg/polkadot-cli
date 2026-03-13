@@ -100,7 +100,7 @@ export async function handleQuery(
     const unsafeApi = clientHandle.client.getUnsafeApi();
     const storageApi = (unsafeApi as any).query[palletInfo.name][storageItem.name];
 
-    const parsedKeys = parseStorageKeys(meta, palletInfo.name, storageItem, keys);
+    const parsedKeys = await parseStorageKeys(meta, palletInfo.name, storageItem, keys);
     const format = opts.output ?? "pretty";
 
     if (storageItem.type === "map" && parsedKeys.length === 0) {
@@ -147,12 +147,12 @@ function palletName(name: string): string {
  * - Single-hasher map with non-struct key: parses 1 arg via parseTypedArg
  * - Multi-hasher NMap: parses each CLI arg against its corresponding key type
  */
-function parseStorageKeys(
+async function parseStorageKeys(
   meta: MetadataBundle,
   palletName: string,
   storageItem: StorageItemInfo,
   args: string[],
-): unknown[] {
+): Promise<unknown[]> {
   // Plain storage — no keys expected
   if (storageItem.type === "plain" || storageItem.keyTypeId == null) {
     return args.map(parseValue);
@@ -169,13 +169,13 @@ function parseStorageKeys(
     // Single-hasher map: getValue() takes exactly 1 argument
     if (args.length === 1) {
       // Single CLI arg — parse it typed (handles JSON structs, primitives, AccountId, etc.)
-      return [parseTypedArg(meta, keyEntry, args[0]!)];
+      return [await parseTypedArg(meta, keyEntry, args[0]!)];
     }
 
     // Multiple CLI args — only valid if the key type is a struct
     if (keyEntry.type === "struct") {
       const label = `${palletName}.${storageItem.name} key`;
-      return [parseStructArgs(meta, keyEntry.value, args, label)];
+      return [await parseStructArgs(meta, keyEntry.value, args, label)];
     }
 
     // Wrong arg count for a non-struct single-hasher key
@@ -205,11 +205,13 @@ function parseStorageKeys(
   // Parse each arg against its corresponding tuple element type
   if (keyEntry.type === "tuple") {
     const entries = keyEntry.value as any[];
-    return entries.map((entry: any, i: number) => parseTypedArg(meta, entry, args[i]!));
+    return Promise.all(
+      entries.map((entry: any, i: number) => parseTypedArg(meta, entry, args[i]!)),
+    );
   }
 
   // Fallback for non-tuple multi-hasher (shouldn't normally happen)
-  return args.map((arg) => parseTypedArg(meta, keyEntry, arg));
+  return Promise.all(args.map((arg) => parseTypedArg(meta, keyEntry, arg)));
 }
 
 export { parseStorageKeys };

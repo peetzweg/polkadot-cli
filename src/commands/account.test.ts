@@ -662,4 +662,134 @@ describe("dot account", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Cannot derive");
   });
+
+  // ---------------------------------------------------------------------------
+  // watch-only account tests
+  // ---------------------------------------------------------------------------
+
+  const WATCH_ONLY: StoredAccount = {
+    name: "treasury",
+    publicKey: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+    derivationPath: "",
+  };
+
+  test("add <name> <ss58> creates watch-only account", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "add",
+      "treasury",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Added (watch-only)");
+    expect(stdout).toContain("treasury");
+    expect(stdout).toContain("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+  });
+
+  test("add <name> <hex-key> creates watch-only from hex", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "add",
+      "hex-watch",
+      "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Added (watch-only)");
+    expect(stdout).toContain("hex-watch");
+  });
+
+  test("add (no name) errors", async () => {
+    const { stderr, exitCode } = await runCli(["account", "add"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("name is required");
+  });
+
+  test("add <name> (no address) errors", async () => {
+    const { stderr, exitCode } = await runCli(["account", "add", "lonely"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Address is required");
+  });
+
+  test("add alice <ss58> (dev name) errors", async () => {
+    const { stderr, exitCode } = await runCli([
+      "account",
+      "add",
+      "alice",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("built-in dev account");
+  });
+
+  test("add existing-name <ss58> (duplicate) errors", async () => {
+    const { stderr, exitCode } = await runCli(
+      ["account", "add", "treasury", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"],
+      { accounts: [WATCH_ONLY] },
+    );
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("already exists");
+  });
+
+  test("add <name> garbage!!! (invalid address) errors", async () => {
+    const { stderr, exitCode } = await runCli(["account", "add", "bad-addr", "garbage!!!"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Invalid address");
+  });
+
+  test("add with --secret still works as import", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "add",
+      "secret-add",
+      "--secret",
+      TEST_MNEMONIC,
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Imported");
+    expect(stdout).toContain("Address:");
+  });
+
+  test("list shows (watch-only) badge for watch-only account", async () => {
+    const { stdout, exitCode } = await runCli(["account", "list"], {
+      accounts: [WATCH_ONLY],
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(watch-only)");
+    expect(stdout).toContain("treasury");
+  });
+
+  test("list shows address for watch-only account", async () => {
+    const { stdout, exitCode } = await runCli(["account", "list"], {
+      accounts: [WATCH_ONLY],
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+  });
+
+  test("inspect watch-only account works", async () => {
+    const { stdout, exitCode } = await runCli(["account", "inspect", "treasury"], {
+      accounts: [WATCH_ONLY],
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Info");
+    expect(stdout).toContain("treasury");
+    expect(stdout).toContain(WATCH_ONLY.publicKey);
+  });
+
+  test("remove watch-only account works", async () => {
+    const { stdout, exitCode } = await runCli(["account", "remove", "treasury"], {
+      accounts: [WATCH_ONLY],
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("removed");
+  });
+
+  test("derive from watch-only source errors", async () => {
+    const { stderr, exitCode } = await runCli(
+      ["account", "derive", "treasury", "child-acct", "--path", "//child"],
+      { accounts: [WATCH_ONLY] },
+    );
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("watch-only");
+  });
 });

@@ -106,8 +106,8 @@ describe("parseEnumShorthand", () => {
 });
 
 describe("parseCallArgs", () => {
-  test("System.remark with hex bytes", () => {
-    const result = parseCallArgs(meta, "System", "remark", ["0xdeadbeef"]) as Record<
+  test("System.remark with hex bytes", async () => {
+    const result = (await parseCallArgs(meta, "System", "remark", ["0xdeadbeef"])) as Record<
       string,
       unknown
     >;
@@ -116,81 +116,84 @@ describe("parseCallArgs", () => {
     expect((result.remark as Binary).asHex()).toBe("0xdeadbeef");
   });
 
-  test("System.remark with plain text", () => {
-    const result = parseCallArgs(meta, "System", "remark", ["hello"]) as Record<string, unknown>;
+  test("System.remark with plain text", async () => {
+    const result = (await parseCallArgs(meta, "System", "remark", ["hello"])) as Record<
+      string,
+      unknown
+    >;
     expect(result.remark).toBeInstanceOf(Binary);
     expect((result.remark as Binary).asText()).toBe("hello");
   });
 
-  test("Balances.transferKeepAlive with address and amount", () => {
+  test("Balances.transferKeepAlive with address and amount", async () => {
     const addr = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
-    const result = parseCallArgs(meta, "Balances", "transfer_keep_alive", [
+    const result = (await parseCallArgs(meta, "Balances", "transfer_keep_alive", [
       addr,
       "1000000000000",
-    ]) as Record<string, unknown>;
+    ])) as Record<string, unknown>;
     expect(result.dest).toEqual({ type: "Id", value: addr });
     expect(result.value).toBe(1000000000000n);
   });
 
-  test("wrong arg count throws", () => {
-    expect(() => parseCallArgs(meta, "System", "remark", ["0xaa", "extra"])).toThrow(
+  test("wrong arg count throws", async () => {
+    expect(parseCallArgs(meta, "System", "remark", ["0xaa", "extra"])).rejects.toThrow(
       /takes 1 argument/,
     );
   });
 
-  test("too few args throws with expected types", () => {
-    expect(() =>
+  test("too few args throws with expected types", async () => {
+    expect(
       parseCallArgs(meta, "Balances", "transfer_keep_alive", [
         "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
       ]),
-    ).toThrow(/takes 2 argument/);
+    ).rejects.toThrow(/takes 2 argument/);
   });
 
-  test("zero args for non-void call throws", () => {
-    expect(() => parseCallArgs(meta, "System", "remark", [])).toThrow(/takes 1 argument/);
+  test("zero args for non-void call throws", async () => {
+    expect(parseCallArgs(meta, "System", "remark", [])).rejects.toThrow(/takes 1 argument/);
   });
 
-  test("struct arg parse error includes field name and expected type", () => {
+  test("struct arg parse error includes field name and expected type", async () => {
     // Balances.transfer_keep_alive has struct fields: dest (MultiAddress), value (Compact<u128>)
     // Passing "abc" for the amount should fail with contextual info
-    expect(() =>
+    expect(
       parseCallArgs(meta, "Balances", "transfer_keep_alive", [
         "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
         "abc",
       ]),
-    ).toThrow(/Invalid value for argument 'value'/);
+    ).rejects.toThrow(/Invalid value for argument 'value'/);
   });
 
-  test("struct arg parse error includes expected type description", () => {
-    expect(() =>
+  test("struct arg parse error includes expected type description", async () => {
+    expect(
       parseCallArgs(meta, "Balances", "transfer_keep_alive", [
         "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
         "abc",
       ]),
-    ).toThrow(/expected/);
+    ).rejects.toThrow(/expected/);
   });
 
-  test("struct arg parse error includes the invalid value in the message", () => {
-    expect(() =>
+  test("struct arg parse error includes the invalid value in the message", async () => {
+    expect(
       parseCallArgs(meta, "Balances", "transfer_keep_alive", [
         "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
         "abc",
       ]),
-    ).toThrow(/"abc"/);
+    ).rejects.toThrow(/"abc"/);
   });
 
-  test("struct arg parse error includes a hint", () => {
-    expect(() =>
+  test("struct arg parse error includes a hint", async () => {
+    expect(
       parseCallArgs(meta, "Balances", "transfer_keep_alive", [
         "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
         "abc",
       ]),
-    ).toThrow(/Hint:/);
+    ).rejects.toThrow(/Hint:/);
   });
 
-  test("struct arg parse error preserves original cause", () => {
+  test("struct arg parse error preserves original cause", async () => {
     try {
-      parseCallArgs(meta, "Balances", "transfer_keep_alive", [
+      await parseCallArgs(meta, "Balances", "transfer_keep_alive", [
         "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
         "abc",
       ]);
@@ -202,7 +205,7 @@ describe("parseCallArgs", () => {
 });
 
 describe("parseTypedArg", () => {
-  test("decodes hex RuntimeCall for Sudo-style usage", () => {
+  test("decodes hex RuntimeCall for Sudo-style usage", async () => {
     // Encode System.remark(0xaa) → hex, then parse it back through parseTypedArg
     const { codec, location } = meta.builder.buildCall("System", "remark");
     const callData = { remark: Binary.fromHex("0xaa") };
@@ -214,7 +217,7 @@ describe("parseTypedArg", () => {
     if (callTypeId == null) throw new Error("No RuntimeCall in metadata");
     const callEntry = meta.lookup(callTypeId);
 
-    const decoded = parseTypedArg(meta, callEntry, callHex) as {
+    const decoded = (await parseTypedArg(meta, callEntry, callHex)) as {
       type: string;
       value: { type: string; value: unknown };
     };
@@ -222,7 +225,7 @@ describe("parseTypedArg", () => {
     expect(decoded.value.type).toBe("remark");
   });
 
-  test("auto-wraps SS58 address to MultiAddress.Id", () => {
+  test("auto-wraps SS58 address to MultiAddress.Id", async () => {
     // Find the dest field type from Balances.transfer_keep_alive
     const palletMeta = meta.unified.pallets.find((p) => p.name === "Balances")!;
     const callsEntry = meta.lookup(palletMeta.calls!.type);
@@ -233,30 +236,30 @@ describe("parseTypedArg", () => {
     const destEntry = inner.value.dest;
 
     const addr = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
-    const result = parseTypedArg(meta, destEntry, addr) as { type: string; value: string };
+    const result = (await parseTypedArg(meta, destEntry, addr)) as { type: string; value: string };
     expect(result).toEqual({ type: "Id", value: addr });
   });
 
-  test("option with 'null' returns undefined", () => {
+  test("option with 'null' returns undefined", async () => {
     const optionEntry = {
       type: "option",
       value: { type: "primitive", value: "u32" },
     };
-    expect(parseTypedArg(meta, optionEntry, "null")).toBeUndefined();
-    expect(parseTypedArg(meta, optionEntry, "none")).toBeUndefined();
+    expect(await parseTypedArg(meta, optionEntry, "null")).toBeUndefined();
+    expect(await parseTypedArg(meta, optionEntry, "none")).toBeUndefined();
   });
 
-  test("compact u128 returns bigint", () => {
+  test("compact u128 returns bigint", async () => {
     const compactEntry = { type: "compact", isBig: true };
-    expect(parseTypedArg(meta, compactEntry, "1000000000000")).toBe(1000000000000n);
+    expect(await parseTypedArg(meta, compactEntry, "1000000000000")).toBe(1000000000000n);
   });
 
-  test("compact u32 returns number", () => {
+  test("compact u32 returns number", async () => {
     const compactEntry = { type: "compact", isBig: false };
-    expect(parseTypedArg(meta, compactEntry, "42")).toBe(42);
+    expect(await parseTypedArg(meta, compactEntry, "42")).toBe(42);
   });
 
-  test("enum shorthand Parachain(1000) with number inner", () => {
+  test("enum shorthand Parachain(1000) with number inner", async () => {
     const enumEntry = {
       type: "enum",
       value: {
@@ -264,13 +267,13 @@ describe("parseTypedArg", () => {
         Here: { type: "void" },
       },
     };
-    expect(parseTypedArg(meta, enumEntry, "Parachain(1000)")).toEqual({
+    expect(await parseTypedArg(meta, enumEntry, "Parachain(1000)")).toEqual({
       type: "Parachain",
       value: 1000,
     });
   });
 
-  test("enum shorthand system(Authorized) with nested enum", () => {
+  test("enum shorthand system(Authorized) with nested enum", async () => {
     const enumEntry = {
       type: "enum",
       value: {
@@ -283,36 +286,36 @@ describe("parseTypedArg", () => {
         },
       },
     };
-    expect(parseTypedArg(meta, enumEntry, "system(Authorized)")).toEqual({
+    expect(await parseTypedArg(meta, enumEntry, "system(Authorized)")).toEqual({
       type: "system",
       value: { type: "Authorized" },
     });
   });
 
-  test("enum shorthand is case-insensitive", () => {
+  test("enum shorthand is case-insensitive", async () => {
     const enumEntry = {
       type: "enum",
       value: {
         Parachain: { type: "compact", isBig: false },
       },
     };
-    expect(parseTypedArg(meta, enumEntry, "parachain(42)")).toEqual({
+    expect(await parseTypedArg(meta, enumEntry, "parachain(42)")).toEqual({
       type: "Parachain",
       value: 42,
     });
   });
 
-  test("enum shorthand Root() treated as void", () => {
+  test("enum shorthand Root() treated as void", async () => {
     const enumEntry = {
       type: "enum",
       value: {
         Root: { type: "void" },
       },
     };
-    expect(parseTypedArg(meta, enumEntry, "Root()")).toEqual({ type: "Root" });
+    expect(await parseTypedArg(meta, enumEntry, "Root()")).toEqual({ type: "Root" });
   });
 
-  test("enum shorthand with JSON inner for structs", () => {
+  test("enum shorthand with JSON inner for structs", async () => {
     const enumEntry = {
       type: "enum",
       value: {
@@ -325,12 +328,12 @@ describe("parseTypedArg", () => {
       },
     };
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
-    const result = parseTypedArg(meta, enumEntry, `AccountId32({"id":"${hex}"})`) as any;
+    const result = (await parseTypedArg(meta, enumEntry, `AccountId32({"id":"${hex}"})`)) as any;
     expect(result.type).toBe("AccountId32");
     expect(result.value.id).toBeInstanceOf(Binary);
   });
 
-  test("enum shorthand does not break SS58 auto-wrap", () => {
+  test("enum shorthand does not break SS58 auto-wrap", async () => {
     // SS58 addresses don't match shorthand pattern (no parens), so MultiAddress auto-wrap still works
     const palletMeta = meta.unified.pallets.find((p) => p.name === "Balances")!;
     const callsEntry = meta.lookup(palletMeta.calls!.type);
@@ -340,23 +343,23 @@ describe("parseTypedArg", () => {
     const destEntry = inner.value.dest;
 
     const addr = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
-    expect(parseTypedArg(meta, destEntry, addr)).toEqual({ type: "Id", value: addr });
+    expect(await parseTypedArg(meta, destEntry, addr)).toEqual({ type: "Id", value: addr });
   });
 
-  test("enum shorthand does not break JSON format", () => {
+  test("enum shorthand does not break JSON format", async () => {
     const enumEntry = {
       type: "enum",
       value: {
         Parachain: { type: "compact", isBig: false },
       },
     };
-    expect(parseTypedArg(meta, enumEntry, '{"type":"Parachain","value":1000}')).toEqual({
+    expect(await parseTypedArg(meta, enumEntry, '{"type":"Parachain","value":1000}')).toEqual({
       type: "Parachain",
       value: 1000,
     });
   });
 
-  test("enum shorthand does not break void variant name", () => {
+  test("enum shorthand does not break void variant name", async () => {
     const enumEntry = {
       type: "enum",
       value: {
@@ -364,7 +367,7 @@ describe("parseTypedArg", () => {
         Signed: { type: "AccountId32" },
       },
     };
-    expect(parseTypedArg(meta, enumEntry, "Root")).toEqual({ type: "Root" });
+    expect(await parseTypedArg(meta, enumEntry, "Root")).toEqual({ type: "Root" });
   });
 });
 

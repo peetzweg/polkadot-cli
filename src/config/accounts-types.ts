@@ -8,9 +8,13 @@ export function isEnvSecret(secret: string | EnvSecret): secret is EnvSecret {
 
 export interface StoredAccount {
   name: string;
-  secret: string | EnvSecret; // hex mini-secret (0x...), BIP39 mnemonic, or env var reference
+  secret?: string | EnvSecret; // hex mini-secret (0x...), BIP39 mnemonic, or env var reference; undefined = watch-only
   publicKey: string; // hex 0x-prefixed, 32 bytes (may be "" for deferred env accounts)
   derivationPath: string; // "" for root
+}
+
+export function isWatchOnly(account: StoredAccount): boolean {
+  return account.secret === undefined;
 }
 
 export interface AccountsFile {

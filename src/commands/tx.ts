@@ -30,6 +30,7 @@ import {
   Spinner,
   YELLOW,
 } from "../core/output.ts";
+import { resolveAccountAddress } from "../core/resolve-address.ts";
 import { CliError } from "../utils/errors.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseValue } from "../utils/parse-value.ts";
@@ -185,7 +186,7 @@ export async function handleTx(
       }
 
       // Parse args against metadata
-      const callData = parseCallArgs(meta, palletInfo.name, callInfo.name, args);
+      const callData = await parseCallArgs(meta, palletInfo.name, callInfo.name, args);
 
       if (opts.encode) {
         const { codec, location } = meta.builder.buildCall(palletInfo.name, callInfo.name);
@@ -444,12 +445,12 @@ function formatEventValue(v: unknown): string {
   return JSON.stringify(v, (_k, val) => (typeof val === "bigint" ? val.toString() : val));
 }
 
-function parseCallArgs(
+async function parseCallArgs(
   meta: MetadataBundle,
   palletName: string,
   callName: string,
   args: string[],
-): unknown {
+): Promise<unknown> {
   // Look up the calls enum to find the variant's inner type
   const palletMeta = meta.unified.pallets.find((p) => p.name === palletName);
   if (!palletMeta?.calls) return undefined;
@@ -469,13 +470,13 @@ function parseCallArgs(
   }
 
   if (variant.type === "struct") {
-    return parseStructArgs(meta, variant.value, args, `${palletName}.${callName}`);
+    return await parseStructArgs(meta, variant.value, args, `${palletName}.${callName}`);
   }
 
   if (variant.type === "lookupEntry") {
     const inner = variant.value;
     if (inner.type === "struct") {
-      return parseStructArgs(meta, inner.value, args, `${palletName}.${callName}`);
+      return await parseStructArgs(meta, inner.value, args, `${palletName}.${callName}`);
     }
     if (inner.type === "void") return undefined;
     // Single arg
@@ -485,7 +486,7 @@ function parseCallArgs(
       );
     }
     try {
-      return parseTypedArg(meta, inner, args[0]!);
+      return await parseTypedArg(meta, inner, args[0]!);
     } catch (err) {
       const typeDesc = describeType(meta.lookup, inner.id);
       throw new Error(
@@ -502,29 +503,31 @@ function parseCallArgs(
         `${palletName}.${callName} takes ${entries.length} arguments, but ${args.length} provided.`,
       );
     }
-    return entries.map((entry: any, i: number) => {
-      try {
-        return parseTypedArg(meta, entry, args[i]!);
-      } catch (err) {
-        const typeDesc = describeType(meta.lookup, entry.id);
-        throw new Error(
-          `Invalid value for argument ${i} (expected ${typeDesc}): ${JSON.stringify(args[i])}`,
-          { cause: err },
-        );
-      }
-    });
+    return Promise.all(
+      entries.map(async (entry: any, i: number) => {
+        try {
+          return await parseTypedArg(meta, entry, args[i]!);
+        } catch (err) {
+          const typeDesc = describeType(meta.lookup, entry.id);
+          throw new Error(
+            `Invalid value for argument ${i} (expected ${typeDesc}): ${JSON.stringify(args[i])}`,
+            { cause: err },
+          );
+        }
+      }),
+    );
   }
 
   // Fallback: parse all args generically
   return args.length === 0 ? undefined : args.map(parseValue);
 }
 
-function parseStructArgs(
+async function parseStructArgs(
   meta: MetadataBundle,
   fields: Record<string, any>,
   args: string[],
   callLabel: string,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const fieldNames = Object.keys(fields);
   if (args.length !== fieldNames.length) {
     const expected = fieldNames
@@ -540,7 +543,7 @@ function parseStructArgs(
     const name = fieldNames[i]!;
     const entry = fields[name];
     try {
-      result[name] = parseTypedArg(meta, entry, args[i]!);
+      result[name] = await parseTypedArg(meta, entry, args[i]!);
     } catch (err) {
       const typeDesc = describeType(meta.lookup, entry.id);
       throw new Error(
@@ -727,7 +730,7 @@ function parseEnumShorthand(arg: string): { variant: string; inner: string } | n
   return { variant, inner: arg.slice(firstParen + 1, -1) };
 }
 
-function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): unknown {
+async function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): Promise<unknown> {
   // Resolve lookupEntry indirection
   if (entry.type === "lookupEntry") return parseTypedArg(meta, entry.value, arg);
 
@@ -739,8 +742,10 @@ function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): unknown {
       return entry.isBig ? BigInt(arg) : parseInt(arg, 10);
 
     case "AccountId32":
+      return resolveAccountAddress(arg);
+
     case "AccountId20":
-      return arg; // polkadot-api handles SS58 decoding
+      return arg; // polkadot-api handles decoding
 
     case "option": {
       if (arg === "null" || arg === "undefined" || arg === "none") {
@@ -780,7 +785,7 @@ function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): unknown {
           if (resolvedDef.type === "void" || shorthand.inner === "") {
             return { type: matched };
           }
-          const innerValue = parseTypedArg(meta, variantDef, shorthand.inner);
+          const innerValue = await parseTypedArg(meta, variantDef, shorthand.inner);
           return normalizeValue(meta.lookup, entry, { type: matched, value: innerValue });
         }
       }
@@ -791,7 +796,8 @@ function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): unknown {
         const idVariant = entry.value.Id;
         const innerType = idVariant.type === "lookupEntry" ? idVariant.value : idVariant;
         if (innerType.type === "AccountId32" && !arg.startsWith("{")) {
-          return { type: "Id", value: arg };
+          const resolved = await resolveAccountAddress(arg);
+          return { type: "Id", value: resolved };
         }
       }
 
