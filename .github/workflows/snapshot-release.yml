@@ -26,6 +26,8 @@ jobs:
 
       - name: Version (snapshot)
         run: npx changeset version --snapshot ${{ github.event.inputs.tag }}
+        env:
+          HUSKY: "0"
 
       - name: Publish (snapshot)
         run: npx changeset publish --tag ${{ github.event.inputs.tag }}
