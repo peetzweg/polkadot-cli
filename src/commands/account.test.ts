@@ -532,9 +532,7 @@ describe("dot account", () => {
       return match![1];
     };
 
-    const addr1 = await run("//a");
-    const addr2 = await run("//a//b");
-    const addr3 = await run("//a/b");
+    const [addr1, addr2, addr3] = await Promise.all([run("//a"), run("//a//b"), run("//a/b")]);
 
     expect(addr1).not.toBe(addr2);
     expect(addr1).not.toBe(addr3);
