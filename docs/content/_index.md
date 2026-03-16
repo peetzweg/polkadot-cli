@@ -729,6 +729,61 @@ dot hash blake2b256 0xdeadbeef --output json
 
 Run `dot hash` with no arguments to see all available algorithms and examples.
 
+## Shell Completions
+
+Generate shell completion scripts for tab-completing subcommands, chain names, pallet names, and item names. Completions use cached metadata — no network calls are made.
+
+### Setup
+
+```
+# zsh — add to ~/.zshrc
+eval "$(dot completions zsh)"
+
+# bash — add to ~/.bashrc
+eval "$(dot completions bash)"
+
+# fish — save to completions directory
+dot completions fish > ~/.config/fish/completions/dot.fish
+```
+
+Then restart your shell or source the config file.
+
+### What completes
+
+Once installed, press Tab to complete at any point:
+
+```
+dot qu<Tab>              # → query
+dot query.<Tab>          # → query.System, query.Balances, ...
+dot query.System.<Tab>   # → query.System.Account, query.System.Number, ...
+dot polkadot.<Tab>       # → polkadot.query, polkadot.tx, ...
+dot polkadot.query.<Tab> # → polkadot.query.System, ...
+dot --chain <Tab>        # → polkadot, paseo, ...
+dot --from <Tab>         # → alice, bob, ..., stored account names
+dot --output <Tab>       # → pretty, json
+dot chain <Tab>          # → add, remove, update, list, default
+dot account <Tab>        # → create, import, derive, list, remove, ...
+dot hash <Tab>           # → blake2b256, blake2b128, keccak256, sha256
+```
+
+Completions are context-aware:
+
+- `query.` shows only pallets with storage items
+- `tx.` shows only pallets with calls
+- `const.` shows only pallets with constants
+- `events.` shows only pallets with events
+- `errors.` shows only pallets with errors
+- `--` after a tx dotpath includes `--from`, `--dry-run`, `--encode`
+- `--` after a query dotpath includes `--limit`
+
+Chain prefix paths work at any depth: `polkadot.query.System.Account` completes each segment individually.
+
+### How it works
+
+The shell completion script calls a hidden `dot __complete` command on every Tab press. This command loads config and cached metadata from `~/.polkadot/` (no network), generates candidates, and prints them to stdout. The shell then presents the matches.
+
+If metadata is not cached for a chain, pallet and item completions are skipped — categories, commands, and chain names still complete.
+
 ## Getting Help
 
 Every command supports `--help` to show its detailed usage, available actions, and examples:

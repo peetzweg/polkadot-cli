@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { StoredAccount } from "../../config/accounts-types.ts";
@@ -47,7 +47,9 @@ export async function runCli(
   for (const chainName of Object.keys(finalConfig.chains)) {
     const dir = join(dotDir, "chains", chainName);
     mkdirSync(dir, { recursive: true });
-    copyFileSync(FIXTURE_METADATA, join(dir, "metadata.bin"));
+    // Hardlink — metadata.bin is read-only in tests, so sharing the inode
+    // avoids ~5MB of copyFileSync I/O per test invocation.
+    linkSync(FIXTURE_METADATA, join(dir, "metadata.bin"));
   }
 
   writeFileSync(join(dotDir, "config.json"), JSON.stringify(finalConfig));

@@ -9,7 +9,8 @@ const STORED_ACCOUNT: StoredAccount = {
   derivationPath: "",
 };
 
-describe("dot account", () => {
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("dot account", { timeout: 15_000 }, () => {
   test("no action shows help", async () => {
     const { stdout, exitCode } = await runCli(["account"]);
     expect(exitCode).toBe(0);

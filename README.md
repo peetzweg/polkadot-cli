@@ -539,6 +539,35 @@ dot query System.Number --output json | jq
 
 In an interactive terminal, both streams render together so you see progress and results normally.
 
+### Shell completions
+
+Generate shell completion scripts for tab-completing subcommands, chain names, pallet names, and item names. Completions use cached metadata — no network calls are made.
+
+```bash
+# zsh — add to ~/.zshrc
+eval "$(dot completions zsh)"
+
+# bash — add to ~/.bashrc
+eval "$(dot completions bash)"
+
+# fish — save to completions directory
+dot completions fish > ~/.config/fish/completions/dot.fish
+```
+
+Once installed, press Tab to complete:
+
+```bash
+dot qu<Tab>              # → query
+dot query.<Tab>          # → query.System, query.Balances, ...
+dot query.System.<Tab>   # → query.System.Account, query.System.Number, ...
+dot polkadot.<Tab>       # → polkadot.query, polkadot.tx, ...
+dot --chain <Tab>        # → polkadot, paseo, ...
+dot --from <Tab>         # → alice, bob, ..., stored account names
+dot chain <Tab>          # → add, remove, update, list, default
+```
+
+Completions are context-aware: `query.` shows pallets with storage items, `tx.` shows pallets with calls, `events.` and `errors.` filter accordingly. Chain prefix paths like `polkadot.query.System.` work at any depth.
+
 ## How it compares
 
 | | polkadot-cli | @polkadot/api-cli | subxt-cli | Pop CLI |

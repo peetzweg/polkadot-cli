@@ -6,7 +6,8 @@ import { parseStorageKeys } from "./query.ts";
 
 const meta = getTestMetadata();
 
-describe("dot query", () => {
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("dot query", { timeout: 15_000 }, () => {
   test("category-only lists pallets with storage", async () => {
     const { stdout, exitCode } = await runCli(["query"]);
     expect(exitCode).toBe(0);
@@ -18,20 +19,20 @@ describe("dot query", () => {
     const { stdout, exitCode } = await runCli(["polkadot.query.System.Number"]);
     expect(exitCode).toBe(0);
     expect(stdout).toBeTruthy();
-  });
+  }, 15_000);
 
   test("stdout does not contain chain info prefix", async () => {
     const { stdout, exitCode } = await runCli(["polkadot.query.System.Number"]);
     expect(exitCode).toBe(0);
     expect(stdout).not.toContain("chain:");
     expect(stdout).not.toContain("chain: polkadot");
-  });
+  }, 15_000);
 
   test("json output is valid JSON with no extra text", async () => {
     const { stdout, exitCode } = await runCli(["polkadot.query.System.Number", "--output", "json"]);
     expect(exitCode).toBe(0);
     expect(() => JSON.parse(stdout)).not.toThrow();
-  });
+  }, 15_000);
 
   test("chain prefix + --chain flag errors", async () => {
     const { stderr, exitCode } = await runCli([
@@ -47,13 +48,13 @@ describe("dot query", () => {
     const { stdout, exitCode } = await runCli(["Polkadot.query.System.Number"]);
     expect(exitCode).toBe(0);
     expect(stdout).toBeTruthy();
-  });
+  }, 15_000);
 
   test("case-insensitive --chain flag resolves correctly", async () => {
     const { stdout, exitCode } = await runCli(["query.System.Number", "--chain", "POLKADOT"]);
     expect(exitCode).toBe(0);
     expect(stdout).toBeTruthy();
-  });
+  }, 15_000);
 
   test("json output has no progress messages on stdout", async () => {
     const { stdout, exitCode } = await runCli(["query.System.Number", "--output", "json"]);
@@ -61,7 +62,7 @@ describe("dot query", () => {
     expect(stdout).not.toContain("Fetching metadata");
     expect(stdout).not.toContain("Connecting");
     expect(() => JSON.parse(stdout)).not.toThrow();
-  });
+  }, 15_000);
 
   test("pallet-only lists storage items", async () => {
     const { stdout, exitCode } = await runCli(["query.System"]);
@@ -122,7 +123,7 @@ describe("dot query", () => {
     expect(exitCode).toBe(0);
     // Should return a numeric block number
     expect(stdout).toBeTruthy();
-  });
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------

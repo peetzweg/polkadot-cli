@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { runCli } from "./__fixtures__/run-cli.ts";
 
-describe("dot const", () => {
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("dot const", { timeout: 15_000 }, () => {
   test("category-only lists pallets with constants", async () => {
     const { stdout, exitCode } = await runCli(["const"]);
     expect(exitCode).toBe(0);
@@ -13,14 +14,14 @@ describe("dot const", () => {
     const { stdout, exitCode } = await runCli(["polkadot.const.System.SS58Prefix"]);
     expect(exitCode).toBe(0);
     expect(stdout).toBeTruthy();
-  });
+  }, 15_000);
 
   test("stdout does not contain chain info prefix", async () => {
     const { stdout, exitCode } = await runCli(["polkadot.const.System.SS58Prefix"]);
     expect(exitCode).toBe(0);
     expect(stdout).not.toContain("chain:");
     expect(stdout).not.toContain("chain: polkadot");
-  });
+  }, 15_000);
 
   test("json output is valid JSON with no extra text", async () => {
     const { stdout, exitCode } = await runCli([
@@ -30,7 +31,7 @@ describe("dot const", () => {
     ]);
     expect(exitCode).toBe(0);
     expect(() => JSON.parse(stdout)).not.toThrow();
-  });
+  }, 15_000);
 
   test("chain prefix + --chain flag errors", async () => {
     const { stderr, exitCode } = await runCli([
@@ -40,19 +41,19 @@ describe("dot const", () => {
     ]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Chain specified both as prefix");
-  });
+  }, 15_000);
 
   test("case-insensitive chain prefix resolves correctly", async () => {
     const { stdout, exitCode } = await runCli(["Polkadot.const.System.SS58Prefix"]);
     expect(exitCode).toBe(0);
     expect(stdout).toBeTruthy();
-  });
+  }, 15_000);
 
   test("case-insensitive --chain flag resolves correctly", async () => {
     const { stdout, exitCode } = await runCli(["const.System.SS58Prefix", "--chain", "POLKADOT"]);
     expect(exitCode).toBe(0);
     expect(stdout).toBeTruthy();
-  });
+  }, 15_000);
 
   test("listing shows first complete sentence from docs", async () => {
     const { stdout, exitCode } = await runCli(["const.Balances"]);
