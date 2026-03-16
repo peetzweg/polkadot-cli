@@ -458,4 +458,22 @@ describe("completions command — shell scripts", () => {
     const { stderr } = await runCli(["completions", "zsh"]);
     expect(stderr).toContain("~/.zshrc");
   });
+
+  test("zsh script uses CURRENT-2 for preceding words (not CURRENT-1)", async () => {
+    const { stdout } = await runCli(["completions", "zsh"]);
+    expect(stdout).toContain("CURRENT-2");
+    expect(stdout).not.toContain("CURRENT-1");
+  });
+
+  test("bash script always calls compopt -o nospace", async () => {
+    const { stdout } = await runCli(["completions", "bash"]);
+    expect(stdout).toContain("compopt -o nospace");
+    expect(stdout).not.toContain("has_dot");
+  });
+
+  test("zsh script always uses compadd -S '' (no trailing space)", async () => {
+    const { stdout } = await runCli(["completions", "zsh"]);
+    expect(stdout).toContain("compadd -S ''");
+    expect(stdout).not.toContain("has_dot");
+  });
 });

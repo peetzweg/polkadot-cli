@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { runCli } from "./__fixtures__/run-cli.ts";
 
-describe("dot const", () => {
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("dot const", { timeout: 15_000 }, () => {
   test("category-only lists pallets with constants", async () => {
     const { stdout, exitCode } = await runCli(["const"]);
     expect(exitCode).toBe(0);

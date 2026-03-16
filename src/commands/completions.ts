@@ -4,27 +4,19 @@ const ZSH_SCRIPT = `\
 _dot_completions() {
   local -a completions
   local current_word="\${words[CURRENT]}"
-  local preceding=("\${words[@]:1:CURRENT-1}")
+  local preceding=("\${words[@]:1:CURRENT-2}")
 
   # Build args: -- <current_word> <preceding_words...>
   local args=("__complete" "--" "\${current_word}")
   args+=("\${preceding[@]}")
 
-  completions=("\${(@f)$(dot "\${args[@]}" 2>/dev/null)}")
+  local output
+  output="$(dot "\${args[@]}" 2>/dev/null)"
+  [[ -z "$output" ]] && return
 
-  local has_dot=0
-  for comp in "\${completions[@]}"; do
-    if [[ "$comp" == *. ]]; then
-      has_dot=1
-      break
-    fi
-  done
+  completions=("\${(@f)output}")
 
-  if (( has_dot )); then
-    compadd -S '' -- "\${completions[@]}"
-  else
-    compadd -- "\${completions[@]}"
-  fi
+  compadd -S '' -- "\${completions[@]}"
 }
 
 compdef _dot_completions dot`;
@@ -42,18 +34,9 @@ _dot_completions() {
   local completions
   completions=($(dot "\${args[@]}" 2>/dev/null))
 
-  local has_dot=0
-  for comp in "\${completions[@]}"; do
-    if [[ "$comp" == *. ]]; then
-      has_dot=1
-      break
-    fi
-  done
+  [[ \${#completions[@]} -eq 0 ]] && return
 
-  if (( has_dot )); then
-    compopt -o nospace
-  fi
-
+  compopt -o nospace
   COMPREPLY=("\${completions[@]}")
 }
 
