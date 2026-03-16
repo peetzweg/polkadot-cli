@@ -11,43 +11,43 @@ describe("top-level completion", () => {
   test("empty input returns categories, chains, and commands", async () => {
     const { stdout } = await runCli(["__complete", "--", "", ""]);
     const l = lines(stdout);
-    // Categories
-    expect(l).toContain("query");
-    expect(l).toContain("tx");
-    expect(l).toContain("const");
-    expect(l).toContain("events");
-    expect(l).toContain("errors");
-    // Named commands
+    // Categories (intermediate → with dot)
+    expect(l).toContain("query.");
+    expect(l).toContain("tx.");
+    expect(l).toContain("const.");
+    expect(l).toContain("events.");
+    expect(l).toContain("errors.");
+    // Named commands (terminal → no dot)
     expect(l).toContain("chain");
     expect(l).toContain("account");
     expect(l).toContain("inspect");
     expect(l).toContain("hash");
     expect(l).toContain("completions");
-    // Chain names
-    expect(l).toContain("polkadot");
+    // Chain names (intermediate → with dot)
+    expect(l).toContain("polkadot.");
   });
 
   test("partial prefix 'qu' filters to query", async () => {
     const { stdout } = await runCli(["__complete", "--", "qu", ""]);
     const l = lines(stdout);
-    expect(l).toContain("query");
-    expect(l).not.toContain("tx");
+    expect(l).toContain("query.");
+    expect(l).not.toContain("tx.");
     expect(l).not.toContain("chain");
   });
 
   test("partial prefix 'e' matches events and errors", async () => {
     const { stdout } = await runCli(["__complete", "--", "e", ""]);
     const l = lines(stdout);
-    expect(l).toContain("events");
-    expect(l).toContain("errors");
-    expect(l).not.toContain("query");
+    expect(l).toContain("events.");
+    expect(l).toContain("errors.");
+    expect(l).not.toContain("query.");
   });
 
   test("partial prefix 'ch' matches chain", async () => {
     const { stdout } = await runCli(["__complete", "--", "ch", ""]);
     const l = lines(stdout);
     expect(l).toContain("chain");
-    expect(l).not.toContain("query");
+    expect(l).not.toContain("query.");
   });
 
   test("partial prefix 'pol' matches polkadot chains", async () => {
@@ -206,8 +206,8 @@ describe("dotpath completion — category paths", () => {
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("query."))).toBe(true);
-    expect(l.some((s) => s === "query.System")).toBe(true);
-    expect(l.some((s) => s === "query.Balances")).toBe(true);
+    expect(l.some((s) => s === "query.System.")).toBe(true);
+    expect(l.some((s) => s === "query.Balances.")).toBe(true);
   });
 
   test("'tx.' returns pallets with calls", async () => {
@@ -215,8 +215,8 @@ describe("dotpath completion — category paths", () => {
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("tx."))).toBe(true);
-    expect(l.some((s) => s === "tx.System")).toBe(true);
-    expect(l.some((s) => s === "tx.Balances")).toBe(true);
+    expect(l.some((s) => s === "tx.System.")).toBe(true);
+    expect(l.some((s) => s === "tx.Balances.")).toBe(true);
   });
 
   test("'const.' returns pallets with constants", async () => {
@@ -224,7 +224,7 @@ describe("dotpath completion — category paths", () => {
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("const."))).toBe(true);
-    expect(l.some((s) => s === "const.Balances")).toBe(true);
+    expect(l.some((s) => s === "const.Balances.")).toBe(true);
   });
 
   test("'events.' returns pallets with events", async () => {
@@ -232,7 +232,7 @@ describe("dotpath completion — category paths", () => {
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("events."))).toBe(true);
-    expect(l.some((s) => s === "events.Balances")).toBe(true);
+    expect(l.some((s) => s === "events.Balances.")).toBe(true);
   });
 
   test("'errors.' returns pallets with errors", async () => {
@@ -240,14 +240,14 @@ describe("dotpath completion — category paths", () => {
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("errors."))).toBe(true);
-    expect(l.some((s) => s === "errors.Balances")).toBe(true);
+    expect(l.some((s) => s === "errors.Balances.")).toBe(true);
   });
 
   test("'query.Sy' filters pallet names", async () => {
     const { stdout } = await runCli(["__complete", "--", "query.Sy", ""]);
     const l = lines(stdout);
-    expect(l).toContain("query.System");
-    expect(l).not.toContain("query.Balances");
+    expect(l).toContain("query.System.");
+    expect(l).not.toContain("query.Balances.");
   });
 
   test("'query.System.' returns storage item names", async () => {
@@ -313,18 +313,18 @@ describe("dotpath completion — chain prefix paths", () => {
   test("'polkadot.' returns categories", async () => {
     const { stdout } = await runCli(["__complete", "--", "polkadot.", ""]);
     const l = lines(stdout);
-    expect(l).toContain("polkadot.query");
-    expect(l).toContain("polkadot.tx");
-    expect(l).toContain("polkadot.const");
-    expect(l).toContain("polkadot.events");
-    expect(l).toContain("polkadot.errors");
+    expect(l).toContain("polkadot.query.");
+    expect(l).toContain("polkadot.tx.");
+    expect(l).toContain("polkadot.const.");
+    expect(l).toContain("polkadot.events.");
+    expect(l).toContain("polkadot.errors.");
   });
 
   test("'polkadot.q' filters to matching categories", async () => {
     const { stdout } = await runCli(["__complete", "--", "polkadot.q", ""]);
     const l = lines(stdout);
-    expect(l).toContain("polkadot.query");
-    expect(l).not.toContain("polkadot.tx");
+    expect(l).toContain("polkadot.query.");
+    expect(l).not.toContain("polkadot.tx.");
   });
 
   test("'polkadot.query.' returns pallet names", async () => {
@@ -332,7 +332,7 @@ describe("dotpath completion — chain prefix paths", () => {
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("polkadot.query."))).toBe(true);
-    expect(l.some((s) => s === "polkadot.query.System")).toBe(true);
+    expect(l.some((s) => s === "polkadot.query.System.")).toBe(true);
   });
 
   test("'polkadot.events.' returns pallets with events", async () => {
@@ -366,8 +366,8 @@ describe("dotpath completion — chain prefix paths", () => {
   test("chain prefix partial pallet filter", async () => {
     const { stdout } = await runCli(["__complete", "--", "polkadot.query.Sy", ""]);
     const l = lines(stdout);
-    expect(l).toContain("polkadot.query.System");
-    expect(l).not.toContain("polkadot.query.Balances");
+    expect(l).toContain("polkadot.query.System.");
+    expect(l).not.toContain("polkadot.query.Balances.");
   });
 
   test("chain prefix partial item filter", async () => {
@@ -398,7 +398,145 @@ describe("completion with --chain flag", () => {
     const { stdout } = await runCli(["__complete", "--", "query.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
-    expect(l.some((s) => s === "query.System")).toBe(true);
+    expect(l.some((s) => s === "query.System.")).toBe(true);
+  });
+});
+
+describe("dot suffix on intermediate completions", () => {
+  test("top-level: categories and chains end with dot, named commands do not", async () => {
+    const { stdout } = await runCli(["__complete", "--", "", ""]);
+    const l = lines(stdout);
+    // Every category and chain candidate must end with "."
+    const categories = l.filter(
+      (s) => ["query.", "tx.", "const.", "events.", "errors."].includes(s) || s.endsWith("."),
+    );
+    for (const c of categories) {
+      expect(c.endsWith(".")).toBe(true);
+    }
+    // Named commands must NOT end with "."
+    const commands = l.filter((s) =>
+      ["chain", "account", "inspect", "hash", "completions"].includes(s),
+    );
+    for (const c of commands) {
+      expect(c.endsWith(".")).toBe(false);
+    }
+  });
+
+  test("no candidate contains double dots", async () => {
+    const { stdout } = await runCli(["__complete", "--", "", ""]);
+    const l = lines(stdout);
+    expect(l.every((s) => !s.includes(".."))).toBe(true);
+  });
+
+  test("category-first pallets end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "query.", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(true);
+    }
+  });
+
+  test("category-first pallets with partial also end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "query.Sy", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(true);
+    }
+  });
+
+  test("category-first items (terminal) do NOT end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "query.System.", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(false);
+    }
+  });
+
+  test("chain-first categories end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "polkadot.", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(true);
+    }
+  });
+
+  test("chain-first categories with partial end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "polkadot.q", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(true);
+    }
+  });
+
+  test("chain-first pallets end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "polkadot.query.", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(true);
+    }
+  });
+
+  test("chain-first pallets with partial end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "polkadot.query.Sy", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(true);
+    }
+  });
+
+  test("chain-first items (terminal) do NOT end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "polkadot.query.System.", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(false);
+    }
+  });
+
+  test("chain-first items with partial do NOT end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "polkadot.query.System.Ac", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(false);
+    }
+  });
+
+  test("--chain flag pallets end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "query.", "--chain", "polkadot"]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(true);
+    }
+  });
+
+  test("--chain flag items (terminal) do NOT end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "query.System.", "--chain", "polkadot"]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(false);
+    }
+  });
+
+  test("all five categories produce dot-suffixed pallets", async () => {
+    for (const cat of ["query", "tx", "const", "events", "errors"]) {
+      const { stdout } = await runCli(["__complete", "--", `${cat}.`, ""]);
+      const l = lines(stdout);
+      if (l.length > 0) {
+        for (const s of l) {
+          expect(s.endsWith(".")).toBe(true);
+        }
+      }
+    }
   });
 });
 
@@ -459,10 +597,10 @@ describe("completions command — shell scripts", () => {
     expect(stderr).toContain("~/.zshrc");
   });
 
-  test("zsh script uses CURRENT-2 for preceding words (not CURRENT-1)", async () => {
+  test("zsh script uses zsh-native array slicing for preceding words", async () => {
     const { stdout } = await runCli(["completions", "zsh"]);
-    expect(stdout).toContain("CURRENT-2");
-    expect(stdout).not.toContain("CURRENT-1");
+    expect(stdout).toContain("words[2,CURRENT-1]");
+    expect(stdout).not.toContain("words[@]:1:");
   });
 
   test("bash script always calls compopt -o nospace", async () => {
