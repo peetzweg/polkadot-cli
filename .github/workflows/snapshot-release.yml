@@ -30,9 +30,7 @@ jobs:
           HUSKY: "0"
 
       - name: Configure npm auth
-        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
 
       - name: Publish (snapshot)
         run: npx changeset publish --tag ${{ github.event.inputs.tag }}
