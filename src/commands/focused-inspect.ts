@@ -403,13 +403,16 @@ export async function showItemHelp(
       if (storageItem.keyTypeId != null) {
         console.log(`${BOLD}Usage:${RESET}`);
         console.log(`  dot query.${pallet.name}.${storageItem.name} <key>`);
-        console.log(`  dot query.${pallet.name}.${storageItem.name}              # all entries`);
+        console.log(`  dot query.${pallet.name}.${storageItem.name} --dump       # all entries`);
       } else {
         console.log(`${BOLD}Usage:${RESET}`);
         console.log(`  dot query.${pallet.name}.${storageItem.name}`);
       }
       console.log();
       console.log(`${BOLD}Options:${RESET}`);
+      console.log(
+        `  --dump           Dump all entries of a map (required for keyless map queries)`,
+      );
       console.log(`  --limit <n>      Max entries for map queries (0 = unlimited, default: 100)`);
       console.log();
       return;

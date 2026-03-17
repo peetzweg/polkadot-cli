@@ -103,14 +103,24 @@ describe("dot query", { timeout: 15_000 }, () => {
     expect(numberLine).not.toContain("[map]");
   });
 
-  test("query.System.Account --help shows storage help", async () => {
+  test("query.System.Account --help shows storage help with --dump", async () => {
     const { stdout, exitCode } = await runCli(["query.System.Account", "--help"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("(Storage)");
     expect(stdout).toContain("Type:");
     expect(stdout).toContain("Usage:");
+    expect(stdout).toContain("--dump");
     expect(stdout).toContain("--limit");
   });
+
+  test("keyless map query without --dump shows help instead of fetching entries", async () => {
+    const { stdout, exitCode } = await runCli(["query.System.Account"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Storage)");
+    expect(stdout).toContain("Usage:");
+    expect(stdout).toContain("--dump");
+    expect(stdout).toContain("Hint:");
+  }, 15_000);
 
   test("unknown pallet in query listing suggests alternatives", async () => {
     const { stderr, exitCode } = await runCli(["query.Systm"]);
