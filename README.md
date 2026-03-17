@@ -254,6 +254,9 @@ dot query System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 # All map entries (default limit: 100)
 dot query System.Account --limit 10
 
+# Enum variant as map key (case-insensitive)
+dot query people-preview.ChunksManager.Chunks R2e9 1
+
 # Pipe-safe — stdout is clean data, progress messages go to stderr
 dot query System.Account --limit 5 | jq '.[0].value.data.free'
 dot query System.Number --output json | jq '.+1'

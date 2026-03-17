@@ -321,6 +321,9 @@ dot query.System.Account --limit 10
 dot query.System.Account --limit 5 | jq '.[0].value.data.free'
 dot query.System.Number --output json | jq '.+1'
 
+# Enum variant as map key (case-insensitive)
+dot people-preview.query.ChunksManager.Chunks R2e9 1
+
 # Query a specific chain using chain prefix
 dot kusama.query.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 

@@ -4,7 +4,7 @@ const ZSH_SCRIPT = `\
 _dot_completions() {
   local -a completions
   local current_word="\${words[CURRENT]}"
-  local preceding=("\${words[@]:1:CURRENT-2}")
+  local preceding=("\${words[2,CURRENT-1]}")
 
   # Build args: -- <current_word> <preceding_words...>
   local args=("__complete" "--" "\${current_word}")

@@ -20,7 +20,10 @@ jobs:
 
       - run: bun run typecheck
 
-      - name: Run tests with coverage
+      - name: Run tests
+        run: bun test
+
+      - name: Generate coverage
         run: bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage 2>&1 | tee coverage-output.txt
 
       - name: Add coverage to job summary
