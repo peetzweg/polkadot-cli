@@ -175,7 +175,11 @@ async function completeDotpath(
 
   // Top-level: no complete segments, typing a partial
   if (numComplete === 0 && !endsWithDot) {
-    const candidates = [...CATEGORIES.map(String), ...knownChains, ...NAMED_COMMANDS];
+    const candidates = [
+      ...CATEGORIES.map((c) => `${c}.`),
+      ...knownChains.map((c) => `${c}.`),
+      ...NAMED_COMMANDS,
+    ];
     return filterPrefix(candidates, partial);
   }
 
@@ -195,7 +199,7 @@ async function completeDotpath(
       const pallets = await loadPallets(config, chainName);
       if (!pallets) return [];
       const filtered = filterPallets(pallets, category);
-      const candidates = filtered.map((p) => `${first}.${p.name}`);
+      const candidates = filtered.map((p) => `${first}.${p.name}.`);
       return filterPrefix(candidates, currentWord.slice(0, -1));
     }
 
@@ -205,7 +209,7 @@ async function completeDotpath(
       const pallets = await loadPallets(config, chainName);
       if (!pallets) return [];
       const filtered = filterPallets(pallets, category);
-      const candidates = filtered.map((p) => `${first}.${p.name}`);
+      const candidates = filtered.map((p) => `${first}.${p.name}.`);
       return filterPrefix(candidates, currentWord);
     }
 
@@ -230,13 +234,13 @@ async function completeDotpath(
 
     if (numComplete === 1 && endsWithDot) {
       // "chain." → categories
-      const candidates = CATEGORIES.map((c) => `${first}.${c}`);
+      const candidates = CATEGORIES.map((c) => `${first}.${c}.`);
       return filterPrefix(candidates, currentWord.slice(0, -1));
     }
 
     if (numComplete === 1 && !endsWithDot) {
       // "chain.partial" → filter categories
-      const candidates = CATEGORIES.map((c) => `${first}.${c}`);
+      const candidates = CATEGORIES.map((c) => `${first}.${c}.`);
       return filterPrefix(candidates, currentWord);
     }
 
@@ -248,7 +252,7 @@ async function completeDotpath(
       if (!pallets) return [];
       const filtered = filterPallets(pallets, category);
       const prefix = `${first}.${completeSegments[1]!}`;
-      const candidates = filtered.map((p) => `${prefix}.${p.name}`);
+      const candidates = filtered.map((p) => `${prefix}.${p.name}.`);
       return filterPrefix(candidates, endsWithDot ? currentWord.slice(0, -1) : currentWord);
     }
 
