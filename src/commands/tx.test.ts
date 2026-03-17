@@ -369,6 +369,51 @@ describe("parseTypedArg", () => {
     };
     expect(await parseTypedArg(meta, enumEntry, "Root")).toEqual({ type: "Root" });
   });
+
+  test("simple variant name resolves lookupEntry-wrapped void", async () => {
+    // Simulates metadata where a void variant is wrapped in lookupEntry indirection
+    // (e.g. RingSize enum variants like R2e9 in ChunksManager.Chunks)
+    const enumEntry = {
+      type: "enum",
+      value: {
+        R2e9: { type: "lookupEntry", value: { type: "void" } },
+        R2e10: { type: "lookupEntry", value: { type: "void" } },
+      },
+    };
+    expect(await parseTypedArg(meta, enumEntry, "R2e9")).toEqual({ type: "R2e9" });
+  });
+
+  test("simple variant name resolves lookupEntry-wrapped void case-insensitively", async () => {
+    const enumEntry = {
+      type: "enum",
+      value: {
+        R2e9: { type: "lookupEntry", value: { type: "void" } },
+      },
+    };
+    expect(await parseTypedArg(meta, enumEntry, "r2e9")).toEqual({ type: "R2e9" });
+  });
+
+  test("enum shorthand resolves lookupEntry-wrapped void with parens", async () => {
+    const enumEntry = {
+      type: "enum",
+      value: {
+        R2e9: { type: "lookupEntry", value: { type: "void" } },
+      },
+    };
+    expect(await parseTypedArg(meta, enumEntry, "R2e9()")).toEqual({ type: "R2e9" });
+  });
+
+  test("lookupEntry-wrapped non-void variant does not short-circuit", async () => {
+    // A variant whose resolved type is NOT void should NOT return { type }
+    const enumEntry = {
+      type: "enum",
+      value: {
+        Parachain: { type: "lookupEntry", value: { type: "compact", isBig: false } },
+      },
+    };
+    // Plain "Parachain" without value should fall through (not match void path)
+    expect(await parseTypedArg(meta, enumEntry, "Parachain")).toBe("Parachain");
+  });
 });
 
 describe("typeHint", () => {

@@ -805,7 +805,8 @@ async function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): Pro
       const matched = variants.find((v) => v.toLowerCase() === arg.toLowerCase());
       if (matched) {
         const variant = entry.value[matched];
-        if (variant.type === "void") {
+        const resolved = variant.type === "lookupEntry" ? variant.value : variant;
+        if (resolved.type === "void") {
           return { type: matched };
         }
       }
