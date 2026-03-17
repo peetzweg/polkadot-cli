@@ -4,7 +4,7 @@
 
 A command-line tool for interacting with Polkadot-ecosystem chains. Manage chains and accounts, query storage, look up constants, inspect metadata, submit extrinsics, and compute hashes — all from your terminal.
 
-Ships with Polkadot and all system parachains preconfigured with multiple fallback RPC endpoints. Add any Substrate-based chain by pointing to its RPC endpoint(s).
+Ships with Polkadot and all system parachains preconfigured. Chains with a known chain spec connect via an embedded [Smoldot](https://github.com/smol-dot/smoldot) light client by default — no RPC endpoint needed. Add any Substrate-based chain by pointing to its RPC endpoint(s).
 
 ### Preconfigured chains
 
@@ -23,7 +23,17 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 | | `paseo-coretime` | yes |
 | | `paseo-people` | yes |
 
-Each chain ships with multiple RPC endpoints from decentralized infrastructure providers (IBP, Dotters, Dwellir, and others). The CLI automatically falls back to the next endpoint if the primary is unreachable.
+Chains marked "yes" under **Light client** use the embedded Smoldot light client by default — no RPC configuration needed. Chains without light client support ship with multiple RPC endpoints from decentralized infrastructure providers (IBP, Dotters, and others) with automatic fallback.
+
+To override the light client and use a specific RPC endpoint, pass `--rpc <url>` to any command or re-add the chain with explicit RPCs:
+
+```bash
+# Per-command override
+dot query System.Number --rpc wss://rpc.polkadot.io
+
+# Persistent override — saves RPCs to config, disabling light client for this chain
+dot chain add polkadot --rpc wss://rpc.polkadot.io
+```
 
 ## Install
 
@@ -48,8 +58,8 @@ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 # Add a chain with fallback RPCs (repeat --rpc for each endpoint)
 dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
 
-# Add a chain via light client
-dot chain add westend --light-client
+# Add a known chain (light client is used automatically)
+dot chain add kusama
 
 # List configured chains
 dot chain list
@@ -524,7 +534,6 @@ dot tx.System.remark 0xdead               # shows call help (no error)
 | `--help` | Show help (global or command-specific) |
 | `--chain <name>` | Target chain (default from config) |
 | `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback) |
-| `--light-client` | Use Smoldot light client |
 | `--output json` | Raw JSON output (default: pretty) |
 | `--limit <n>` | Max entries for map queries (0 = unlimited, default: 100) |
 

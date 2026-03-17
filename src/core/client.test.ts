@@ -24,7 +24,7 @@ mock.module("polkadot-api", () => ({
 }));
 
 // Import after mocking so the mocks take effect
-const { createChainClient } = await import("./client.ts");
+const { createChainClient, hasLightClientSpec, getExplorerRpc } = await import("./client.ts");
 
 describe("createChainClient", () => {
   test("passes websocketClass to getWsProvider", async () => {
@@ -83,6 +83,59 @@ describe("createChainClient", () => {
     );
   });
 
+  test("throws ConnectionError when rpc is empty array on unknown chain", async () => {
+    expect(createChainClient("unknown-chain", { rpc: [] })).rejects.toThrow(ConnectionError);
+  });
+
+  test("uses RPC path when config has RPCs, even for known chain", async () => {
+    mockGetWsProvider.mockClear();
+
+    const handle = await createChainClient("polkadot", {
+      rpc: ["wss://polkadot.ibp.network", "wss://rpc.polkadot.io"],
+    });
+
+    // Should use WS provider (RPC path), not smoldot
+    expect(mockGetWsProvider).toHaveBeenCalledTimes(1);
+    const [endpoints] = mockGetWsProvider.mock.calls[0]!;
+    expect(endpoints).toEqual(["wss://polkadot.ibp.network", "wss://rpc.polkadot.io"]);
+
+    handle.destroy();
+  });
+
+  test("uses RPC path when config has single string RPC, even for known chain", async () => {
+    mockGetWsProvider.mockClear();
+
+    const handle = await createChainClient("polkadot", {
+      rpc: "wss://rpc.polkadot.io",
+    });
+
+    expect(mockGetWsProvider).toHaveBeenCalledTimes(1);
+    const [endpoints] = mockGetWsProvider.mock.calls[0]!;
+    expect(endpoints).toBe("wss://rpc.polkadot.io");
+
+    handle.destroy();
+  });
+
+  test("rpcOverride takes priority over light client for known chain", async () => {
+    mockGetWsProvider.mockClear();
+
+    const handle = await createChainClient(
+      "polkadot",
+      { rpc: [] },
+      "wss://override.example.com",
+    );
+
+    expect(mockGetWsProvider).toHaveBeenCalledTimes(1);
+    const [endpoints] = mockGetWsProvider.mock.calls[0]!;
+    expect(endpoints).toBe("wss://override.example.com");
+
+    handle.destroy();
+  });
+
+  test("throws ConnectionError when config has empty string rpc on unknown chain", async () => {
+    expect(createChainClient("unknown-chain", { rpc: "" })).rejects.toThrow(ConnectionError);
+  });
+
   test("wraps provider with withPolkadotSdkCompat", async () => {
     mockWithCompat.mockClear();
 
@@ -115,6 +168,33 @@ describe("createChainClient", () => {
     expect(destroySpy).not.toHaveBeenCalled();
     handle.destroy();
     expect(destroySpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("getExplorerRpc", () => {
+  test("returns explorer RPC for known chains", () => {
+    expect(getExplorerRpc("polkadot")).toBe("wss://rpc.polkadot.io");
+    expect(getExplorerRpc("kusama")).toBe("wss://kusama-rpc.polkadot.io");
+    expect(getExplorerRpc("polkadot-asset-hub")).toBe("wss://polkadot-asset-hub-rpc.polkadot.io");
+  });
+
+  test("returns undefined for unknown chains", () => {
+    expect(getExplorerRpc("my-custom-chain")).toBeUndefined();
+    expect(getExplorerRpc("test-chain")).toBeUndefined();
+  });
+});
+
+describe("hasLightClientSpec", () => {
+  test("returns true for known chains", () => {
+    expect(hasLightClientSpec("polkadot")).toBe(true);
+    expect(hasLightClientSpec("kusama")).toBe(true);
+    expect(hasLightClientSpec("westend")).toBe(true);
+    expect(hasLightClientSpec("polkadot-asset-hub")).toBe(true);
+  });
+
+  test("returns false for unknown chains", () => {
+    expect(hasLightClientSpec("my-custom-chain")).toBe(false);
+    expect(hasLightClientSpec("test-chain")).toBe(false);
   });
 });
 

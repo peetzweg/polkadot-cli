@@ -35,7 +35,7 @@ const ACCOUNT_SUBCOMMANDS = [
   "inspect",
 ];
 
-const GLOBAL_OPTIONS = ["--chain", "--rpc", "--light-client", "--output", "--help", "--version"];
+const GLOBAL_OPTIONS = ["--chain", "--rpc", "--output", "--help", "--version"];
 const TX_OPTIONS = ["--from", "--dry-run", "--encode", "--ext"];
 const QUERY_OPTIONS = ["--limit"];
 

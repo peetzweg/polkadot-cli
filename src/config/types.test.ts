@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BUILTIN_CHAIN_NAMES, DEFAULT_CONFIG, primaryRpc } from "./types.ts";
+import { hasLightClientSpec } from "../core/client.ts";
 
 describe("primaryRpc", () => {
   test("returns the string itself when given a string", () => {
@@ -23,19 +24,34 @@ describe("DEFAULT_CONFIG", () => {
   test("built-in chains use array rpc", () => {
     for (const [_name, config] of Object.entries(DEFAULT_CONFIG.chains)) {
       expect(Array.isArray(config.rpc)).toBe(true);
-      expect((config.rpc as string[]).length).toBeGreaterThanOrEqual(1);
     }
   });
 
-  test("polkadot has multiple RPC endpoints", () => {
-    const rpcs = DEFAULT_CONFIG.chains.polkadot!.rpc;
-    expect(Array.isArray(rpcs)).toBe(true);
-    expect((rpcs as string[]).length).toBeGreaterThanOrEqual(2);
+  test("known light-client chains have empty rpc arrays", () => {
+    for (const [name, config] of Object.entries(DEFAULT_CONFIG.chains)) {
+      if (hasLightClientSpec(name)) {
+        expect((config.rpc as string[]).length).toBe(0);
+      }
+    }
   });
 
-  test("primaryRpc works with DEFAULT_CONFIG chains", () => {
-    const primary = primaryRpc(DEFAULT_CONFIG.chains.polkadot!.rpc);
-    expect(primary).toBe("wss://polkadot.ibp.network");
+  test("RPC-only chains have at least 2 RPC endpoints", () => {
+    for (const [name, config] of Object.entries(DEFAULT_CONFIG.chains)) {
+      if (!hasLightClientSpec(name)) {
+        expect((config.rpc as string[]).length).toBeGreaterThanOrEqual(2);
+      }
+    }
+  });
+
+  test("RPC-only chains use wss:// protocol", () => {
+    for (const [name, config] of Object.entries(DEFAULT_CONFIG.chains)) {
+      if (!hasLightClientSpec(name)) {
+        const rpcs = Array.isArray(config.rpc) ? config.rpc : [config.rpc];
+        for (const url of rpcs) {
+          expect(url).toMatch(/^wss:\/\//);
+        }
+      }
+    }
   });
 
   test("BUILTIN_CHAIN_NAMES matches DEFAULT_CONFIG keys", () => {
@@ -71,28 +87,45 @@ describe("DEFAULT_CONFIG", () => {
     }
   });
 
-  test("all RPC URLs use wss:// protocol", () => {
-    for (const [_name, config] of Object.entries(DEFAULT_CONFIG.chains)) {
-      const rpcs = Array.isArray(config.rpc) ? config.rpc : [config.rpc];
-      for (const url of rpcs) {
-        expect(url).toMatch(/^wss:\/\//);
+  test("paseo-bridge-hub has RPCs (no light client spec)", () => {
+    const rpcs = DEFAULT_CONFIG.chains["paseo-bridge-hub"]!.rpc as string[];
+    expect(rpcs.length).toBeGreaterThanOrEqual(2);
+    expect(rpcs[0]).toContain("bridge-hub-paseo");
+  });
+
+  test("paseo-collectives has RPCs (no light client spec)", () => {
+    const rpcs = DEFAULT_CONFIG.chains["paseo-collectives"]!.rpc as string[];
+    expect(rpcs.length).toBeGreaterThanOrEqual(2);
+    expect(rpcs[0]).toContain("collectives-paseo");
+  });
+
+  test("polkadot has empty rpc array (uses light client)", () => {
+    expect(DEFAULT_CONFIG.chains.polkadot!.rpc).toEqual([]);
+  });
+
+  test("paseo has empty rpc array (uses light client)", () => {
+    expect(DEFAULT_CONFIG.chains.paseo!.rpc).toEqual([]);
+  });
+
+  test("all parachains have empty rpc if they have light client spec", () => {
+    const parachains = [
+      "polkadot-asset-hub",
+      "polkadot-bridge-hub",
+      "polkadot-collectives",
+      "polkadot-coretime",
+      "polkadot-people",
+      "paseo-asset-hub",
+      "paseo-coretime",
+      "paseo-people",
+    ];
+    for (const name of parachains) {
+      if (hasLightClientSpec(name)) {
+        expect((DEFAULT_CONFIG.chains[name]!.rpc as string[]).length).toBe(0);
       }
     }
   });
 
-  test("every chain has at least 2 RPC endpoints", () => {
-    for (const [_name, config] of Object.entries(DEFAULT_CONFIG.chains)) {
-      expect((config.rpc as string[]).length).toBeGreaterThanOrEqual(2);
-    }
-  });
-
-  test("relay chains use IBP as primary endpoint", () => {
-    expect(primaryRpc(DEFAULT_CONFIG.chains.polkadot!.rpc)).toContain("ibp.network");
-    expect(primaryRpc(DEFAULT_CONFIG.chains.paseo!.rpc)).toContain("ibp.network");
-  });
-
-  test("polkadot relay keeps rpc.polkadot.io as last fallback", () => {
-    const rpcs = DEFAULT_CONFIG.chains.polkadot!.rpc as string[];
-    expect(rpcs[rpcs.length - 1]).toBe("wss://rpc.polkadot.io");
+  test("primaryRpc returns undefined for empty array", () => {
+    expect(primaryRpc([])).toBeUndefined();
   });
 });

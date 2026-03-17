@@ -36,7 +36,6 @@ describe("dot chain", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain("polkadot");
     expect(stdout).toContain("(default)");
-    expect(stdout).toContain("rpc.polkadot.io");
     expect(stdout).toContain("paseo");
     // Polkadot system parachains
     expect(stdout).toContain("polkadot-asset-hub");
@@ -94,13 +93,14 @@ describe("dot chain", () => {
     expect(stdout).toContain("kusama-rpc.polkadot.io");
   });
 
-  test("list shows built-in chains with multiple RPCs", async () => {
+  test("list shows light-client badge for default known chains", async () => {
     const { stdout, exitCode } = await runCli(["chain", "list"]);
     expect(exitCode).toBe(0);
-    // polkadot should show primary + fallback RPCs
-    expect(stdout).toContain("polkadot.ibp.network");
-    expect(stdout).toContain("polkadot-rpc.n.dwellir.com");
-    expect(stdout).toContain("rpc.polkadot.io");
+    // Known chains with empty RPCs should show [light-client]
+    expect(stdout).toContain("[light-client]");
+    // RPC-only chains should show their RPCs
+    expect(stdout).toContain("bridge-hub-paseo");
+    expect(stdout).toContain("collectives-paseo");
   });
 
   test("list with single-element array rpc", async () => {
@@ -116,25 +116,76 @@ describe("dot chain", () => {
     expect(stdout).toContain("kusama-rpc.polkadot.io");
   });
 
-  test("help text shows multi-rpc example", async () => {
+  test("help text shows multi-rpc example and no --light-client", async () => {
     const { stdout, exitCode } = await runCli(["chain"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain(
       "--rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com",
     );
+    expect(stdout).not.toContain("--light-client");
   });
 
-  test("list with light-client chain", async () => {
+  test("list shows light-client badge for known chains", async () => {
     const { stdout, exitCode } = await runCli(["chain", "list"], {
       config: {
         chains: {
-          kusama: { rpc: "", lightClient: true },
+          kusama: { rpc: [] },
         },
       },
     });
     expect(exitCode).toBe(0);
     expect(stdout).toContain("kusama");
-    expect(stdout).toContain("light-client");
+    expect(stdout).toContain("[light-client]");
+  });
+
+  test("list shows RPCs alongside light-client badge when chain has both", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"], {
+      config: {
+        chains: {
+          kusama: { rpc: ["wss://kusama-rpc.polkadot.io", "wss://kusama.ibp.network"] },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("kusama");
+    expect(stdout).toContain("[light-client]");
+    expect(stdout).toContain("kusama-rpc.polkadot.io");
+    expect(stdout).toContain("kusama.ibp.network");
+  });
+
+  test("list shows only light-client badge when known chain has empty RPCs", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"], {
+      config: {
+        chains: {
+          polkadot: { rpc: [] },
+          "paseo-bridge-hub": { rpc: ["wss://bridge-hub-paseo.ibp.network"] },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    // polkadot line should have [light-client] but no RPC URL
+    const polkadotLine = stdout.split("\n").find((l: string) => l.includes("polkadot"));
+    expect(polkadotLine).toContain("[light-client]");
+    expect(polkadotLine).not.toContain("wss://");
+    // paseo-bridge-hub should have RPC but no light-client badge
+    const bridgeLine = stdout.split("\n").find((l: string) => l.includes("paseo-bridge-hub"));
+    expect(bridgeLine).toContain("bridge-hub-paseo");
+    expect(bridgeLine).not.toContain("[light-client]");
+  });
+
+  test("list does not show light-client badge for unknown chains", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"], {
+      config: {
+        chains: {
+          mychain: { rpc: "wss://example.com" },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("mychain");
+    // The mychain line should not have [light-client] badge
+    const mychainLine = stdout.split("\n").find((l: string) => l.includes("mychain"));
+    expect(mychainLine).not.toContain("[light-client]");
   });
 
   test("default kusama succeeds", async () => {
@@ -241,10 +292,10 @@ describe("dot chain", () => {
     expect(stderr).toContain("Chain name is required");
   });
 
-  test("add mychain (no --rpc) errors", async () => {
+  test("add mychain (no --rpc, unknown chain) errors", async () => {
     const { stderr, exitCode } = await runCli(["chain", "add", "mychain"]);
     expect(exitCode).toBe(1);
-    expect(stderr).toContain("Must provide either --rpc");
+    expect(stderr).toContain("no built-in light client support");
   });
 
   test("remove Polkadot (case-insensitive) errors as built-in", async () => {

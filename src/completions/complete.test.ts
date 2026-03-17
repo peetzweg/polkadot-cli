@@ -122,7 +122,7 @@ describe("option name completion", () => {
     expect(l).toContain("--output");
     expect(l).toContain("--help");
     expect(l).toContain("--version");
-    expect(l).toContain("--light-client");
+    expect(l).not.toContain("--light-client");
   });
 
   test("-- with tx dotpath includes tx-specific options", async () => {

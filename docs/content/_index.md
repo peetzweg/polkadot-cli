@@ -10,11 +10,11 @@ Install globally via npm:
 npm install -g polkadot-cli@latest
 ```
 
-This installs the `dot` command globally. Ships with Polkadot and all system parachains preconfigured with multiple fallback RPC endpoints. Add any Substrate-based chain by pointing to its RPC endpoint(s).
+This installs the `dot` command globally. Ships with Polkadot and all system parachains preconfigured. Chains with a known chain spec connect via an embedded [Smoldot](https://github.com/smol-dot/smoldot) light client by default — no RPC endpoint needed. Add any Substrate-based chain by pointing to its RPC endpoint(s).
 
 ## Chains
 
-Manage chain connections. Polkadot is configured by default along with all system parachains for both Polkadot and Paseo networks. Add any Substrate-based chain by RPC endpoint or Smoldot light client.
+Manage chain connections. Polkadot is configured by default along with all system parachains for both Polkadot and Paseo networks. Chains with a known chain spec use the embedded Smoldot light client by default. Add any Substrate-based chain by RPC endpoint, or override the light client with explicit RPCs.
 
 ### Preconfigured chains
 
@@ -35,7 +35,20 @@ The following chains are available out of the box — no `dot chain add` needed:
 | | `paseo-coretime` | yes |
 | | `paseo-people` | yes |
 
-Each chain ships with multiple RPC endpoints from decentralized infrastructure providers (IBP, Dotters, Dwellir, and others). The CLI automatically falls back to the next endpoint if the primary is unreachable. Use `dot chain list` to see all endpoints for each chain.
+Chains marked "yes" under **Light client** use the embedded Smoldot light client by default — no RPC configuration needed. Chains without light client support ship with multiple RPC endpoints from decentralized infrastructure providers (IBP, Dotters, and others) with automatic fallback. Use `dot chain list` to see the connection mode for each chain.
+
+To override the light client and use a specific RPC endpoint, pass `--rpc <url>` to any command or re-add the chain with explicit RPCs:
+
+```
+# Per-command override
+dot query System.Number --rpc wss://rpc.polkadot.io
+
+# Persistent override — saves RPCs to config, disabling light client for this chain
+dot chain add polkadot --rpc wss://rpc.polkadot.io
+
+# Re-enable light client (removes saved RPCs)
+dot chain add polkadot
+```
 
 ### Add a chain
 
@@ -48,8 +61,8 @@ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 # Multiple RPCs with fallback
 dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
 
-# Light client
-dot chain add westend --light-client
+# Known chain (light client is used automatically)
+dot chain add kusama
 ```
 
 ### List chains
@@ -845,7 +858,6 @@ These flags work with any command:
 | `--help` | Show help (global or command-specific) |
 | `--chain <name>` | Target chain (default from config) |
 | `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback) |
-| `--light-client` | Use Smoldot light client |
 | `--output json` | Raw JSON output (default: pretty) |
 | `--limit <n>` | Max entries for map queries (0 = unlimited, default: 100) |
 

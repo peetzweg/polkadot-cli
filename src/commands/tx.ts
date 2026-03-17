@@ -5,7 +5,7 @@ import { Binary } from "polkadot-api";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { primaryRpc } from "../config/types.ts";
 import { resolveAccountSigner, toSs58 } from "../core/accounts.ts";
-import { type ClientHandle, createChainClient } from "../core/client.ts";
+import { type ClientHandle, createChainClient, getExplorerRpc } from "../core/client.ts";
 import { papiLink, pjsAppsLink } from "../core/explorers.ts";
 import type { Lookup, MetadataBundle } from "../core/metadata.ts";
 import {
@@ -255,7 +255,7 @@ export async function handleTx(
       }
     }
 
-    const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc);
+    const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc) || getExplorerRpc(chainName);
     if (rpcUrl) {
       const blockHash = result.block.hash;
       console.log(`  ${BOLD}Explorer:${RESET}`);

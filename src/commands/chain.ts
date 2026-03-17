@@ -7,23 +7,23 @@ import {
   saveConfig,
 } from "../config/store.ts";
 import { BUILTIN_CHAIN_NAMES } from "../config/types.ts";
-import { createChainClient } from "../core/client.ts";
+import { createChainClient, hasLightClientSpec } from "../core/client.ts";
 import { fetchMetadataFromChain } from "../core/metadata.ts";
 import { BOLD, CYAN, DIM, printHeading, RESET } from "../core/output.ts";
 
 const CHAIN_HELP = `
 ${BOLD}Usage:${RESET}
+  $ dot chain add <name>                Add a known chain (uses light client automatically)
   $ dot chain add <name> --rpc <url>    Add a chain via WebSocket RPC
-  $ dot chain add <name> --light-client Add a chain via Smoldot light client
   $ dot chain remove <name>             Remove a chain
   $ dot chain update [name]             Re-fetch metadata (default chain if omitted)
   $ dot chain list                      List configured chains
   $ dot chain default <name>            Set the default chain
 
 ${BOLD}Examples:${RESET}
+  $ dot chain add kusama
   $ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
   $ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
-  $ dot chain add westend --light-client
   $ dot chain default kusama
   $ dot chain list
   $ dot chain update
@@ -39,7 +39,7 @@ export function registerChainCommands(cli: CAC) {
       async (
         action: string | undefined,
         name: string | undefined,
-        opts: { rpc?: string | string[]; lightClient?: boolean },
+        opts: { rpc?: string | string[] },
       ) => {
         if (!action) {
           if (process.argv[2] === "chains") return chainList();
@@ -68,24 +68,23 @@ export function registerChainCommands(cli: CAC) {
 
 async function chainAdd(
   name: string | undefined,
-  opts: { rpc?: string | string[]; lightClient?: boolean },
+  opts: { rpc?: string | string[] },
 ) {
   if (!name) {
     console.error("Chain name is required.\n");
     console.error("Usage: dot chain add <name> --rpc <url>");
-    console.error("       dot chain add <name> --light-client");
     process.exit(1);
   }
-  if (!opts.rpc && !opts.lightClient) {
-    console.error("Must provide either --rpc <url> or --light-client.\n");
+  if (!opts.rpc && !hasLightClientSpec(name)) {
+    console.error(
+      `Chain "${name}" has no built-in light client support. Use --rpc <url>.\n`,
+    );
     console.error("Usage: dot chain add <name> --rpc <url>");
-    console.error("       dot chain add <name> --light-client");
     process.exit(1);
   }
 
   const chainConfig = {
-    rpc: opts.rpc ?? "",
-    ...(opts.lightClient ? { lightClient: true } : {}),
+    rpc: opts.rpc ?? [],
   };
 
   console.error(`Connecting to ${name}...`);
@@ -142,14 +141,16 @@ async function chainList() {
   for (const [name, chainConfig] of Object.entries(config.chains)) {
     const isDefault = name === config.defaultChain;
     const marker = isDefault ? ` ${BOLD}(default)${RESET}` : "";
-    if (chainConfig.lightClient) {
-      console.log(`  ${CYAN}${name}${RESET}${marker}  ${DIM}light-client${RESET}`);
-    } else {
-      const rpcs = Array.isArray(chainConfig.rpc) ? chainConfig.rpc : [chainConfig.rpc];
-      console.log(`  ${CYAN}${name}${RESET}${marker}  ${DIM}${rpcs[0]}${RESET}`);
+    const lcBadge = hasLightClientSpec(name) ? ` ${DIM}[light-client]${RESET}` : "";
+    const rpcs = Array.isArray(chainConfig.rpc) ? chainConfig.rpc : [chainConfig.rpc];
+    const hasRpcs = rpcs.length > 0 && rpcs[0] !== "";
+    if (hasRpcs) {
+      console.log(`  ${CYAN}${name}${RESET}${marker}${lcBadge}  ${DIM}${rpcs[0]}${RESET}`);
       for (let i = 1; i < rpcs.length; i++) {
         console.log(`    ${DIM}${rpcs[i]}${RESET}`);
       }
+    } else {
+      console.log(`  ${CYAN}${name}${RESET}${marker}${lcBadge}`);
     }
   }
   console.log();
