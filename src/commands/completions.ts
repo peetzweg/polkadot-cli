@@ -2,6 +2,7 @@ import type { CAC } from "cac";
 
 const ZSH_SCRIPT = `\
 _dot_completions() {
+  emulate -L zsh
   local -a completions
   local current_word="\${words[CURRENT]}"
   local preceding=("\${words[2,CURRENT-1]}")
