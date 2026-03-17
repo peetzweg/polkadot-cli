@@ -1,5 +1,34 @@
 # polkadot-cli
 
+## 1.4.0
+
+### Minor Changes
+
+- 080d2d0: Require `--dump` flag for keyless map queries to prevent accidentally fetching all entries.
+
+  Running `dot query.System.Account` (a map query without a key) now shows help and usage info instead of fetching every entry via `getEntries()`. This protects users from accidentally triggering slow, expensive full-map dumps on live chains with millions of entries.
+
+  To explicitly fetch all entries, pass `--dump`:
+
+  ```
+  dot query.System.Account --dump
+  dot query.System.Account --dump --limit 10
+  ```
+
+  Querying a specific key still works as before:
+
+  ```
+  dot query.System.Account 5GrwvaEF...
+  ```
+
+### Patch Changes
+
+- 000ab29: Fix enum variant names not recognized as storage query keys.
+
+  Enum variants whose metadata type is wrapped in `lookupEntry` indirection (e.g. `{ type: "lookupEntry", value: { type: "void" } }`) were not resolved before checking for void, causing them to fall through as raw strings. This produced a cryptic "Incompatible runtime entry" error when querying storage maps keyed by such enums (e.g. `ChunksManager.Chunks R2e9 1`). The same variants already worked in `--encode` via the shorthand path, which correctly resolved `lookupEntry` first.
+
+- e798641: Add `emulate -L zsh` to zsh completion function to prevent user shell options from interfering with completion logic.
+
 ## 1.3.0
 
 ### Minor Changes
