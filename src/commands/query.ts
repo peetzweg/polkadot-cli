@@ -19,13 +19,13 @@ import {
 } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseValue } from "../utils/parse-value.ts";
-import { loadMeta, resolvePallet } from "./focused-inspect.ts";
+import { loadMeta, resolvePallet, showItemHelp } from "./focused-inspect.ts";
 import { parseStructArgs, parseTypedArg } from "./tx.ts";
 
 export async function handleQuery(
   target: string | undefined,
   keys: string[],
-  opts: { chain?: string; rpc?: string; output?: string; limit: number },
+  opts: { chain?: string; rpc?: string; output?: string; limit: number; dump?: boolean },
 ) {
   if (!target) {
     // List all pallets with storage item counts
@@ -104,6 +104,13 @@ export async function handleQuery(
     const format = opts.output ?? "pretty";
 
     if (storageItem.type === "map" && parsedKeys.length === 0) {
+      if (!opts.dump) {
+        // No key and no --dump: show help instead of fetching all entries
+        clientHandle.destroy();
+        await showItemHelp("query", target!, { chain: opts.chain, rpc: opts.rpc });
+        console.log(`${DIM}Hint: use --dump to fetch all entries${RESET}`);
+        return;
+      }
       // Fetch all entries
       const entries: Array<{ keyArgs: any; value: any }> = await storageApi.getEntries();
 

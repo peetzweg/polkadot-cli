@@ -314,11 +314,14 @@ dot query.System.Number
 # Map entry by key
 dot query.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 
-# All map entries (default limit: 100)
-dot query.System.Account --limit 10
+# Map without key — shows help/usage (use --dump to fetch all entries)
+dot query.System.Account
+
+# Dump all map entries (requires --dump, default limit: 100)
+dot query.System.Account --dump --limit 10
 
 # Pipe-safe — stdout is clean data, progress messages go to stderr
-dot query.System.Account --limit 5 | jq '.[0].value.data.free'
+dot query.System.Account --dump --limit 5 | jq '.[0].value.data.free'
 dot query.System.Number --output json | jq '.+1'
 
 # Enum variant as map key (case-insensitive)
@@ -517,7 +520,8 @@ dot errors.Balances.InsufficientBalance    # error detail
 ```
 dot query                                  # list pallets with storage items
 dot query.System                           # list storage items with types
-dot query.System.Account                   # storage detail (fetches value)
+dot query.System.Account                   # storage help (use --dump for all entries)
+dot query.System.Account --dump            # fetch all map entries
 ```
 
 ### Constants (const listing)
@@ -777,7 +781,7 @@ Completions are context-aware:
 - `events.` shows only pallets with events
 - `errors.` shows only pallets with errors
 - `--` after a tx dotpath includes `--from`, `--dry-run`, `--encode`
-- `--` after a query dotpath includes `--limit`
+- `--` after a query dotpath includes `--dump`, `--limit`
 
 Chain prefix paths work at any depth: `polkadot.query.System.Account` completes each segment individually.
 
@@ -850,6 +854,7 @@ These flags work with any command:
 | `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback) |
 | `--light-client` | Use Smoldot light client |
 | `--output json` | Raw JSON output (default: pretty) |
+| `--dump` | Dump all entries of a storage map (required for keyless map queries) |
 | `--limit <n>` | Max entries for map queries (0 = unlimited, default: 100) |
 
 ### Pipe-safe output

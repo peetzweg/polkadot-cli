@@ -65,6 +65,7 @@ if (process.argv[2] === "__complete") {
     .option("--limit <n>", "Max entries to return for map queries (0 = unlimited)", {
       default: 100,
     })
+    .option("--dump", "Dump all entries of a storage map (without specifying a key)")
     .action(
       async (
         dotpath: string | undefined,
@@ -78,6 +79,7 @@ if (process.argv[2] === "__complete") {
           encode?: boolean;
           ext?: string;
           limit: number;
+          dump?: boolean;
         },
       ) => {
         if (!dotpath) {
@@ -121,7 +123,7 @@ if (process.argv[2] === "__complete") {
 
         switch (parsed.category) {
           case "query":
-            await handleQuery(target, args, { ...handlerOpts, limit: opts.limit });
+            await handleQuery(target, args, { ...handlerOpts, limit: opts.limit, dump: opts.dump });
             break;
           case "tx":
             // Handle raw hex: if pallet starts with 0x, it's a raw call hex
