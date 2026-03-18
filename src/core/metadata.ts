@@ -120,26 +120,37 @@ export async function getOrFetchMetadata(
 }
 
 export function listPallets(meta: MetadataBundle): PalletInfo[] {
-  return meta.unified.pallets.map((p) => ({
-    name: p.name,
-    index: p.index,
-    docs: p.docs ?? [],
-    storage: (p.storage?.items ?? []).map((s) => ({
-      name: s.name,
-      docs: s.docs ?? [],
-      type: s.type.tag,
-      keyTypeId: s.type.tag === "map" ? s.type.value.key : null,
-      valueTypeId: s.type.tag === "plain" ? s.type.value : s.type.value.value,
+  const sortByName = <T extends { name: string }>(arr: T[]) =>
+    arr.sort((a, b) => a.name.localeCompare(b.name));
+
+  return sortByName(
+    meta.unified.pallets.map((p) => ({
+      name: p.name,
+      index: p.index,
+      docs: p.docs ?? [],
+      storage: sortByName(
+        (p.storage?.items ?? []).map((s) => ({
+          name: s.name,
+          docs: s.docs ?? [],
+          type: s.type.tag,
+          keyTypeId: s.type.tag === "map" ? s.type.value.key : null,
+          valueTypeId: s.type.tag === "plain" ? s.type.value : s.type.value.value,
+        })),
+      ),
+      constants: sortByName(
+        (p.constants ?? []).map((c) => ({
+          name: c.name,
+          docs: c.docs ?? [],
+          typeId: c.type,
+        })),
+      ),
+      calls: sortByName(extractEnumVariants(meta, p.calls)),
+      events: sortByName(extractEnumVariants(meta, p.events)),
+      errors: sortByName(
+        extractEnumVariants(meta, p.errors).map(({ name, docs }) => ({ name, docs })),
+      ),
     })),
-    constants: (p.constants ?? []).map((c) => ({
-      name: c.name,
-      docs: c.docs ?? [],
-      typeId: c.type,
-    })),
-    calls: extractEnumVariants(meta, p.calls),
-    events: extractEnumVariants(meta, p.events),
-    errors: extractEnumVariants(meta, p.errors).map(({ name, docs }) => ({ name, docs })),
-  }));
+  );
 }
 
 function extractEnumVariants(meta: MetadataBundle, ref: { type: number } | undefined): CallInfo[] {
@@ -184,7 +195,7 @@ export function getSignedExtensions(meta: MetadataBundle): SignedExtensionInfo[]
 }
 
 export function getPalletNames(meta: MetadataBundle): string[] {
-  return meta.unified.pallets.map((p) => p.name);
+  return meta.unified.pallets.map((p) => p.name).sort((a, b) => a.localeCompare(b));
 }
 
 export function describeType(lookup: Lookup, typeId: number): string {

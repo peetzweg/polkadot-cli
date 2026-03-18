@@ -227,8 +227,8 @@ describe("dot inspect", () => {
     const { stdout, exitCode } = await runCli(["inspect", "Balances"]);
     expect(exitCode).toBe(0);
     const lines = stdout.split("\n");
-    // Find the transfer_allow_death call line, next line should be indented doc
-    const callIdx = lines.findIndex((l: string) => l.includes("transfer_allow_death"));
+    // Match the actual call line (has opening paren), not a doc line that references the name
+    const callIdx = lines.findIndex((l: string) => l.includes("transfer_allow_death("));
     expect(callIdx).toBeGreaterThan(-1);
     const docLine = lines[callIdx + 1];
     expect(docLine).toMatch(/^\s{8}/); // 8-space indent for doc line
