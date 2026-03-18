@@ -130,16 +130,16 @@ describe("listPallets", () => {
   test("items within a pallet are sorted alphabetically by name", () => {
     const pallets = listPallets(meta);
     for (const p of pallets) {
-      const checkSorted = (items: { name: string }[], label: string) => {
+      const checkSorted = (items: { name: string }[]) => {
         const names = items.map((i) => i.name);
         const sorted = [...names].sort((a, b) => a.localeCompare(b));
         expect(names).toEqual(sorted);
       };
-      checkSorted(p.storage, `${p.name}.storage`);
-      checkSorted(p.constants, `${p.name}.constants`);
-      checkSorted(p.calls, `${p.name}.calls`);
-      checkSorted(p.events, `${p.name}.events`);
-      checkSorted(p.errors, `${p.name}.errors`);
+      checkSorted(p.storage);
+      checkSorted(p.constants);
+      checkSorted(p.calls);
+      checkSorted(p.events);
+      checkSorted(p.errors);
     }
   });
 
