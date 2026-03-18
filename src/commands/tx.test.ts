@@ -16,10 +16,41 @@ import {
   parseExtOption,
   parsePrimitive,
   parseTypedArg,
+  parseWaitLevel,
   typeHint,
 } from "./tx.ts";
 
 const meta = getTestMetadata();
+
+// ---------------------------------------------------------------------------
+// parseWaitLevel
+// ---------------------------------------------------------------------------
+
+describe("parseWaitLevel", () => {
+  test('"broadcast" returns "broadcast"', () => {
+    expect(parseWaitLevel("broadcast")).toBe("broadcast");
+  });
+
+  test('"best-block" returns "best-block"', () => {
+    expect(parseWaitLevel("best-block")).toBe("best-block");
+  });
+
+  test('"best" returns "best-block"', () => {
+    expect(parseWaitLevel("best")).toBe("best-block");
+  });
+
+  test('"finalized" returns "finalized"', () => {
+    expect(parseWaitLevel("finalized")).toBe("finalized");
+  });
+
+  test("undefined returns finalized", () => {
+    expect(parseWaitLevel(undefined)).toBe("finalized");
+  });
+
+  test("invalid value throws CliError", () => {
+    expect(() => parseWaitLevel("invalid")).toThrow('Invalid --wait value "invalid"');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Layer 2: Function-level tests

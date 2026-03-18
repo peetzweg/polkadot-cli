@@ -62,6 +62,13 @@ if (process.argv[2] === "__complete") {
     .option("--dry-run", "Estimate fees without submitting (for tx)")
     .option("--encode", "Encode call to hex without signing (for tx)")
     .option("--ext <json>", "Custom signed extension values as JSON (for tx)")
+    .option(
+      "-w, --wait <level>",
+      "Resolve at: broadcast, best-block (or best), finalized (for tx)",
+      {
+        default: "finalized",
+      },
+    )
     .option("--limit <n>", "Max entries to return for map queries (0 = unlimited)", {
       default: 100,
     })
@@ -78,6 +85,7 @@ if (process.argv[2] === "__complete") {
           dryRun?: boolean;
           encode?: boolean;
           ext?: string;
+          wait?: string;
           limit: number;
           dump?: boolean;
         },
@@ -134,6 +142,7 @@ if (process.argv[2] === "__complete") {
                 dryRun: opts.dryRun,
                 encode: opts.encode,
                 ext: opts.ext,
+                wait: opts.wait,
               });
             } else {
               await handleTx(target, args, {
@@ -142,6 +151,7 @@ if (process.argv[2] === "__complete") {
                 dryRun: opts.dryRun,
                 encode: opts.encode,
                 ext: opts.ext,
+                wait: opts.wait,
               });
             }
             break;

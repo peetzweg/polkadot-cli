@@ -1,6 +1,6 @@
 import type { Decoded } from "@polkadot-api/view-builder";
 import { getViewBuilder } from "@polkadot-api/view-builder";
-import type { TxEvent, TxFinalized } from "polkadot-api";
+import type { TxBestBlocksState, TxBroadcasted, TxEvent, TxFinalized } from "polkadot-api";
 import { Binary } from "polkadot-api";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { primaryRpc } from "../config/types.ts";
@@ -36,6 +36,25 @@ import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseValue } from "../utils/parse-value.ts";
 import { loadMeta, resolvePallet, showItemHelp } from "./focused-inspect.ts";
 
+export type WaitLevel = "broadcast" | "best-block" | "finalized";
+
+export function parseWaitLevel(raw?: string): WaitLevel {
+  switch (raw) {
+    case "broadcast":
+      return "broadcast";
+    case "best-block":
+    case "best":
+      return "best-block";
+    case "finalized":
+    case undefined:
+      return "finalized";
+    default:
+      throw new CliError(
+        `Invalid --wait value "${raw}". Valid: broadcast, best-block, best, finalized`,
+      );
+  }
+}
+
 export async function handleTx(
   target: string | undefined,
   args: string[],
@@ -47,6 +66,7 @@ export async function handleTx(
     encode?: boolean;
     output?: string;
     ext?: string;
+    wait?: string;
   },
 ) {
   if (!target) {
@@ -222,7 +242,8 @@ export async function handleTx(
       return;
     }
 
-    const result = await watchTransaction(tx.signSubmitAndWatch(signer, txOptions));
+    const waitLevel = parseWaitLevel(opts.wait);
+    const result = await watchTransaction(tx.signSubmitAndWatch(signer, txOptions), waitLevel);
 
     console.log();
     console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
@@ -230,9 +251,18 @@ export async function handleTx(
     console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
     console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
 
+    if (result.type === "broadcasted") {
+      console.log(`  ${BOLD}Status:${RESET} ${GREEN}broadcasted${RESET}`);
+      console.log(`  ${DIM}Note: tx was broadcast but not yet included in a block${RESET}`);
+      console.log();
+      return;
+    }
+
     let dispatchErrorMsg: string | undefined;
     if (result.ok) {
-      console.log(`  ${BOLD}Status:${RESET} ${GREEN}ok${RESET}`);
+      const hint =
+        result.type === "txBestBlocksState" ? ` ${DIM}(best block, not yet finalized)${RESET}` : "";
+      console.log(`  ${BOLD}Status:${RESET} ${GREEN}ok${RESET}${hint}`);
     } else {
       dispatchErrorMsg = formatDispatchError(result.dispatchError);
       console.log(`  ${BOLD}Status:${RESET} ${RED}dispatch error${RESET}`);
@@ -976,12 +1006,19 @@ function autoDefaultForType(entry: any): any {
 
 // --- Progressive transaction tracking ---
 
-function watchTransaction(observable: import("rxjs").Observable<TxEvent>): Promise<TxFinalized> {
+type WatchResult = TxFinalized | (TxBestBlocksState & { found: true }) | TxBroadcasted;
+
+function watchTransaction(
+  observable: import("rxjs").Observable<TxEvent>,
+  level: WaitLevel,
+): Promise<WatchResult> {
   const spinner = new Spinner();
-  return new Promise<TxFinalized>((resolve, reject) => {
+  return new Promise<WatchResult>((resolve, reject) => {
+    let settled = false;
     spinner.start("Signing...");
-    observable.subscribe({
+    const subscription = observable.subscribe({
       next(event: TxEvent) {
+        if (settled) return;
         switch (event.type) {
           case "signed":
             spinner.succeed("Signed");
@@ -989,24 +1026,40 @@ function watchTransaction(observable: import("rxjs").Observable<TxEvent>): Promi
             spinner.start("Broadcasting...");
             break;
           case "broadcasted":
-            spinner.succeed("Broadcasted");
-            spinner.start("In best block...");
+            if (level === "broadcast") {
+              spinner.succeed("Broadcasted");
+              settled = true;
+              subscription.unsubscribe();
+              resolve(event);
+            } else {
+              spinner.succeed("Broadcasted");
+              spinner.start("In best block...");
+            }
             break;
           case "txBestBlocksState":
             if (event.found) {
-              spinner.succeed(`In best block #${event.block.number}`);
-              spinner.start("Finalizing...");
+              if (level === "best-block") {
+                spinner.succeed(`In best block #${event.block.number}`);
+                settled = true;
+                subscription.unsubscribe();
+                resolve(event);
+              } else {
+                spinner.succeed(`In best block #${event.block.number}`);
+                spinner.start("Finalizing...");
+              }
             } else {
               spinner.start("In best block...");
             }
             break;
           case "finalized":
             spinner.succeed(`Finalized in block #${event.block.number}`);
+            settled = true;
             resolve(event);
             break;
         }
       },
       error(err: unknown) {
+        if (settled) return;
         spinner.stop();
         reject(err);
       },
