@@ -36,7 +36,7 @@ const ACCOUNT_SUBCOMMANDS = [
 ];
 
 const GLOBAL_OPTIONS = ["--chain", "--rpc", "--light-client", "--output", "--help", "--version"];
-const TX_OPTIONS = ["--from", "--dry-run", "--encode", "--ext"];
+const TX_OPTIONS = ["--from", "--dry-run", "--encode", "--ext", "--wait"];
 const QUERY_OPTIONS = ["--limit"];
 
 function matchCategory(s: string): string | undefined {
@@ -119,6 +119,9 @@ export async function generateCompletions(
     const accounts = await loadAccounts();
     const names = [...DEV_NAMES, ...accounts.accounts.map((a) => a.name)];
     return filterPrefix(names, currentWord);
+  }
+  if (prevWord === "--wait" || prevWord === "-w") {
+    return filterPrefix(["broadcast", "best-block", "best", "finalized"], currentWord);
   }
 
   // 2. Option name completion

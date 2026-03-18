@@ -111,6 +111,31 @@ describe("option value completion", () => {
     expect(l).toContain("alice");
     expect(l).not.toContain("bob");
   });
+
+  test("--wait completes wait levels", async () => {
+    const { stdout } = await runCli(["__complete", "--", "", "--wait"]);
+    const l = lines(stdout);
+    expect(l).toContain("broadcast");
+    expect(l).toContain("best-block");
+    expect(l).toContain("best");
+    expect(l).toContain("finalized");
+  });
+
+  test("--wait with prefix filters", async () => {
+    const { stdout } = await runCli(["__complete", "--", "b", "--wait"]);
+    const l = lines(stdout);
+    expect(l).toContain("broadcast");
+    expect(l).toContain("best-block");
+    expect(l).toContain("best");
+    expect(l).not.toContain("finalized");
+  });
+
+  test("-w completes wait levels", async () => {
+    const { stdout } = await runCli(["__complete", "--", "", "-w"]);
+    const l = lines(stdout);
+    expect(l).toContain("broadcast");
+    expect(l).toContain("finalized");
+  });
 });
 
 describe("option name completion", () => {
@@ -132,6 +157,7 @@ describe("option name completion", () => {
     expect(l).toContain("--dry-run");
     expect(l).toContain("--encode");
     expect(l).toContain("--ext");
+    expect(l).toContain("--wait");
     expect(l).toContain("--chain");
   });
 

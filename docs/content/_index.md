@@ -677,6 +677,31 @@ dot tx.Balances.transferKeepAlive 5GrwvaEF... abc --encode
 
 For struct-based calls (most extrinsics), the error identifies the specific field that failed. For tuple-based calls, it shows the argument index. The original parse error is preserved as the `cause` for programmatic access.
 
+### Wait level
+
+By default, `dot tx` waits for finalization (~30s on Polkadot). Use `--wait` / `-w` to return earlier:
+
+```
+# Return as soon as the tx is broadcast (fastest)
+dot tx.System.remark 0xdead --from alice --wait broadcast
+
+# Return when included in a best block
+dot tx.System.remark 0xdead --from alice -w best-block
+dot tx.System.remark 0xdead --from alice -w best    # alias
+
+# Wait for finalization (default, unchanged)
+dot tx.System.remark 0xdead --from alice --wait finalized
+dot tx.System.remark 0xdead --from alice             # same
+```
+
+| Level | Resolves when | Events shown | Explorer links |
+|-------|---------------|:---:|:---:|
+| `broadcast` | Tx is broadcast to the network | — | — |
+| `best-block` / `best` | Tx is included in a best block | yes | yes |
+| `finalized` (default) | Tx is finalized | yes | yes |
+
+The `--wait` flag is silently ignored when combined with `--dry-run` or `--encode` (both return before submission).
+
 ### Custom signed extensions
 
 Chains with non-standard signed extensions (e.g. `people-preview`) are auto-handled:
@@ -782,7 +807,7 @@ Completions are context-aware:
 - `const.` shows only pallets with constants
 - `events.` shows only pallets with events
 - `errors.` shows only pallets with errors
-- `--` after a tx dotpath includes `--from`, `--dry-run`, `--encode`
+- `--` after a tx dotpath includes `--from`, `--dry-run`, `--encode`, `--wait`
 - `--` after a query dotpath includes `--dump`, `--limit`
 
 Chain prefix paths work at any depth: `polkadot.query.System.Account` completes each segment individually.
@@ -828,6 +853,7 @@ Options:
   --dry-run        Estimate fees without submitting
   --encode         Encode call to hex without signing
   --ext <json>     Custom signed extension values as JSON
+  -w, --wait       Resolve at: broadcast, best-block, finalized (default)
 ```
 
 Other categories work the same way:
@@ -858,6 +884,7 @@ These flags work with any command:
 | `--output json` | Raw JSON output (default: pretty) |
 | `--dump` | Dump all entries of a storage map (required for keyless map queries) |
 | `--limit <n>` | Max entries for map queries (0 = unlimited, default: 100) |
+| `-w, --wait <level>` | Tx wait level: `broadcast`, `best-block` / `best`, `finalized` (default) |
 
 ### Pipe-safe output
 
