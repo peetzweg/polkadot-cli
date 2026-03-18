@@ -67,6 +67,12 @@ describe("getPalletNames", () => {
     expect(names).toContain("Balances");
     expect(names).toContain("Staking");
   });
+
+  test("returns names sorted alphabetically", () => {
+    const names = getPalletNames(meta);
+    const sorted = [...names].sort((a, b) => a.localeCompare(b));
+    expect(names).toEqual(sorted);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -112,6 +118,29 @@ describe("listPallets", () => {
     const system = pallets.find((p) => p.name === "System")!;
     const account = system.storage.find((s) => s.name === "Account");
     expect(account).toBeDefined();
+  });
+
+  test("returns pallets sorted alphabetically by name", () => {
+    const pallets = listPallets(meta);
+    const names = pallets.map((p) => p.name);
+    const sorted = [...names].sort((a, b) => a.localeCompare(b));
+    expect(names).toEqual(sorted);
+  });
+
+  test("items within a pallet are sorted alphabetically by name", () => {
+    const pallets = listPallets(meta);
+    for (const p of pallets) {
+      const checkSorted = (items: { name: string }[]) => {
+        const names = items.map((i) => i.name);
+        const sorted = [...names].sort((a, b) => a.localeCompare(b));
+        expect(names).toEqual(sorted);
+      };
+      checkSorted(p.storage);
+      checkSorted(p.constants);
+      checkSorted(p.calls);
+      checkSorted(p.events);
+      checkSorted(p.errors);
+    }
   });
 
   test("storage items have correct type ('plain' or 'map')", () => {

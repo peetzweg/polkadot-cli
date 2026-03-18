@@ -403,6 +403,8 @@ dot inspect kusama.System.Account
 
 ### Pallet listing
 
+All listings — pallets, storage items, constants, calls, events, and errors — are sorted alphabetically, making it easy to scan for a specific item.
+
 When inspecting a pallet (e.g. `dot inspect Balances`), each item shows type information inline so you can understand the shape without drilling into the detail view:
 
 **Storage items** show key and value types. Map items include a `[map]` tag:

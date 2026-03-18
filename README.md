@@ -321,6 +321,8 @@ dot inspect kusama.System
 dot inspect kusama.System.Account
 ```
 
+All listings — pallets, storage items, constants, calls, events, and errors — are sorted alphabetically, making it easy to find a specific item at a glance.
+
 The pallet listing view shows type information inline so you can understand item shapes at a glance:
 
 - **Storage**: key/value types with `[map]` tag for map items (e.g. `Account: AccountId32 → { nonce: u32, ... }    [map]`)
