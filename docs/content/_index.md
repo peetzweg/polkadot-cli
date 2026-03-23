@@ -2,6 +2,20 @@
 
 A command-line tool for interacting with Polkadot-ecosystem chains. Manage chains and accounts, query storage, look up constants, inspect metadata, submit extrinsics, and compute hashes — all from your terminal. [View on GitHub](https://github.com/peetzweg/polkadot-cli).
 
+## Features
+
+- ✅ Same syntax as [polkadot-api](https://papi.how) (PAPI)
+- ✅ Chain name prefix — `dot polkadot.query.System.Number`
+- ✅ zsh, bash, and fish autocompletion
+- ✅ Exposes all on-chain metadata documentation
+- ✅ Encode, dry-run, and submit extrinsics
+- ✅ Support for custom signed extensions
+- ✅ Built with agent use in mind — pipe-safe JSON output (`--output json`)
+- ✅ Fuzzy matching with typo suggestions
+- ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
+- ✅ Named address resolution across all commands
+- ✅ Batteries included — all system parachains and testnets already setup to be used
+
 ## Install
 
 Install globally via npm:
