@@ -6,6 +6,20 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 
 Ships with Polkadot and all system parachains preconfigured with multiple fallback RPC endpoints. Add any Substrate-based chain by pointing to its RPC endpoint(s).
 
+## Features
+
+- ✅ Same syntax as [polkadot-api](https://papi.how) (PAPI)
+- ✅ Chain name prefix — `dot polkadot.query.System.Number`
+- ✅ zsh, bash, and fish autocompletion
+- ✅ Exposes all on-chain metadata documentation
+- ✅ Encode, dry-run, and submit extrinsics
+- ✅ Support for custom signed extensions
+- ✅ Built with agent use in mind — pipe-safe JSON output (`--output json`)
+- ✅ Fuzzy matching with typo suggestions
+- ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
+- ✅ Named address resolution across all commands
+- ✅ Batteries included — all system parachains and testnets already setup to be used
+
 ### Preconfigured chains
 
 | Network | Chain | Light client |
