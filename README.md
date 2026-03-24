@@ -18,6 +18,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Fuzzy matching with typo suggestions
 - ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
 - ✅ Named address resolution across all commands
+- ✅ Runtime API calls — `dot apis.Core.version`
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 
 ### Preconfigured chains
@@ -347,6 +348,36 @@ The pallet listing view shows type information inline so you can understand item
 
 Documentation from the runtime metadata is shown on an indented line below each item. The detail view (`dot inspect Balances.transfer_allow_death`) shows the full argument signature and complete documentation text. Use call inspection to discover argument names, types, and docs before constructing `dot tx` commands.
 
+### Runtime APIs
+
+Browse and call Substrate runtime APIs. These are top-level APIs exposed by the runtime (e.g. `Core`, `AccountNonceApi`, `TransactionPaymentApi`), accessed as `dot apis.ApiName.method`.
+
+```bash
+# List all runtime APIs with method counts
+dot apis
+
+# List methods in a specific API (with signatures)
+dot apis.Core
+
+# Call a runtime API method
+dot apis.Core.version
+
+# With chain prefix
+dot polkadot.apis.Core.version
+
+# Show method signature and docs
+dot apis.Core.version --help
+```
+
+`api` is an alias for `apis`.
+
+Runtime API info requires v15 metadata. If `dot apis` shows 0 APIs, update the cached metadata:
+
+```bash
+dot chain update              # default chain
+dot chain update people-paseo # specific chain
+```
+
 ### Focused commands
 
 Browse specific metadata categories directly without using `dot inspect`:
@@ -374,9 +405,13 @@ dot storage System.Account               # storage detail
 # List pallet constants (dual-purpose — also works as value lookup)
 dot const Balances                        # list constants
 dot const Balances.ExistentialDeposit     # look up value
+
+# List runtime APIs
+dot apis                                  # list all APIs
+dot apis.Core                             # list methods in Core
 ```
 
-Each command supports `--chain <name>`, `--rpc <url>`, and chain prefix syntax. Singular and plural forms are interchangeable (e.g. `dot call` = `dot calls`, `dot event` = `dot events`).
+Each command supports `--chain <name>`, `--rpc <url>`, and chain prefix syntax. Singular and plural forms are interchangeable (e.g. `dot call` = `dot calls`, `dot event` = `dot events`, `dot api` = `dot apis`).
 
 ### Submit extrinsics
 
@@ -556,6 +591,7 @@ dot query.System.Account --help           # storage type, key/value info, and qu
 dot const.Balances.ExistentialDeposit --help  # constant type and docs
 dot events.Balances.Transfer --help       # event fields and docs
 dot errors.Balances.InsufficientBalance --help  # error docs
+dot apis.Core.version --help             # runtime API method signature and docs
 ```
 
 For `tx` commands, omitting both `--from` and `--encode` shows this same help output instead of an error:
@@ -609,13 +645,15 @@ Once installed, press Tab to complete:
 dot qu<Tab>              # → query
 dot query.<Tab>          # → query.System, query.Balances, ...
 dot query.System.<Tab>   # → query.System.Account, query.System.Number, ...
-dot polkadot.<Tab>       # → polkadot.query, polkadot.tx, ...
+dot apis.<Tab>           # → apis.Core, apis.Metadata, ...
+dot apis.Core.<Tab>      # → apis.Core.version, ...
+dot polkadot.<Tab>       # → polkadot.query, polkadot.tx, ..., polkadot.apis
 dot --chain <Tab>        # → polkadot, paseo, ...
 dot --from <Tab>         # → alice, bob, ..., stored account names
 dot chain <Tab>          # → add, remove, update, list, default
 ```
 
-Completions are context-aware: `query.` shows pallets with storage items, `tx.` shows pallets with calls, `events.` and `errors.` filter accordingly. Chain prefix paths like `polkadot.query.System.` work at any depth.
+Completions are context-aware: `query.` shows pallets with storage items, `tx.` shows pallets with calls, `events.` and `errors.` filter accordingly, `apis.` shows runtime API names. Chain prefix paths like `polkadot.query.System.` work at any depth.
 
 ## How it compares
 

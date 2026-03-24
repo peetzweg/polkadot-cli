@@ -4,10 +4,13 @@ import type { MetadataBundle, PalletInfo } from "../core/metadata.ts";
 import {
   describeCallArgs,
   describeEventFields,
+  describeRuntimeApiMethodArgs,
   describeType,
   findPallet,
+  findRuntimeApi,
   getOrFetchMetadata,
   getPalletNames,
+  getRuntimeApiNames,
   listPallets,
 } from "../core/metadata.ts";
 import {
@@ -325,6 +328,47 @@ export async function showItemHelp(
   const config = await loadConfig();
   const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
   const meta = await loadMeta(chainName, chainConfig, opts.rpc);
+
+  // Runtime APIs are not pallet-based — handle separately
+  if (category === "apis") {
+    const dotIdx = target.indexOf(".");
+    const apiName = dotIdx === -1 ? target : target.slice(0, dotIdx);
+    const methodName = dotIdx === -1 ? undefined : target.slice(dotIdx + 1);
+
+    const apiNames = getRuntimeApiNames(meta);
+    const api = findRuntimeApi(meta, apiName);
+    if (!api) {
+      throw new Error(suggestMessage("runtime API", apiName, apiNames));
+    }
+
+    if (!methodName) {
+      // API-level help: list methods
+      const { handleApis } = await import("./apis.ts");
+      await handleApis(target, [], opts);
+      return;
+    }
+
+    const method = api.methods.find((m) => m.name.toLowerCase() === methodName.toLowerCase());
+    if (!method) {
+      const names = api.methods.map((m) => m.name);
+      throw new Error(suggestMessage(`method in ${api.name}`, methodName, names));
+    }
+
+    printHeading(`${api.name}.${method.name} (Runtime API)`);
+    const argStr = describeRuntimeApiMethodArgs(meta, method);
+    const retStr = describeType(meta.lookup, method.output);
+    console.log(`  ${BOLD}Args:${RESET} ${argStr}`);
+    console.log(`  ${BOLD}Returns:${RESET} ${retStr}`);
+    if (method.docs.length) {
+      console.log();
+      printDocs(method.docs);
+    }
+    console.log();
+    console.log(`${BOLD}Usage:${RESET}`);
+    console.log(`  dot apis.${api.name}.${method.name}`);
+    console.log();
+    return;
+  }
 
   const dotIdx = target.indexOf(".");
   const palletName = dotIdx === -1 ? target : target.slice(0, dotIdx);

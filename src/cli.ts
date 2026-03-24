@@ -2,6 +2,7 @@
 import cac from "cac";
 import { version } from "../package.json";
 import { registerAccountCommands } from "./commands/account.ts";
+import { handleApis } from "./commands/apis.ts";
 import { registerChainCommands } from "./commands/chain.ts";
 import { registerCompletionsCommand } from "./commands/completions.ts";
 import { handleConst } from "./commands/const.ts";
@@ -164,6 +165,9 @@ if (process.argv[2] === "__complete") {
           case "errors":
             await handleErrors(target, handlerOpts);
             break;
+          case "apis":
+            await handleApis(target, args, handlerOpts);
+            break;
         }
       },
     );
@@ -184,6 +188,7 @@ if (process.argv[2] === "__complete") {
     console.log("  const     Look up or list pallet constants");
     console.log("  events    List or inspect pallet events");
     console.log("  errors    List or inspect pallet errors");
+    console.log("  apis      Browse and call runtime APIs");
     console.log();
     console.log("Examples:");
     console.log("  dot query.System.Account <addr>         Query a storage item");
@@ -191,6 +196,7 @@ if (process.argv[2] === "__complete") {
     console.log("  dot tx.System.remark 0xdead --from alice");
     console.log("  dot const.Balances.ExistentialDeposit");
     console.log("  dot events.Balances                     List events in Balances");
+    console.log("  dot apis.Core.version                    Call a runtime API");
     console.log("  dot polkadot.query.System.Number        With chain prefix");
     console.log();
     console.log("Commands:");

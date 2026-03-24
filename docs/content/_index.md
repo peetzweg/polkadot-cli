@@ -14,6 +14,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Fuzzy matching with typo suggestions
 - ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
 - ✅ Named address resolution across all commands
+- ✅ Runtime API calls — `dot apis.Core.version`
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 
 ## Install
@@ -505,7 +506,7 @@ Use call inspection to discover argument names, types, and documentation before 
 
 ## Focused Listing
 
-Each category supports partial paths for browsing metadata. Category-only invocations list pallets; pallet-level invocations list items; item-level invocations show detail. All support `--chain <name>`, `--rpc <url>`, and chain prefix syntax. Singular and plural aliases work: `event` = `events`, `error` = `errors`.
+Each category supports partial paths for browsing metadata. Category-only invocations list pallets (or APIs); pallet-level invocations list items; item-level invocations show detail. All support `--chain <name>`, `--rpc <url>`, and chain prefix syntax. Singular and plural aliases work: `event` = `events`, `error` = `errors`, `api` = `apis`.
 
 ### Calls (tx listing)
 
@@ -547,6 +548,28 @@ dot const                                  # list pallets with constants
 dot const.Balances                         # list constants (offline)
 dot const.Balances.ExistentialDeposit      # look up value (connects to chain)
 ```
+
+### Runtime APIs
+
+Browse and call Substrate runtime APIs. Unlike pallets, runtime APIs are top-level named interfaces (e.g. `Core`, `AccountNonceApi`, `TransactionPaymentApi`) that expose methods callable via `dot apis.ApiName.method`.
+
+```
+dot apis                                   # list all runtime APIs with method counts
+dot apis.Core                              # list methods in Core API with signatures
+dot apis.Core.version                      # call the Core.version runtime API
+dot apis.AccountNonceApi.account_nonce <addr>  # call with arguments
+```
+
+Chain prefix and `--help` work the same as other categories:
+
+```
+dot polkadot.apis.Core.version             # target a specific chain
+dot apis.Core.version --help               # show method signature, return type, and docs
+```
+
+`api` is an alias for `apis`. Shell completions work at every level: `apis.<Tab>` shows API names, `apis.Core.<Tab>` shows method names.
+
+Runtime API info requires v15 metadata. If `dot apis` shows 0 APIs, the CLI will suggest updating your cached metadata. Run `dot chain update` (or `dot chain update <chain>`) to fetch the latest version.
 
 ## Transactions
 
@@ -804,7 +827,9 @@ Once installed, press Tab to complete at any point:
 dot qu<Tab>              # → query
 dot query.<Tab>          # → query.System, query.Balances, ...
 dot query.System.<Tab>   # → query.System.Account, query.System.Number, ...
-dot polkadot.<Tab>       # → polkadot.query, polkadot.tx, ...
+dot apis.<Tab>           # → apis.Core, apis.Metadata, ...
+dot apis.Core.<Tab>      # → apis.Core.version, ...
+dot polkadot.<Tab>       # → polkadot.query, polkadot.tx, ..., polkadot.apis
 dot polkadot.query.<Tab> # → polkadot.query.System, ...
 dot --chain <Tab>        # → polkadot, paseo, ...
 dot --from <Tab>         # → alice, bob, ..., stored account names
@@ -821,6 +846,7 @@ Completions are context-aware:
 - `const.` shows only pallets with constants
 - `events.` shows only pallets with events
 - `errors.` shows only pallets with errors
+- `apis.` shows runtime API names
 - `--` after a tx dotpath includes `--from`, `--dry-run`, `--encode`, `--wait`
 - `--` after a query dotpath includes `--dump`, `--limit`
 
@@ -877,6 +903,7 @@ dot query.System.Account --help           # storage type, key/value info, query 
 dot const.Balances.ExistentialDeposit --help  # constant type and docs
 dot events.Balances.Transfer --help       # event fields and docs
 dot errors.Balances.InsufficientBalance --help  # error docs
+dot apis.Core.version --help             # runtime API method signature and docs
 ```
 
 For `tx` commands, omitting both `--from` and `--encode` shows this same help output instead of an error — so you can explore calls without remembering the exact flags:

@@ -205,6 +205,54 @@ describe("parseDotPath", () => {
     });
   });
 
+  // --- apis category ---
+  test("apis → category only", () => {
+    expect(parseDotPath("apis", knownChains)).toEqual({ category: "apis" });
+  });
+
+  test("api → apis alias", () => {
+    expect(parseDotPath("api", knownChains)).toEqual({ category: "apis" });
+  });
+
+  test("apis.Core → category + pallet (API name)", () => {
+    expect(parseDotPath("apis.Core", knownChains)).toEqual({
+      category: "apis",
+      pallet: "Core",
+    });
+  });
+
+  test("apis.Core.version → category + pallet + item", () => {
+    expect(parseDotPath("apis.Core.version", knownChains)).toEqual({
+      category: "apis",
+      pallet: "Core",
+      item: "version",
+    });
+  });
+
+  test("polkadot.apis.Core.version → chain + category + pallet + item", () => {
+    expect(parseDotPath("polkadot.apis.Core.version", knownChains)).toEqual({
+      chain: "polkadot",
+      category: "apis",
+      pallet: "Core",
+      item: "version",
+    });
+  });
+
+  test("polkadot.apis → chain + category", () => {
+    expect(parseDotPath("polkadot.apis", knownChains)).toEqual({
+      chain: "polkadot",
+      category: "apis",
+    });
+  });
+
+  test("polkadot.apis.Core → chain + category + pallet", () => {
+    expect(parseDotPath("polkadot.apis.Core", knownChains)).toEqual({
+      chain: "polkadot",
+      category: "apis",
+      pallet: "Core",
+    });
+  });
+
   // --- Hyphenated chain names ---
   test("polkadot-asset-hub.query → hyphenated chain name (not split on dots)", () => {
     // Note: "polkadot-asset-hub" has no dots, so it works with split on "."
