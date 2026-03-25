@@ -819,49 +819,14 @@ All existing flags work: `--from`, `--dry-run`, `--encode`, `--chain`, `--output
 Files support shell-style `${VAR}` placeholders with optional defaults via `${VAR:-default}`.
 
 ```yaml
-chain: ${CHAIN:-people-paseo}
-
-vars:                         # defaults (lowest priority)
+chain: ${CHAIN:-polkadot}
+vars:
   AMOUNT: "1000000000000"
-  DEST_PARA: "5140"
-
 tx:
-  PolkadotXcm:
-    send:
-      dest:
-        type: V3
-        value:
-          parents: 1
-          interior:
-            type: Here
-      message:
-        type: V3
-        value:
-          - type: WithdrawAsset
-            value:
-              - id:
-                  type: Concrete
-                  value:
-                    parents: 0
-                    interior:
-                      type: Here
-                fun:
-                  type: Fungible
-                  value: ${AMOUNT}
-          - type: RefundSurplus
-          - type: DepositAsset
-            value:
-              assets:
-                type: Wild
-                value:
-                  type: All
-              beneficiary:
-                parents: 0
-                interior:
-                  type: X1
-                  value:
-                    type: Parachain
-                    value: ${DEST_PARA}
+  Balances:
+    transfer_keep_alive:
+      dest: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+      value: ${AMOUNT}
 ```
 
 Variables are resolved in this order (first match wins):
@@ -872,13 +837,13 @@ Variables are resolved in this order (first match wins):
 
 ```bash
 # Uses defaults from vars section
-dot ./transfer.xcm.yaml --from alice
+dot ./transfer.yaml --from alice
 
 # Override with --var
-dot ./transfer.xcm.yaml --var AMOUNT=2000000000000 --var DEST_PARA=1000 --from alice
+dot ./transfer.yaml --var AMOUNT=2000000000000 --from alice
 
 # Override via environment
-AMOUNT=5000000000000 dot ./transfer.xcm.yaml --from alice
+AMOUNT=5000000000000 dot ./transfer.yaml --from alice
 ```
 
 ### Examples for each category
@@ -919,6 +884,147 @@ apis:
   Core:
     version:
 ```
+
+### XCM transfer examples
+
+File-based commands are especially useful for XCM transfers. The following examples use `polkadot-asset-hub` as the source chain.
+
+**Teleport DOT** from Asset Hub to the Polkadot relay chain (1 DOT = 10,000,000,000 planck):
+
+```yaml
+# teleport-dot.xcm.yaml — Teleport 1 DOT to relay chain
+chain: polkadot-asset-hub
+tx:
+  PolkadotXcm:
+    limited_teleport_assets:
+      dest:
+        type: V4
+        value:
+          parents: 1
+          interior:
+            type: Here
+      beneficiary:
+        type: V4
+        value:
+          parents: 0
+          interior:
+            type: X1
+            value:
+              - type: AccountId32
+                value:
+                  network: null
+                  id: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"
+      assets:
+        type: V4
+        value:
+          - id:
+              parents: 1
+              interior:
+                type: Here
+            fun:
+              type: Fungible
+              value: 10000000000
+      fee_asset_item: 0
+      weight_limit:
+        type: Unlimited
+```
+
+The same teleport in JSON:
+
+```json
+{
+  "chain": "polkadot-asset-hub",
+  "tx": {
+    "PolkadotXcm": {
+      "limited_teleport_assets": {
+        "dest": { "type": "V4", "value": { "parents": 1, "interior": { "type": "Here" } } },
+        "beneficiary": {
+          "type": "V4",
+          "value": {
+            "parents": 0,
+            "interior": {
+              "type": "X1",
+              "value": [{ "type": "AccountId32", "value": { "network": null, "id": "0xd435...a27d" } }]
+            }
+          }
+        },
+        "assets": {
+          "type": "V4",
+          "value": [{
+            "id": { "parents": 1, "interior": { "type": "Here" } },
+            "fun": { "type": "Fungible", "value": 10000000000 }
+          }]
+        },
+        "fee_asset_item": 0,
+        "weight_limit": { "type": "Unlimited" }
+      }
+    }
+  }
+}
+```
+
+**Reserve transfer USDC** from Asset Hub to Hydration (parachain 2034). USDC is asset ID 1337 on Asset Hub with 6 decimals (10 USDC = 10,000,000):
+
+```yaml
+# reserve-transfer-usdc.xcm.yaml — Reserve transfer 10 USDC to Hydration
+chain: polkadot-asset-hub
+tx:
+  PolkadotXcm:
+    limited_reserve_transfer_assets:
+      dest:
+        type: V4
+        value:
+          parents: 1
+          interior:
+            type: X1
+            value:
+              - type: Parachain
+                value: 2034
+      beneficiary:
+        type: V4
+        value:
+          parents: 0
+          interior:
+            type: X1
+            value:
+              - type: AccountId32
+                value:
+                  network: null
+                  id: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"
+      assets:
+        type: V4
+        value:
+          - id:
+              parents: 0
+              interior:
+                type: X2
+                value:
+                  - type: PalletInstance
+                    value: 50
+                  - type: GeneralIndex
+                    value: 1337
+            fun:
+              type: Fungible
+              value: 10000000
+      fee_asset_item: 0
+      weight_limit:
+        type: Unlimited
+```
+
+**Remote execution** via `PolkadotXcm.send` — see [`transfer.xcm.yaml`](transfer.xcm.yaml) for a full example that constructs an XCM program with `WithdrawAsset`, `BuyExecution`, `Transact`, `RefundSurplus`, and `DepositAsset`.
+
+```bash
+# Teleport DOT
+dot ./teleport-dot.xcm.yaml --from alice --dry-run
+
+# Reserve transfer USDC
+dot ./reserve-transfer-usdc.xcm.yaml --from alice --dry-run
+
+# Encode without submitting
+dot ./teleport-dot.xcm.yaml --encode
+```
+
+> **Teleport vs reserve transfer**: Teleports burn assets on the source and mint on the destination — used between chains that trust each other (e.g. Asset Hub and the relay chain). Reserve transfers lock assets on the source (the reserve) and mint derivatives on the destination — used for assets like USDC where Asset Hub holds the real tokens.
 
 ### File detection
 

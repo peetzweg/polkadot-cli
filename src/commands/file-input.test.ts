@@ -307,6 +307,230 @@ tx:
 });
 
 // ---------------------------------------------------------------------------
+// XCM transfer examples (use XcmPallet from relay metadata as proxy for
+// PolkadotXcm on Asset Hub — identical arg structure)
+// ---------------------------------------------------------------------------
+
+const ALICE_ID = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+
+describe("file input: XCM teleport DOT", () => {
+  const teleportYaml = `
+tx:
+  XcmPallet:
+    limited_teleport_assets:
+      dest:
+        type: V4
+        value:
+          parents: 1
+          interior:
+            type: Here
+      beneficiary:
+        type: V4
+        value:
+          parents: 0
+          interior:
+            type: X1
+            value:
+              - type: AccountId32
+                value:
+                  network: null
+                  id: "${ALICE_ID}"
+      assets:
+        type: V4
+        value:
+          - id:
+              parents: 1
+              interior:
+                type: Here
+            fun:
+              type: Fungible
+              value: 10000000000
+      fee_asset_item: 0
+      weight_limit:
+        type: Unlimited
+`;
+
+  const teleportJson = JSON.stringify({
+    tx: {
+      XcmPallet: {
+        limited_teleport_assets: {
+          dest: { type: "V4", value: { parents: 1, interior: { type: "Here" } } },
+          beneficiary: {
+            type: "V4",
+            value: {
+              parents: 0,
+              interior: {
+                type: "X1",
+                value: [{ type: "AccountId32", value: { network: null, id: ALICE_ID } }],
+              },
+            },
+          },
+          assets: {
+            type: "V4",
+            value: [
+              {
+                id: { parents: 1, interior: { type: "Here" } },
+                fun: { type: "Fungible", value: 10000000000 },
+              },
+            ],
+          },
+          fee_asset_item: 0,
+          weight_limit: { type: "Unlimited" },
+        },
+      },
+    },
+  });
+
+  test("YAML encodes successfully", async () => {
+    const { stdout, exitCode, stderr } = await runCli(["{{HOME}}/teleport.yaml", "--encode"], {
+      files: { "teleport.yaml": teleportYaml },
+    });
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/^0x[0-9a-f]+$/);
+  });
+
+  test("JSON encodes successfully", async () => {
+    const { stdout, exitCode, stderr } = await runCli(["{{HOME}}/teleport.json", "--encode"], {
+      files: { "teleport.json": teleportJson },
+    });
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/^0x[0-9a-f]+$/);
+  });
+
+  test("YAML and JSON produce identical hex", async () => {
+    const [yamlResult, jsonResult] = await Promise.all([
+      runCli(["{{HOME}}/t.yaml", "--encode"], { files: { "t.yaml": teleportYaml } }),
+      runCli(["{{HOME}}/t.json", "--encode"], { files: { "t.json": teleportJson } }),
+    ]);
+    expect(yamlResult.exitCode).toBe(0);
+    expect(jsonResult.exitCode).toBe(0);
+    expect(yamlResult.stdout).toBe(jsonResult.stdout);
+  });
+});
+
+describe("file input: XCM reserve transfer USDC", () => {
+  const reserveYaml = `
+tx:
+  XcmPallet:
+    limited_reserve_transfer_assets:
+      dest:
+        type: V4
+        value:
+          parents: 1
+          interior:
+            type: X1
+            value:
+              - type: Parachain
+                value: 2034
+      beneficiary:
+        type: V4
+        value:
+          parents: 0
+          interior:
+            type: X1
+            value:
+              - type: AccountId32
+                value:
+                  network: null
+                  id: "${ALICE_ID}"
+      assets:
+        type: V4
+        value:
+          - id:
+              parents: 0
+              interior:
+                type: X2
+                value:
+                  - type: PalletInstance
+                    value: 50
+                  - type: GeneralIndex
+                    value: 1337
+            fun:
+              type: Fungible
+              value: 10000000
+      fee_asset_item: 0
+      weight_limit:
+        type: Unlimited
+`;
+
+  const reserveJson = JSON.stringify({
+    tx: {
+      XcmPallet: {
+        limited_reserve_transfer_assets: {
+          dest: {
+            type: "V4",
+            value: {
+              parents: 1,
+              interior: { type: "X1", value: [{ type: "Parachain", value: 2034 }] },
+            },
+          },
+          beneficiary: {
+            type: "V4",
+            value: {
+              parents: 0,
+              interior: {
+                type: "X1",
+                value: [{ type: "AccountId32", value: { network: null, id: ALICE_ID } }],
+              },
+            },
+          },
+          assets: {
+            type: "V4",
+            value: [
+              {
+                id: {
+                  parents: 0,
+                  interior: {
+                    type: "X2",
+                    value: [
+                      { type: "PalletInstance", value: 50 },
+                      { type: "GeneralIndex", value: 1337 },
+                    ],
+                  },
+                },
+                fun: { type: "Fungible", value: 10000000 },
+              },
+            ],
+          },
+          fee_asset_item: 0,
+          weight_limit: { type: "Unlimited" },
+        },
+      },
+    },
+  });
+
+  test("YAML encodes successfully", async () => {
+    const { stdout, exitCode, stderr } = await runCli(["{{HOME}}/reserve.yaml", "--encode"], {
+      files: { "reserve.yaml": reserveYaml },
+    });
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/^0x[0-9a-f]+$/);
+  });
+
+  test("JSON encodes successfully", async () => {
+    const { stdout, exitCode, stderr } = await runCli(["{{HOME}}/reserve.json", "--encode"], {
+      files: { "reserve.json": reserveJson },
+    });
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/^0x[0-9a-f]+$/);
+  });
+
+  test("YAML and JSON produce identical hex", async () => {
+    const [yamlResult, jsonResult] = await Promise.all([
+      runCli(["{{HOME}}/r.yaml", "--encode"], { files: { "r.yaml": reserveYaml } }),
+      runCli(["{{HOME}}/r.json", "--encode"], { files: { "r.json": reserveJson } }),
+    ]);
+    expect(yamlResult.exitCode).toBe(0);
+    expect(jsonResult.exitCode).toBe(0);
+    expect(yamlResult.stdout).toBe(jsonResult.stdout);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Existing dot-path commands still work
 // ---------------------------------------------------------------------------
 

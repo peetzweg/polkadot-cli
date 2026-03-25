@@ -21,7 +21,7 @@ tx:
                       type: Here
                 fun:
                   type: Fungible
-                  value: ${AMOUNT:-1000000}
+                  value: 1000000000000
           - type: BuyExecution
             value:
               fees:
@@ -43,7 +43,7 @@ tx:
               require_weight_at_most:
                 ref_time: 2020000000
                 proof_size: 10000
-              call: "0x3c0ae8030000"
+              call: ${CALL}
           - type: RefundSurplus
           - type: DepositAsset
             value:

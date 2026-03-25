@@ -577,60 +577,137 @@ dot tx System.remark 0xdeadbeef --from alice --ext '{"MyExtension":{"value":"...
 
 Run any `dot` command from a YAML or JSON file. Especially useful for complex calls like XCM messages that are hard to construct inline.
 
+**Teleport DOT** from Asset Hub to the relay chain:
+
 ```yaml
-# transfer.xcm.yaml
-chain: people-paseo
+# teleport-dot.xcm.yaml
+chain: polkadot-asset-hub
 tx:
   PolkadotXcm:
-    send:
+    limited_teleport_assets:
       dest:
-        type: V3
+        type: V4
         value:
           parents: 1
           interior:
             type: Here
-      message:
-        type: V3
+      beneficiary:
+        type: V4
         value:
-          - type: WithdrawAsset
+          parents: 0
+          interior:
+            type: X1
             value:
-              - id:
-                  type: Concrete
-                  value:
-                    parents: 0
-                    interior:
-                      type: Here
-                fun:
-                  type: Fungible
-                  value: ${AMOUNT:-1000000000000}
-          - type: RefundSurplus
-          - type: DepositAsset
-            value:
-              assets:
-                type: Wild
+              - type: AccountId32
                 value:
-                  type: All
-              beneficiary:
-                parents: 0
-                interior:
-                  type: X1
-                  value:
-                    type: Parachain
-                    value: ${DEST_PARA:-5140}
+                  network: null
+                  id: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"
+      assets:
+        type: V4
+        value:
+          - id:
+              parents: 1
+              interior:
+                type: Here
+            fun:
+              type: Fungible
+              value: 10000000000
+      fee_asset_item: 0
+      weight_limit:
+        type: Unlimited
+```
+
+**Reserve transfer USDC** (asset 1337, 6 decimals) from Asset Hub to Hydration:
+
+```yaml
+# reserve-transfer-usdc.xcm.yaml
+chain: polkadot-asset-hub
+tx:
+  PolkadotXcm:
+    limited_reserve_transfer_assets:
+      dest:
+        type: V4
+        value:
+          parents: 1
+          interior:
+            type: X1
+            value:
+              - type: Parachain
+                value: 2034
+      beneficiary:
+        type: V4
+        value:
+          parents: 0
+          interior:
+            type: X1
+            value:
+              - type: AccountId32
+                value:
+                  network: null
+                  id: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"
+      assets:
+        type: V4
+        value:
+          - id:
+              parents: 0
+              interior:
+                type: X2
+                value:
+                  - type: PalletInstance
+                    value: 50
+                  - type: GeneralIndex
+                    value: 1337
+            fun:
+              type: Fungible
+              value: 10000000
+      fee_asset_item: 0
+      weight_limit:
+        type: Unlimited
+```
+
+The same teleport in JSON:
+
+```json
+{
+  "chain": "polkadot-asset-hub",
+  "tx": {
+    "PolkadotXcm": {
+      "limited_teleport_assets": {
+        "dest": { "type": "V4", "value": { "parents": 1, "interior": { "type": "Here" } } },
+        "beneficiary": {
+          "type": "V4",
+          "value": {
+            "parents": 0,
+            "interior": {
+              "type": "X1",
+              "value": [{ "type": "AccountId32", "value": { "network": null, "id": "0xd435...a27d" } }]
+            }
+          }
+        },
+        "assets": {
+          "type": "V4",
+          "value": [{
+            "id": { "parents": 1, "interior": { "type": "Here" } },
+            "fun": { "type": "Fungible", "value": 10000000000 }
+          }]
+        },
+        "fee_asset_item": 0,
+        "weight_limit": { "type": "Unlimited" }
+      }
+    }
+  }
+}
 ```
 
 ```bash
 # Run from file
-dot ./transfer.xcm.yaml --from alice --dry-run
-
-# Override variables
-dot ./transfer.xcm.yaml --var AMOUNT=2000000000000 --var DEST_PARA=1000 --from alice
-
-# Use environment variables
-AMOUNT=5000000000000 dot ./transfer.xcm.yaml --from alice
+dot ./teleport-dot.xcm.yaml --from alice --dry-run
 
 # Encode only
-dot ./transfer.xcm.yaml --encode
+dot ./reserve-transfer-usdc.xcm.yaml --encode
+
+# Override variables
+dot ./transfer.xcm.yaml --var AMOUNT=2000000000000 --from alice
 ```
 
 The file format uses a required category wrapper (`tx`, `query`, `const`, or `apis`) with the structure `category > Pallet > Item > args`:
