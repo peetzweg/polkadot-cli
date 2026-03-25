@@ -247,6 +247,51 @@ describe("dot errors", () => {
   });
 });
 
+describe("dot apis", () => {
+  test("lists runtime APIs", async () => {
+    const { stdout, exitCode } = await runCli(["apis"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Runtime APIs");
+    expect(stdout).toContain("Core");
+    expect(stdout).toContain("methods");
+  });
+
+  test("does not show v14 hint when metadata is v15", async () => {
+    const { stdout, exitCode } = await runCli(["apis"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("Hint");
+    expect(stdout).not.toContain("chain update");
+  });
+
+  test("lists methods in a specific API", async () => {
+    const { stdout, exitCode } = await runCli(["apis.Core"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Core Methods");
+    expect(stdout).toContain("version");
+  });
+
+  test("api alias works", async () => {
+    const { stdout, exitCode } = await runCli(["api.Core"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Core Methods");
+  });
+
+  test("typo suggests correct API name", async () => {
+    const { stderr, exitCode } = await runCli(["apis.Cor"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Core");
+  });
+
+  test("chain prefix works for apis", async () => {
+    const config = {
+      chains: { kusama: { rpc: "wss://kusama-rpc.polkadot.io" } },
+    };
+    const { stdout, exitCode } = await runCli(["kusama.apis.Core"], { config });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Core Methods");
+  });
+});
+
 describe("no truncation", () => {
   test("call docs show first complete sentence", async () => {
     const { stdout, exitCode } = await runCli(["tx.Balances"]);
@@ -290,6 +335,13 @@ describe("item-level --help", () => {
     const { stdout, exitCode } = await runCli(["errors.System.CallFiltered", "--help"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("(Error)");
+    expect(stdout).toContain("Usage:");
+  });
+
+  test("apis.Core.version --help shows runtime API help with usage", async () => {
+    const { stdout, exitCode } = await runCli(["apis.Core.version", "--help"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Runtime API)");
     expect(stdout).toContain("Usage:");
   });
 });

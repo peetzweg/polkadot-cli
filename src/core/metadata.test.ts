@@ -3,13 +3,17 @@ import { getTestMetadata } from "../commands/__fixtures__/load-metadata.ts";
 import { MetadataError } from "../utils/errors.ts";
 import {
   describeCallArgs,
+  describeRuntimeApiMethodArgs,
   describeType,
   findPallet,
+  findRuntimeApi,
   getOrFetchMetadata,
   getPalletNames,
+  getRuntimeApiNames,
   getSignedExtensions,
   type Lookup,
   listPallets,
+  listRuntimeApis,
   type MetadataBundle,
   parseMetadata,
 } from "./metadata.ts";
@@ -273,5 +277,133 @@ describe("getOrFetchMetadata", () => {
   test("corrupt metadata bytes throws", () => {
     const garbage = new Uint8Array([0x00, 0x01, 0x02, 0x03]);
     expect(() => parseMetadata(garbage)).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listRuntimeApis
+// ---------------------------------------------------------------------------
+describe("listRuntimeApis", () => {
+  test("returns non-empty array", () => {
+    const apis = listRuntimeApis(meta);
+    expect(apis.length).toBeGreaterThan(0);
+  });
+
+  test("returns APIs sorted alphabetically by name", () => {
+    const apis = listRuntimeApis(meta);
+    const names = apis.map((a) => a.name);
+    const sorted = [...names].sort((a, b) => a.localeCompare(b));
+    expect(names).toEqual(sorted);
+  });
+
+  test("contains known runtime APIs", () => {
+    const apis = listRuntimeApis(meta);
+    const names = apis.map((a) => a.name);
+    expect(names).toContain("Core");
+    expect(names).toContain("Metadata");
+    expect(names).toContain("BlockBuilder");
+  });
+
+  test("methods within an API are sorted alphabetically", () => {
+    const apis = listRuntimeApis(meta);
+    for (const api of apis) {
+      const methodNames = api.methods.map((m) => m.name);
+      const sorted = [...methodNames].sort((a, b) => a.localeCompare(b));
+      expect(methodNames).toEqual(sorted);
+    }
+  });
+
+  test("Core API has version method", () => {
+    const apis = listRuntimeApis(meta);
+    const core = apis.find((a) => a.name === "Core");
+    expect(core).toBeDefined();
+    const version = core!.methods.find((m) => m.name === "version");
+    expect(version).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findRuntimeApi
+// ---------------------------------------------------------------------------
+describe("findRuntimeApi", () => {
+  test("exact name match returns RuntimeApiInfo", () => {
+    const api = findRuntimeApi(meta, "Core");
+    expect(api).toBeDefined();
+    expect(api!.name).toBe("Core");
+  });
+
+  test("case-insensitive match", () => {
+    const api = findRuntimeApi(meta, "core");
+    expect(api).toBeDefined();
+    expect(api!.name).toBe("Core");
+  });
+
+  test("returns undefined for unknown API name", () => {
+    expect(findRuntimeApi(meta, "NonExistentApi")).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getRuntimeApiNames
+// ---------------------------------------------------------------------------
+describe("getRuntimeApiNames", () => {
+  test("returns non-empty array", () => {
+    const names = getRuntimeApiNames(meta);
+    expect(names.length).toBeGreaterThan(0);
+  });
+
+  test("contains known API names", () => {
+    const names = getRuntimeApiNames(meta);
+    expect(names).toContain("Core");
+    expect(names).toContain("Metadata");
+  });
+
+  test("returns names sorted alphabetically", () => {
+    const names = getRuntimeApiNames(meta);
+    const sorted = [...names].sort((a, b) => a.localeCompare(b));
+    expect(names).toEqual(sorted);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// describeRuntimeApiMethodArgs
+// ---------------------------------------------------------------------------
+describe("describeRuntimeApiMethodArgs", () => {
+  test("method with no inputs returns ()", () => {
+    const api = findRuntimeApi(meta, "Core")!;
+    const version = api.methods.find((m) => m.name === "version")!;
+    const result = describeRuntimeApiMethodArgs(meta, version);
+    expect(result).toBe("()");
+  });
+
+  test("method with inputs formats correctly", () => {
+    // Find a method that has inputs
+    const apis = listRuntimeApis(meta);
+    let methodWithInputs: { api: string; method: any } | undefined;
+    for (const api of apis) {
+      for (const m of api.methods) {
+        if (m.inputs.length > 0) {
+          methodWithInputs = { api: api.name, method: m };
+          break;
+        }
+      }
+      if (methodWithInputs) break;
+    }
+    expect(methodWithInputs).toBeDefined();
+    const result = describeRuntimeApiMethodArgs(meta, methodWithInputs!.method);
+    expect(result.startsWith("(")).toBe(true);
+    expect(result.endsWith(")")).toBe(true);
+    // Should contain field name and colon
+    expect(result).toContain(":");
+  });
+});
+
+describe("MetadataBundle.version", () => {
+  test("version is populated from metadata", () => {
+    expect(meta.version).toBeGreaterThanOrEqual(14);
+  });
+
+  test("test fixture is v15", () => {
+    expect(meta.version).toBe(15);
   });
 });

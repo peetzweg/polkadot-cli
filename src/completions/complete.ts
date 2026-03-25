@@ -4,9 +4,9 @@ import type { Config } from "../config/types.ts";
 import { DEV_NAMES } from "../core/accounts.ts";
 import { getAlgorithmNames } from "../core/hash.ts";
 import type { PalletInfo } from "../core/metadata.ts";
-import { listPallets, parseMetadata } from "../core/metadata.ts";
+import { listPallets, listRuntimeApis, parseMetadata } from "../core/metadata.ts";
 
-const CATEGORIES = ["query", "tx", "const", "events", "errors"] as const;
+const CATEGORIES = ["query", "tx", "const", "events", "errors", "apis"] as const;
 
 const CATEGORY_ALIASES: Record<string, string> = {
   query: "query",
@@ -18,6 +18,8 @@ const CATEGORY_ALIASES: Record<string, string> = {
   event: "events",
   errors: "errors",
   error: "errors",
+  apis: "apis",
+  api: "apis",
 };
 
 const NAMED_COMMANDS = ["chain", "account", "inspect", "hash", "completions"];
@@ -48,6 +50,19 @@ async function loadPallets(_config: Config, chainName: string): Promise<PalletIn
   if (!raw) return null;
   const meta = parseMetadata(raw);
   return listPallets(meta);
+}
+
+async function loadRuntimeApiNames(
+  _config: Config,
+  chainName: string,
+): Promise<{ name: string; methodNames: string[] }[] | null> {
+  const raw = await loadMetadata(chainName);
+  if (!raw) return null;
+  const meta = parseMetadata(raw);
+  return listRuntimeApis(meta).map((a) => ({
+    name: a.name,
+    methodNames: a.methods.map((m) => m.name),
+  }));
 }
 
 function filterPallets(pallets: PalletInfo[], category: string): PalletInfo[] {
@@ -196,6 +211,19 @@ async function completeDotpath(
   if (firstIsCategory) {
     const category = matchCategory(first)!;
 
+    // Runtime APIs use API names / method names instead of pallets / items
+    if (category === "apis") {
+      return completeApisCategory(
+        first,
+        numComplete,
+        endsWithDot,
+        completeSegments,
+        currentWord,
+        config,
+        chainFromFlag,
+      );
+    }
+
     if (numComplete === 1 && endsWithDot) {
       // "category." → pallet names
       const chainName = chainFromFlag ?? config.defaultChain;
@@ -248,9 +276,22 @@ async function completeDotpath(
     }
 
     if (numComplete === 2) {
-      // "chain.category." or "chain.category.partial" → pallet names
+      // "chain.category." or "chain.category.partial" → pallet/API names
       const category = matchCategory(completeSegments[1]!);
       if (!category) return [];
+
+      if (category === "apis") {
+        return completeApisCategory(
+          `${first}.${completeSegments[1]!}`,
+          numComplete - 1,
+          endsWithDot,
+          completeSegments.slice(1),
+          currentWord,
+          config,
+          chainName,
+        );
+      }
+
       const pallets = await loadPallets(config, chainName);
       if (!pallets) return [];
       const filtered = filterPallets(pallets, category);
@@ -260,9 +301,22 @@ async function completeDotpath(
     }
 
     if (numComplete === 3) {
-      // "chain.category.Pallet." or "chain.category.Pallet.partial" → items
+      // "chain.category.Pallet." or "chain.category.Pallet.partial" → items/methods
       const category = matchCategory(completeSegments[1]!);
       if (!category) return [];
+
+      if (category === "apis") {
+        return completeApisCategory(
+          `${first}.${completeSegments[1]!}`,
+          numComplete - 1,
+          endsWithDot,
+          completeSegments.slice(1),
+          currentWord,
+          config,
+          chainName,
+        );
+      }
+
       const palletName = completeSegments[2]!;
       const pallets = await loadPallets(config, chainName);
       if (!pallets) return [];
@@ -275,6 +329,49 @@ async function completeDotpath(
     }
 
     return [];
+  }
+
+  return [];
+}
+
+/**
+ * Complete API names and method names for the `apis` category.
+ * `prefix` is the dotpath prefix before the API name (e.g. "apis" or "polkadot.apis").
+ * `numComplete` is the number of complete segments after the category (0, 1, or 2).
+ * `segments` are the complete segments after the category.
+ */
+async function completeApisCategory(
+  prefix: string,
+  numComplete: number,
+  endsWithDot: boolean,
+  segments: string[],
+  currentWord: string,
+  config: Config,
+  chainNameOverride?: string,
+): Promise<string[]> {
+  const chainName = chainNameOverride ?? config.defaultChain;
+  const apis = await loadRuntimeApiNames(config, chainName);
+  if (!apis) return [];
+
+  if (numComplete === 1 && endsWithDot) {
+    // "apis." → API names
+    const candidates = apis.map((a) => `${prefix}.${a.name}.`);
+    return filterPrefix(candidates, currentWord.slice(0, -1));
+  }
+
+  if (numComplete === 1 && !endsWithDot) {
+    // "apis.partial" → filter API names
+    const candidates = apis.map((a) => `${prefix}.${a.name}.`);
+    return filterPrefix(candidates, currentWord);
+  }
+
+  if (numComplete === 2) {
+    // "apis.Core." or "apis.Core.partial" → method names
+    const apiName = segments[1]!;
+    const api = apis.find((a) => a.name.toLowerCase() === apiName.toLowerCase());
+    if (!api) return [];
+    const candidates = api.methodNames.map((m) => `${prefix}.${apiName}.${m}`);
+    return filterPrefix(candidates, endsWithDot ? currentWord.slice(0, -1) : currentWord);
   }
 
   return [];

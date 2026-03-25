@@ -226,6 +226,48 @@ describe("named subcommand completion", () => {
   });
 });
 
+describe("dotpath completion — apis category", () => {
+  test("'apis.' returns API names", async () => {
+    const { stdout } = await runCli(["__complete", "--", "apis.", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    expect(l.every((s) => s.startsWith("apis."))).toBe(true);
+    expect(l.some((s) => s === "apis.Core.")).toBe(true);
+  });
+
+  test("'apis.Core.' returns method names", async () => {
+    const { stdout } = await runCli(["__complete", "--", "apis.Core.", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    expect(l.every((s) => s.startsWith("apis.Core."))).toBe(true);
+    expect(l.some((s) => s === "apis.Core.version")).toBe(true);
+  });
+
+  test("'apis.Co' filters to matching API names", async () => {
+    const { stdout } = await runCli(["__complete", "--", "apis.Co", ""]);
+    const l = lines(stdout);
+    expect(l).toContain("apis.Core.");
+  });
+
+  test("apis method completions (terminal) do NOT end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "apis.Core.", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(false);
+    }
+  });
+
+  test("apis API-level completions (intermediate) end with dot", async () => {
+    const { stdout } = await runCli(["__complete", "--", "apis.", ""]);
+    const l = lines(stdout);
+    expect(l.length).toBeGreaterThan(0);
+    for (const s of l) {
+      expect(s.endsWith(".")).toBe(true);
+    }
+  });
+});
+
 describe("dotpath completion — category paths", () => {
   test("'query.' returns pallet names with storage", async () => {
     const { stdout } = await runCli(["__complete", "--", "query.", ""]);

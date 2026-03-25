@@ -1,10 +1,19 @@
 import { getDynamicBuilder, getLookupFn } from "@polkadot-api/metadata-builders";
-import { decAnyMetadata, unifyMetadata } from "@polkadot-api/substrate-bindings";
+import {
+  Bytes,
+  decAnyMetadata,
+  Option,
+  u32,
+  unifyMetadata,
+} from "@polkadot-api/substrate-bindings";
+import { toHex } from "@polkadot-api/utils";
 import { loadMetadata, saveMetadata } from "../config/store.ts";
 import { ConnectionError, MetadataError } from "../utils/errors.ts";
 import type { ClientHandle } from "./client.ts";
 
 const METADATA_TIMEOUT_MS = 15_000;
+const optionalOpaqueBytes = Option(Bytes());
+const v15Arg = toHex(u32.enc(15));
 
 export interface PalletInfo {
   name: string;
@@ -56,14 +65,16 @@ export interface MetadataBundle {
   unified: UnifiedMeta;
   lookup: Lookup;
   builder: DynamicBuilder;
+  version: number;
 }
 
 export function parseMetadata(raw: Uint8Array): MetadataBundle {
   const decoded = decAnyMetadata(raw);
+  const version = Number(decoded.metadata.tag.replace("v", ""));
   const unified = unifyMetadata(decoded);
   const lookup = getLookupFn(unified);
   const builder = getDynamicBuilder(lookup);
-  return { unified, lookup, builder };
+  return { unified, lookup, builder, version };
 }
 
 export async function fetchMetadataFromChain(
@@ -72,22 +83,26 @@ export async function fetchMetadataFromChain(
 ): Promise<Uint8Array> {
   const { client } = clientHandle;
 
+  // Try v15 metadata first (includes runtime API info)
   try {
-    const hex = await Promise.race([
-      client._request<string>("state_getMetadata", []),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () =>
-            reject(
-              new ConnectionError(
-                `Timed out fetching metadata for "${chainName}" after ${METADATA_TIMEOUT_MS / 1000}s. ` +
-                  "Check that the RPC endpoint is correct and reachable.",
-              ),
-            ),
-          METADATA_TIMEOUT_MS,
-        ),
-      ),
-    ]);
+    const hex = await withTimeout(
+      client._request<string>("state_call", ["Metadata_metadata_at_version", v15Arg]),
+      chainName,
+    );
+    const raw = hexToBytes(hex);
+    const decoded = optionalOpaqueBytes.dec(raw);
+    if (decoded !== undefined) {
+      const bytes = new Uint8Array(decoded);
+      await saveMetadata(chainName, bytes);
+      return bytes;
+    }
+  } catch {
+    // v15 not available, fall through to v14
+  }
+
+  // Fall back to state_getMetadata (v14)
+  try {
+    const hex = await withTimeout(client._request<string>("state_getMetadata", []), chainName);
     const bytes = hexToBytes(hex);
     await saveMetadata(chainName, bytes);
     return bytes;
@@ -98,6 +113,24 @@ export async function fetchMetadataFromChain(
         "Check that the RPC endpoint is correct and reachable.",
     );
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, chainName: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () =>
+          reject(
+            new ConnectionError(
+              `Timed out fetching metadata for "${chainName}" after ${METADATA_TIMEOUT_MS / 1000}s. ` +
+                "Check that the RPC endpoint is correct and reachable.",
+            ),
+          ),
+        METADATA_TIMEOUT_MS,
+      ),
+    ),
+  ]);
 }
 
 export async function getOrFetchMetadata(
@@ -196,6 +229,58 @@ export function getSignedExtensions(meta: MetadataBundle): SignedExtensionInfo[]
 
 export function getPalletNames(meta: MetadataBundle): string[] {
   return meta.unified.pallets.map((p) => p.name).sort((a, b) => a.localeCompare(b));
+}
+
+export interface RuntimeApiInfo {
+  name: string;
+  methods: RuntimeApiMethodInfo[];
+  docs: string[];
+}
+
+export interface RuntimeApiMethodInfo {
+  name: string;
+  inputs: Array<{ name: string; type: number }>;
+  output: number;
+  docs: string[];
+}
+
+export function listRuntimeApis(meta: MetadataBundle): RuntimeApiInfo[] {
+  const sortByName = <T extends { name: string }>(arr: T[]) =>
+    arr.sort((a, b) => a.name.localeCompare(b.name));
+
+  return sortByName(
+    meta.unified.apis.map((api) => ({
+      name: api.name,
+      docs: api.docs ?? [],
+      methods: sortByName(
+        api.methods.map((m) => ({
+          name: m.name,
+          inputs: m.inputs.map((i) => ({ name: i.name, type: i.type })),
+          output: m.output,
+          docs: m.docs ?? [],
+        })),
+      ),
+    })),
+  );
+}
+
+export function findRuntimeApi(meta: MetadataBundle, apiName: string): RuntimeApiInfo | undefined {
+  return listRuntimeApis(meta).find((a) => a.name.toLowerCase() === apiName.toLowerCase());
+}
+
+export function getRuntimeApiNames(meta: MetadataBundle): string[] {
+  return meta.unified.apis.map((a) => a.name).sort((a, b) => a.localeCompare(b));
+}
+
+export function describeRuntimeApiMethodArgs(
+  meta: MetadataBundle,
+  method: RuntimeApiMethodInfo,
+): string {
+  if (method.inputs.length === 0) return "()";
+  const fields = method.inputs
+    .map((i) => `${i.name}: ${describeType(meta.lookup, i.type)}`)
+    .join(", ");
+  return `(${fields})`;
 }
 
 export function describeType(lookup: Lookup, typeId: number): string {

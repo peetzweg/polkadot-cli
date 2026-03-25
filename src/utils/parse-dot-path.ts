@@ -1,4 +1,4 @@
-export type DotCategory = "query" | "tx" | "const" | "events" | "errors";
+export type DotCategory = "query" | "tx" | "const" | "events" | "errors" | "apis";
 
 export interface ParsedDotPath {
   chain?: string;
@@ -17,6 +17,8 @@ const CATEGORY_ALIASES: Record<string, DotCategory> = {
   event: "events",
   errors: "errors",
   error: "errors",
+  apis: "apis",
+  api: "apis",
 };
 
 function matchCategory(segment: string): DotCategory | undefined {
@@ -44,7 +46,7 @@ export function parseDotPath(input: string, knownChains: string[] = []): ParsedD
       const cat = matchCategory(parts[0]!);
       if (cat) return { category: cat };
       throw new Error(
-        `Unknown command "${parts[0]}". Expected a category (query, tx, const, events, errors) or a named command.`,
+        `Unknown command "${parts[0]}". Expected a category (query, tx, const, events, errors, apis) or a named command.`,
       );
     }
 
