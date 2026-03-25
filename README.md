@@ -72,6 +72,7 @@ dot chain list
 # Re-fetch metadata after a runtime upgrade
 dot chain update          # updates default chain
 dot chain update kusama   # updates a specific chain
+dot chain update --all    # updates all configured chains in parallel
 
 # Set default chain
 dot chain default kusama
@@ -376,6 +377,7 @@ Runtime API info requires v15 metadata. If `dot apis` shows 0 APIs, update the c
 ```bash
 dot chain update              # default chain
 dot chain update people-paseo # specific chain
+dot chain update --all        # all configured chains
 ```
 
 ### Focused commands

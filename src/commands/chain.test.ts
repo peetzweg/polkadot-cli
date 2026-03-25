@@ -241,6 +241,12 @@ describe("dot chain", () => {
     expect(stderr).toContain("Chain name is required");
   });
 
+  test("help text shows --all flag", async () => {
+    const { stdout, exitCode } = await runCli(["chain"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("--all");
+  });
+
   test("add mychain (no --rpc) errors", async () => {
     const { stderr, exitCode } = await runCli(["chain", "add", "mychain"]);
     expect(exitCode).toBe(1);
