@@ -1,5 +1,32 @@
 # polkadot-cli
 
+## 1.6.0
+
+### Minor Changes
+
+- cae50f3: Add `--all` flag to `dot chain update` to re-fetch metadata for all configured chains in parallel.
+
+  - `dot chain update --all` updates all chains concurrently
+  - Shows a summary with check/cross marks for each chain
+  - Failures don't block other chains (uses `Promise.allSettled`)
+  - Exits with non-zero if any chain fails
+
+- 7064511: Add runtime API calls as new `apis` category. Browse and call Substrate runtime APIs (e.g. `Core.version`, `AccountNonceApi.account_nonce`) directly from the CLI.
+
+  - `dot apis` lists all runtime APIs with method counts
+  - `dot apis.Core` lists methods in a specific API with signatures
+  - `dot apis.Core.version` calls a runtime API method
+  - Chain prefix support: `dot polkadot.apis.Core.version`
+  - `--help` support: `dot apis.Core.version --help`
+  - Shell completions for API names and method names
+  - Aliases: `api` and `apis` both work
+  - Metadata fetching now requests v15 metadata first (required for runtime API info), falling back to v14
+  - Shows a helpful hint when cached metadata is v14 and does not include runtime APIs
+
+### Patch Changes
+
+- 4c7dbaa: Add feature list to README and docs landing page
+
 ## 1.5.0
 
 ### Minor Changes
