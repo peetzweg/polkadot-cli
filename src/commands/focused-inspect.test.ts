@@ -290,6 +290,109 @@ describe("dot apis", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Core Methods");
   });
+
+  test("space-separated pallet works for apis", async () => {
+    const { stdout, exitCode } = await runCli(["api", "Core"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Core Methods");
+  });
+
+  test("--chain flag with space-separated pallet works for apis", async () => {
+    const { stdout, exitCode } = await runCli(["--chain", "POLKADOT", "api", "Core"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Core Methods");
+  });
+});
+
+describe("space-separated arguments", () => {
+  test("query pallet: dot query System", async () => {
+    const { stdout, exitCode } = await runCli(["query", "System"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System Storage");
+    expect(stdout).toContain("Account");
+  });
+
+  test("query pallet + item: dot query System Number", async () => {
+    const { stdout, exitCode } = await runCli(["query", "System", "Number"]);
+    expect(exitCode).toBe(0);
+    // Should resolve to query.System.Number — a plain storage value
+    expect(stdout).toMatch(/\d+/);
+  });
+
+  test("tx pallet: dot tx Balances", async () => {
+    const { stdout, exitCode } = await runCli(["tx", "Balances"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Balances Calls");
+    expect(stdout).toContain("transfer_allow_death");
+  });
+
+  test("events pallet: dot events Balances", async () => {
+    const { stdout, exitCode } = await runCli(["events", "Balances"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Balances Events");
+    expect(stdout).toContain("Transfer");
+  });
+
+  test("events pallet + item: dot events Balances Transfer", async () => {
+    const { stdout, exitCode } = await runCli(["events", "Balances", "Transfer"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Event)");
+    expect(stdout).toContain("from:");
+  });
+
+  test("errors pallet: dot errors Balances", async () => {
+    const { stdout, exitCode } = await runCli(["errors", "Balances"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Balances Errors");
+    expect(stdout).toContain("InsufficientBalance");
+  });
+
+  test("errors pallet + item: dot errors Balances InsufficientBalance", async () => {
+    const { stdout, exitCode } = await runCli(["errors", "Balances", "InsufficientBalance"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Error)");
+    expect(stdout).toContain("Balance too low");
+  });
+
+  test("const pallet: dot const Balances", async () => {
+    const { stdout, exitCode } = await runCli(["const", "Balances"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Balances Constants");
+    expect(stdout).toContain("ExistentialDeposit");
+  });
+
+  test("const pallet + item: dot const Balances ExistentialDeposit", async () => {
+    const { stdout, exitCode } = await runCli(["const", "Balances", "ExistentialDeposit"]);
+    expect(exitCode).toBe(0);
+    // Should resolve to the constant value
+    expect(stdout).toMatch(/\d+/);
+  });
+
+  test("apis pallet: dot apis Core", async () => {
+    const { stdout, exitCode } = await runCli(["apis", "Core"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Core Methods");
+    expect(stdout).toContain("version");
+  });
+
+  test("--chain flag with space-separated args: dot --chain POLKADOT events Balances", async () => {
+    const { stdout, exitCode } = await runCli(["--chain", "POLKADOT", "events", "Balances"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Balances Events");
+  });
+
+  test("--chain flag with pallet + item: dot --chain POLKADOT errors Balances InsufficientBalance", async () => {
+    const { stdout, exitCode } = await runCli([
+      "--chain",
+      "POLKADOT",
+      "errors",
+      "Balances",
+      "InsufficientBalance",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Error)");
+    expect(stdout).toContain("Balance too low");
+  });
 });
 
 describe("no truncation", () => {

@@ -319,6 +319,29 @@ The `--chain` flag and default chain still work as before. Using a dot-path with
 
 For `inspect`, a two-segment input like `kusama.System` is disambiguated by checking configured chain names. Chain names (lowercase, e.g. `kusama`) and pallet names (PascalCase, e.g. `System`) don't collide in practice. If they did, the chain prefix takes priority and `--chain` serves as an escape hatch.
 
+## Space-Separated Syntax
+
+Pallet and item segments can also be provided as separate arguments instead of dot notation. These forms are equivalent:
+
+```
+# Dot notation vs space-separated — these are identical:
+dot query.System                          # dot notation
+dot query System                          # space-separated
+
+dot events.Balances.Transfer              # dot notation
+dot events Balances Transfer              # space-separated
+
+dot apis.Core                             # dot notation
+dot apis Core                             # space-separated
+
+# Especially useful with --chain flag:
+dot --chain kusama query System
+dot --chain kusama events Balances Transfer
+dot --chain kusama apis Core
+```
+
+This works for all categories (`query`, `tx`, `const`, `events`, `errors`, `apis`). Remaining arguments after the pallet and item are passed as method parameters as usual.
+
 ## Query
 
 Read on-chain storage using dot-path syntax: `dot query.Pallet.Item`. Fetch plain values, look up map entries by key, or enumerate all entries. Use `dot query` to list pallets with storage items, or `dot query.Pallet` to list a pallet's storage items.
