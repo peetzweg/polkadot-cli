@@ -1,6 +1,31 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
+import { existsSync, linkSync, mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { DEFAULT_CONFIG } from "../config/types.ts";
 import { runCli } from "./__fixtures__/run-cli.ts";
 import { showItemHelp } from "./focused-inspect.ts";
+
+// ---------------------------------------------------------------------------
+// Ensure metadata + config exist in real $HOME for in-process tests.
+// On CI runners $HOME/.polkadot/ doesn't exist; runCli subprocess tests
+// create isolated temp HOMEs, but in-process calls use the real HOME.
+// ---------------------------------------------------------------------------
+const FIXTURE_METADATA = join(import.meta.dir, "__fixtures__/polkadot-metadata.bin");
+const DOT_DIR = join(homedir(), ".polkadot");
+
+beforeAll(() => {
+  const metaDir = join(DOT_DIR, "chains", "polkadot");
+  const metaPath = join(metaDir, "metadata.bin");
+  if (!existsSync(metaPath)) {
+    mkdirSync(metaDir, { recursive: true });
+    linkSync(FIXTURE_METADATA, metaPath);
+  }
+  const configPath = join(DOT_DIR, "config.json");
+  if (!existsSync(configPath)) {
+    writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG));
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Direct unit tests for showItemHelp (in-process, counted by coverage).
