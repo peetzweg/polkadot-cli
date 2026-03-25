@@ -85,6 +85,7 @@ Re-fetch metadata after a runtime upgrade. Targets the default chain if no name 
 ```
 dot chain update
 dot chain update kusama
+dot chain update --all
 ```
 
 ### Set default chain
@@ -569,7 +570,7 @@ dot apis.Core.version --help               # show method signature, return type,
 
 `api` is an alias for `apis`. Shell completions work at every level: `apis.<Tab>` shows API names, `apis.Core.<Tab>` shows method names.
 
-Runtime API info requires v15 metadata. If `dot apis` shows 0 APIs, the CLI will suggest updating your cached metadata. Run `dot chain update` (or `dot chain update <chain>`) to fetch the latest version.
+Runtime API info requires v15 metadata. If `dot apis` shows 0 APIs, the CLI will suggest updating your cached metadata. Run `dot chain update` (or `dot chain update <chain>`, or `dot chain update --all` for all chains) to fetch the latest version.
 
 ## Transactions
 

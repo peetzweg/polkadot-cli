@@ -9,7 +9,7 @@ import {
 import { BUILTIN_CHAIN_NAMES } from "../config/types.ts";
 import { createChainClient } from "../core/client.ts";
 import { fetchMetadataFromChain } from "../core/metadata.ts";
-import { BOLD, CYAN, DIM, printHeading, RESET } from "../core/output.ts";
+import { BOLD, CHECK_MARK, CYAN, DIM, GREEN, printHeading, RED, RESET } from "../core/output.ts";
 
 const CHAIN_HELP = `
 ${BOLD}Usage:${RESET}
@@ -17,6 +17,7 @@ ${BOLD}Usage:${RESET}
   $ dot chain add <name> --light-client Add a chain via Smoldot light client
   $ dot chain remove <name>             Remove a chain
   $ dot chain update [name]             Re-fetch metadata (default chain if omitted)
+  $ dot chain update --all              Re-fetch metadata for all configured chains
   $ dot chain list                      List configured chains
   $ dot chain default <name>            Set the default chain
 
@@ -28,6 +29,7 @@ ${BOLD}Examples:${RESET}
   $ dot chain list
   $ dot chain update
   $ dot chain update kusama
+  $ dot chain update --all
   $ dot chain remove kusama
 `.trimStart();
 
@@ -35,11 +37,12 @@ export function registerChainCommands(cli: CAC) {
   cli
     .command("chain [action] [name]", "Manage chains (add, remove, update, list, default)")
     .alias("chains")
+    .option("--all", "Update all configured chains")
     .action(
       async (
         action: string | undefined,
         name: string | undefined,
-        opts: { rpc?: string | string[]; lightClient?: boolean },
+        opts: { rpc?: string | string[]; lightClient?: boolean; all?: boolean },
       ) => {
         if (!action) {
           if (process.argv[2] === "chains") return chainList();
@@ -155,8 +158,17 @@ async function chainList() {
   console.log();
 }
 
-async function chainUpdate(name: string | undefined, opts: { rpc?: string | string[] }) {
+async function chainUpdate(
+  name: string | undefined,
+  opts: { rpc?: string | string[]; all?: boolean },
+) {
   const config = await loadConfig();
+
+  if (opts.all) {
+    await chainUpdateAll(config);
+    return;
+  }
+
   const { name: chainName, chain: chainConfig } = resolveChain(config, name);
 
   console.error(`Connecting to ${chainName}...`);
@@ -168,6 +180,44 @@ async function chainUpdate(name: string | undefined, opts: { rpc?: string | stri
     console.log(`Metadata for "${chainName}" updated.`);
   } finally {
     clientHandle.destroy();
+  }
+}
+
+async function chainUpdateAll(config: {
+  chains: Record<string, import("../config/types.ts").ChainConfig>;
+}) {
+  const chainNames = Object.keys(config.chains).sort();
+
+  console.error(`Updating metadata for ${chainNames.length} chains...\n`);
+
+  const results = await Promise.allSettled(
+    chainNames.map(async (chainName) => {
+      const chainConfig = config.chains[chainName]!;
+      const clientHandle = await createChainClient(chainName, chainConfig);
+      try {
+        await fetchMetadataFromChain(clientHandle, chainName);
+      } finally {
+        clientHandle.destroy();
+      }
+    }),
+  );
+
+  for (let i = 0; i < chainNames.length; i++) {
+    const result = results[i]!;
+    const name = chainNames[i]!;
+    if (result.status === "fulfilled") {
+      console.log(`  ${GREEN}${CHECK_MARK}${RESET} ${name}`);
+    } else {
+      console.log(
+        `  ${RED}✗${RESET} ${name}${DIM} — ${result.reason?.message ?? "unknown error"}${RESET}`,
+      );
+    }
+  }
+
+  const failed = results.filter((r) => r.status === "rejected").length;
+  if (failed > 0) {
+    console.error(`\n${failed} of ${chainNames.length} chains failed to update.`);
+    process.exit(1);
   }
 }
 
