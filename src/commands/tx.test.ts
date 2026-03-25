@@ -6,6 +6,7 @@ import {
   autoDefaultForType,
   buildCustomSignedExtensions,
   decodeCallFallback,
+  fileArgsToStrings,
   formatDispatchError,
   formatEventValue,
   formatRawDecoded,
@@ -770,10 +771,97 @@ describe("normalizeValue", () => {
     expect(result).toBe(42);
   });
 
-  test("leaves non-string values alone for primitives", () => {
+  test("leaves bigint alone for u128 primitives", () => {
     const mockEntry = { type: "primitive", value: "u128" };
     expect(normalizeValue(meta.lookup, mockEntry, 42n)).toBe(42n);
+  });
+
+  test("converts number to bigint for u128 primitives (file/YAML input)", () => {
+    const mockEntry = { type: "primitive", value: "u128" };
+    expect(normalizeValue(meta.lookup, mockEntry, 42)).toBe(42n);
+  });
+
+  test("leaves number alone for u32 primitives", () => {
+    const mockEntry = { type: "primitive", value: "u32" };
     expect(normalizeValue(meta.lookup, mockEntry, 42)).toBe(42);
+  });
+
+  test("converts number to bigint for u64 primitives", () => {
+    const mockEntry = { type: "primitive", value: "u64" };
+    expect(normalizeValue(meta.lookup, mockEntry, 100)).toBe(100n);
+  });
+
+  test("converts number to bigint for u256 primitives", () => {
+    const mockEntry = { type: "primitive", value: "u256" };
+    expect(normalizeValue(meta.lookup, mockEntry, 0)).toBe(0n);
+  });
+
+  test("converts number to bigint for i128 primitives", () => {
+    const mockEntry = { type: "primitive", value: "i128" };
+    expect(normalizeValue(meta.lookup, mockEntry, -5)).toBe(-5n);
+  });
+
+  test("converts number to bigint for big compact types", () => {
+    const mockEntry = { type: "compact", isBig: true };
+    expect(normalizeValue(meta.lookup, mockEntry, 42)).toBe(42n);
+  });
+
+  test("leaves number alone for small compact types", () => {
+    const mockEntry = { type: "compact", isBig: false };
+    expect(normalizeValue(meta.lookup, mockEntry, 42)).toBe(42);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fileArgsToStrings
+// ---------------------------------------------------------------------------
+
+describe("fileArgsToStrings", () => {
+  test("returns empty array for null", () => {
+    expect(fileArgsToStrings(null)).toEqual([]);
+  });
+
+  test("returns empty array for undefined", () => {
+    expect(fileArgsToStrings(undefined)).toEqual([]);
+  });
+
+  test("converts object to individual string values", () => {
+    const result = fileArgsToStrings({ dest: "alice", value: 1000 });
+    expect(result).toEqual(["alice", "1000"]);
+  });
+
+  test("serializes nested objects as JSON", () => {
+    const result = fileArgsToStrings({
+      dest: { type: "V3", value: { parents: 1 } },
+      amount: 42,
+    });
+    expect(result).toEqual(['{"type":"V3","value":{"parents":1}}', "42"]);
+  });
+
+  test("converts array elements to strings", () => {
+    expect(fileArgsToStrings(["0xdead", "0xbeef"])).toEqual(["0xdead", "0xbeef"]);
+  });
+
+  test("serializes complex array elements as JSON", () => {
+    const result = fileArgsToStrings([{ type: "V3" }, 0]);
+    expect(result).toEqual(['{"type":"V3"}', "0"]);
+  });
+
+  test("converts scalar string", () => {
+    expect(fileArgsToStrings("0xdead")).toEqual(["0xdead"]);
+  });
+
+  test("converts scalar number", () => {
+    expect(fileArgsToStrings(42)).toEqual(["42"]);
+  });
+
+  test("converts scalar boolean", () => {
+    expect(fileArgsToStrings(true)).toEqual(["true"]);
+  });
+
+  test("converts null values in objects", () => {
+    const result = fileArgsToStrings({ key: null });
+    expect(result).toEqual(["null"]);
   });
 });
 

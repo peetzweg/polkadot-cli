@@ -1,0 +1,60 @@
+chain: people-paseo
+tx:
+  PolkadotXcm:
+    send:
+      dest:
+        type: V3
+        value:
+          parents: 1
+          interior:
+            type: Here
+      message:
+        type: V3
+        value:
+          - type: WithdrawAsset
+            value:
+              - id:
+                  type: Concrete
+                  value:
+                    parents: 0
+                    interior:
+                      type: Here
+                fun:
+                  type: Fungible
+                  value: ${AMOUNT:-1000000}
+          - type: BuyExecution
+            value:
+              fees:
+                id:
+                  type: Concrete
+                  value:
+                    parents: 0
+                    interior:
+                      type: Here
+                fun:
+                  type: Fungible
+                  value: 1000000000000
+              weight_limit:
+                type: Unlimited
+          - type: Transact
+            value:
+              origin_kind:
+                type: Native
+              require_weight_at_most:
+                ref_time: 2020000000
+                proof_size: 10000
+              call: "0x3c0ae8030000"
+          - type: RefundSurplus
+          - type: DepositAsset
+            value:
+              assets:
+                type: Wild
+                value:
+                  type: All
+              beneficiary:
+                parents: 0
+                interior:
+                  type: X1
+                  value:
+                    type: Parachain
+                    value: 5140

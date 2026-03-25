@@ -27,7 +27,13 @@ import { parseTypedArg } from "./tx.ts";
 export async function handleApis(
   target: string | undefined,
   args: string[],
-  opts: { chain?: string; rpc?: string; output?: string },
+  opts: {
+    chain?: string;
+    rpc?: string;
+    output?: string;
+    /** Pre-parsed args from a file */
+    parsedArgs?: unknown;
+  },
 ) {
   if (!target) {
     // List all runtime APIs
@@ -95,7 +101,20 @@ export async function handleApis(
       throw new Error(suggestMessage(`method in ${api.name}`, methodName, names));
     }
 
-    const parsedArgs = await parseRuntimeApiArgs(meta, method, args);
+    // Merge file args into positional args
+    const effectiveArgs =
+      args.length > 0 || opts.parsedArgs == null
+        ? args
+        : Array.isArray(opts.parsedArgs)
+          ? opts.parsedArgs.map((v: unknown) =>
+              typeof v === "object" ? JSON.stringify(v) : String(v),
+            )
+          : [
+              typeof opts.parsedArgs === "object"
+                ? JSON.stringify(opts.parsedArgs)
+                : String(opts.parsedArgs),
+            ];
+    const parsedArgs = await parseRuntimeApiArgs(meta, method, effectiveArgs);
 
     const unsafeApi = clientHandle.client.getUnsafeApi();
     const result = await (unsafeApi as any).apis[api.name][method.name](...parsedArgs);

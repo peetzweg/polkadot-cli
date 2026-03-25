@@ -16,6 +16,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Named address resolution across all commands
 - ✅ Runtime API calls — `dot apis.Core.version`
 - ✅ Batteries included — all system parachains and testnets already setup to be used
+- ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 
 ## Install
 
@@ -777,6 +778,156 @@ For manual override, use `--ext` with a JSON object:
 dot tx.System.remark 0xdeadbeef --from alice \
   --ext '{"MyExtension":{"value":"..."}}'
 ```
+
+## File-Based Commands
+
+Run any `dot` command from a YAML or JSON file instead of typing complex arguments inline. This is especially useful for XCM messages and other deeply nested call data.
+
+### File format
+
+Files use a required category wrapper (`tx`, `query`, `const`, or `apis`) with an optional `chain` field:
+
+```yaml
+chain: people-paseo          # optional, overridable with --chain
+tx:                           # category: tx, query, const, or apis
+  PolkadotXcm:               # pallet name
+    send:                     # call / storage item / constant / api method
+      dest: ...               # arguments (named or positional)
+      message: ...
+```
+
+### Running from a file
+
+```bash
+# Run a transaction from a YAML file
+dot ./transfer.xcm.yaml --from alice --dry-run
+
+# Encode only (no signing)
+dot ./transfer.xcm.yaml --encode
+
+# Override the chain from the file
+dot ./transfer.xcm.yaml --chain kusama --from alice
+
+# JSON files also work
+dot ./remark.json --encode
+```
+
+All existing flags work: `--from`, `--dry-run`, `--encode`, `--chain`, `--output`, `--wait`, `--ext`, etc.
+
+### Variable substitution
+
+Files support shell-style `${VAR}` placeholders with optional defaults via `${VAR:-default}`.
+
+```yaml
+chain: ${CHAIN:-people-paseo}
+
+vars:                         # defaults (lowest priority)
+  AMOUNT: "1000000000000"
+  DEST_PARA: "5140"
+
+tx:
+  PolkadotXcm:
+    send:
+      dest:
+        type: V3
+        value:
+          parents: 1
+          interior:
+            type: Here
+      message:
+        type: V3
+        value:
+          - type: WithdrawAsset
+            value:
+              - id:
+                  type: Concrete
+                  value:
+                    parents: 0
+                    interior:
+                      type: Here
+                fun:
+                  type: Fungible
+                  value: ${AMOUNT}
+          - type: RefundSurplus
+          - type: DepositAsset
+            value:
+              assets:
+                type: Wild
+                value:
+                  type: All
+              beneficiary:
+                parents: 0
+                interior:
+                  type: X1
+                  value:
+                    type: Parachain
+                    value: ${DEST_PARA}
+```
+
+Variables are resolved in this order (first match wins):
+
+1. `--var KEY=VALUE` flags (highest priority)
+2. Environment variables
+3. `vars:` section in the file (defaults)
+
+```bash
+# Uses defaults from vars section
+dot ./transfer.xcm.yaml --from alice
+
+# Override with --var
+dot ./transfer.xcm.yaml --var AMOUNT=2000000000000 --var DEST_PARA=1000 --from alice
+
+# Override via environment
+AMOUNT=5000000000000 dot ./transfer.xcm.yaml --from alice
+```
+
+### Examples for each category
+
+**Transaction (tx):**
+
+```yaml
+tx:
+  System:
+    remark:
+      - "0xdeadbeef"
+```
+
+**Storage query:**
+
+```yaml
+chain: polkadot
+query:
+  System:
+    Account:
+      - "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+```
+
+**Constant lookup:**
+
+```yaml
+chain: polkadot
+const:
+  Balances:
+    ExistentialDeposit:
+```
+
+**Runtime API call:**
+
+```yaml
+chain: polkadot
+apis:
+  Core:
+    version:
+```
+
+### File detection
+
+A first argument is treated as a file when it:
+
+- Ends with `.json`, `.yaml`, or `.yml`
+- Starts with `./` or `/`
+
+Otherwise, the normal dot-path syntax is used.
 
 ## Hash
 

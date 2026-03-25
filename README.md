@@ -20,6 +20,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Named address resolution across all commands
 - ✅ Runtime API calls — `dot apis.Core.version`
 - ✅ Batteries included — all system parachains and testnets already setup to be used
+- ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 
 ### Preconfigured chains
 
@@ -571,6 +572,108 @@ For manual override, use `--ext` with a JSON object:
 ```bash
 dot tx System.remark 0xdeadbeef --from alice --ext '{"MyExtension":{"value":"..."}}'
 ```
+
+### File-based commands
+
+Run any `dot` command from a YAML or JSON file. Especially useful for complex calls like XCM messages that are hard to construct inline.
+
+```yaml
+# transfer.xcm.yaml
+chain: people-paseo
+tx:
+  PolkadotXcm:
+    send:
+      dest:
+        type: V3
+        value:
+          parents: 1
+          interior:
+            type: Here
+      message:
+        type: V3
+        value:
+          - type: WithdrawAsset
+            value:
+              - id:
+                  type: Concrete
+                  value:
+                    parents: 0
+                    interior:
+                      type: Here
+                fun:
+                  type: Fungible
+                  value: ${AMOUNT:-1000000000000}
+          - type: RefundSurplus
+          - type: DepositAsset
+            value:
+              assets:
+                type: Wild
+                value:
+                  type: All
+              beneficiary:
+                parents: 0
+                interior:
+                  type: X1
+                  value:
+                    type: Parachain
+                    value: ${DEST_PARA:-5140}
+```
+
+```bash
+# Run from file
+dot ./transfer.xcm.yaml --from alice --dry-run
+
+# Override variables
+dot ./transfer.xcm.yaml --var AMOUNT=2000000000000 --var DEST_PARA=1000 --from alice
+
+# Use environment variables
+AMOUNT=5000000000000 dot ./transfer.xcm.yaml --from alice
+
+# Encode only
+dot ./transfer.xcm.yaml --encode
+```
+
+The file format uses a required category wrapper (`tx`, `query`, `const`, or `apis`) with the structure `category > Pallet > Item > args`:
+
+```yaml
+# Simple transaction
+tx:
+  System:
+    remark:
+      - "0xdeadbeef"
+```
+
+```yaml
+# Storage query
+chain: polkadot
+query:
+  System:
+    Account:
+      - "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+```
+
+```yaml
+# Constant lookup
+chain: polkadot
+const:
+  Balances:
+    ExistentialDeposit:
+```
+
+**Variable substitution** uses shell-style `${VAR}` with optional defaults `${VAR:-default}`. Variables are resolved in order: `--var` flags > environment variables > `vars:` section defaults.
+
+```yaml
+chain: ${CHAIN:-polkadot}
+vars:
+  AMOUNT: "1000000000000"
+tx:
+  Balances:
+    transfer_keep_alive:
+      dest: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+      value: ${AMOUNT}
+```
+
+All existing flags work with file input — `--chain` overrides the file's `chain:` field, `--from`, `--dry-run`, `--encode`, `--output`, etc. behave identically to inline commands.
 
 ### Compute hashes
 
