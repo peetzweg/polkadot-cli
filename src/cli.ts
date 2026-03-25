@@ -108,6 +108,17 @@ if (process.argv[2] === "__complete") {
           );
         }
 
+        // When dotpath doesn't include pallet/item, absorb them from positional args.
+        // Only consume item from args if pallet was also consumed from args,
+        // to avoid misinterpreting method arguments as item names
+        // (e.g. `dot query.System 0x1234` should NOT treat 0x1234 as an item).
+        if (!parsed.pallet && args.length > 0) {
+          parsed.pallet = args.shift()!;
+          if (!parsed.item && args.length > 0) {
+            parsed.item = args.shift()!;
+          }
+        }
+
         // Resolve chain: dotpath chain takes precedence, --chain flag as fallback
         if (parsed.chain && opts.chain) {
           throw new CliError(

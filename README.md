@@ -258,6 +258,29 @@ Chain names are case-insensitive — `Polkadot.System.Account`, `POLKADOT.System
 
 The `--chain` flag and default chain still work as before. If both a chain prefix and `--chain` flag are provided, the CLI errors.
 
+### Space-separated syntax
+
+Pallet and item segments can also be provided as separate arguments instead of dot notation. These forms are equivalent:
+
+```bash
+# Dot notation vs space-separated — these are identical:
+dot query.System                          # dot notation
+dot query System                          # space-separated
+
+dot events.Balances.Transfer              # dot notation
+dot events Balances Transfer              # space-separated
+
+dot apis.Core                             # dot notation
+dot apis Core                             # space-separated
+
+# Especially useful with --chain flag:
+dot --chain kusama query System
+dot --chain kusama events Balances Transfer
+dot --chain kusama apis Core
+```
+
+This works for all categories (`query`, `tx`, `const`, `events`, `errors`, `apis`). Remaining arguments after the pallet and item are passed as method parameters as usual.
+
 ### Query storage
 
 ```bash
