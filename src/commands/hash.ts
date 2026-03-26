@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import type { CAC } from "cac";
 import {
   ALGORITHMS,
@@ -24,26 +25,16 @@ async function resolveInput(
   }
 
   if (opts.file) {
-    const buf = await Bun.file(opts.file).arrayBuffer();
+    const buf = await readFile(opts.file);
     return new Uint8Array(buf);
   }
 
   if (opts.stdin) {
-    const reader = Bun.stdin.stream().getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(chunk);
     }
-    const totalLen = chunks.reduce((sum, c) => sum + c.length, 0);
-    const result = new Uint8Array(totalLen);
-    let offset = 0;
-    for (const chunk of chunks) {
-      result.set(chunk, offset);
-      offset += chunk.length;
-    }
-    return result;
+    return new Uint8Array(Buffer.concat(chunks));
   }
 
   return parseInputData(data!);

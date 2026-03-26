@@ -773,6 +773,14 @@ tx:
       value: ${AMOUNT}
 ```
 
+Hex values passed via `--var` are preserved as-is, including leading zeros. This is important for encoded call data in XCM `Transact` instructions or similar byte-array fields:
+
+```bash
+# Encode a remark, then embed it in an XCM Transact via --var
+CALL=$(dot tx.System.remark 0xdead --encode)
+dot ./xcm-transact.yaml --var CALL=$CALL --encode
+```
+
 All existing flags work with file input — `--chain` overrides the file's `chain:` field, `--from`, `--dry-run`, `--encode`, `--yaml`, `--json`, `--output`, etc. behave identically to inline commands.
 
 ### Compute hashes

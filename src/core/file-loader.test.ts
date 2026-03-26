@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isFilePath, loadCommandFile, parseVarFlags, substituteVars } from "./file-loader.ts";
+import {
+  isFilePath,
+  loadCommandFile,
+  parseVarFlags,
+  quoteYamlHexValues,
+  substituteVars,
+} from "./file-loader.ts";
 
 // ---------------------------------------------------------------------------
 // isFilePath
@@ -133,6 +139,60 @@ describe("substituteVars", () => {
 
   test("handles empty default", () => {
     expect(substituteVars("${VAR:-}", {})).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// quoteYamlHexValues
+// ---------------------------------------------------------------------------
+
+describe("quoteYamlHexValues", () => {
+  test("quotes bare hex value after key", () => {
+    expect(quoteYamlHexValues("call: 0xdeadbeef")).toBe('call: "0xdeadbeef"');
+  });
+
+  test("quotes hex with leading zeros (preserves them as string)", () => {
+    expect(quoteYamlHexValues("call: 0x000010deadbeef")).toBe('call: "0x000010deadbeef"');
+  });
+
+  test("quotes hex in array items", () => {
+    expect(quoteYamlHexValues("  - 0xdeadbeef")).toBe('  - "0xdeadbeef"');
+  });
+
+  test("does not double-quote already quoted hex", () => {
+    expect(quoteYamlHexValues('call: "0xdeadbeef"')).toBe('call: "0xdeadbeef"');
+  });
+
+  test("does not touch decimal numbers", () => {
+    expect(quoteYamlHexValues("ref_time: 2020000000")).toBe("ref_time: 2020000000");
+  });
+
+  test("does not touch non-hex strings", () => {
+    expect(quoteYamlHexValues("type: Here")).toBe("type: Here");
+  });
+
+  test("handles indented YAML keys", () => {
+    expect(quoteYamlHexValues("              call: 0x000010deadbeef")).toBe(
+      '              call: "0x000010deadbeef"',
+    );
+  });
+
+  test("handles multiline YAML correctly", () => {
+    const input = [
+      "chain: people",
+      "tx:",
+      "  System:",
+      "    remark:",
+      "      call: 0x000010deadbeef",
+      "      ref_time: 2020000000",
+    ].join("\n");
+    const result = quoteYamlHexValues(input);
+    expect(result).toContain('call: "0x000010deadbeef"');
+    expect(result).toContain("ref_time: 2020000000");
+  });
+
+  test("does not touch bare 0x without digits (not a YAML hex integer)", () => {
+    expect(quoteYamlHexValues("data: 0x")).toBe("data: 0x");
   });
 });
 
@@ -333,6 +393,32 @@ tx:
     const path = await writeTemp("default.yaml", yaml);
     const result = await loadCommandFile(path, {});
     expect(result.chain).toBe("polkadot");
+  });
+
+  // --- Hex preservation ---
+
+  test("preserves hex --var values as strings in YAML", async () => {
+    const yaml = `
+tx:
+  System:
+    remark:
+      call: \${CALL}
+`;
+    const path = await writeTemp("hex.yaml", yaml);
+    const result = await loadCommandFile(path, { CALL: "0x000010deadbeef" });
+    expect(result.args).toEqual({ call: "0x000010deadbeef" });
+  });
+
+  test("preserves hex --var values with leading zeros", async () => {
+    const yaml = `
+tx:
+  System:
+    remark:
+      data: \${DATA}
+`;
+    const path = await writeTemp("hexzero.yaml", yaml);
+    const result = await loadCommandFile(path, { DATA: "0x0000ff" });
+    expect(result.args).toEqual({ data: "0x0000ff" });
   });
 
   // --- Error cases ---

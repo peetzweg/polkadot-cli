@@ -869,6 +869,14 @@ dot ./transfer.yaml --var AMOUNT=2000000000000 --from alice
 AMOUNT=5000000000000 dot ./transfer.yaml --from alice
 ```
 
+Hex values passed via `--var` are preserved as-is, including leading zeros. This is important for encoded call data in XCM `Transact` instructions or similar byte-array fields:
+
+```bash
+# Encode a remark, then embed it in an XCM Transact via --var
+CALL=$(dot tx.System.remark 0xdead --encode)
+dot ./xcm-transact.yaml --var CALL=$CALL --encode
+```
+
 ### Examples for each category
 
 **Transaction (tx):**
