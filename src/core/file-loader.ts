@@ -1,3 +1,4 @@
+import { access, readFile } from "node:fs/promises";
 import { parse as parseYaml } from "yaml";
 import { CliError } from "../utils/errors.ts";
 
@@ -83,11 +84,24 @@ export function substituteVars(text: string, vars: Record<string, string>): stri
     if (defaultValue !== undefined) return defaultValue;
 
     throw new CliError(
-      `Undefined variable "\${${varName}}" in file. ` +
-        `Provide it via --var ${varName}=VALUE, as an environment variable, ` +
-        `or add a default with \${${varName}:-default}.`,
+      `Undefined variable "\${${varName}}" in file.\n\n` +
+        `  Provide it using one of:\n` +
+        `    --var ${varName}=VALUE\n` +
+        `    ${varName}=VALUE dot ...    (environment variable)\n` +
+        `    \${${varName}:-default}     (inline default in file)`,
     );
   });
+}
+
+/**
+ * Quote bare hex values in YAML text so they are preserved as strings.
+ *
+ * YAML's core schema interprets `0x…` as hex integers, which silently drops
+ * leading zeros (e.g. `0x000010deadbeef` → `72455405295`). For encoded call
+ * data every byte matters, so we wrap unquoted hex values in double quotes.
+ */
+export function quoteYamlHexValues(text: string): string {
+  return text.replace(/^(\s*(?:[^:]+:\s+|-\s+))(0x[0-9a-fA-F]+)\s*$/gm, '$1"$2"');
 }
 
 /**
@@ -101,13 +115,13 @@ export async function loadCommandFile(
   cliVars: Record<string, string>,
 ): Promise<ParsedFileCommand> {
   // Read file
-  const file = Bun.file(filePath);
-  const exists = await file.exists();
-  if (!exists) {
+  try {
+    await access(filePath);
+  } catch {
     throw new CliError(`File not found: ${filePath}`);
   }
 
-  const rawText = await file.text();
+  const rawText = await readFile(filePath, "utf-8");
   if (!rawText.trim()) {
     throw new CliError(`File is empty: ${filePath}`);
   }
@@ -138,10 +152,15 @@ export async function loadCommandFile(
   // Substitute variables
   const substituted = substituteVars(rawText, mergedVars);
 
+  // For YAML: quote bare hex values so they stay as strings instead of being
+  // parsed as integers (YAML core schema interprets 0x... as hex numbers,
+  // which loses leading zeros that are significant for encoded call data).
+  const textToParse = isJson ? substituted : quoteYamlHexValues(substituted);
+
   // Parse
   let parsed: unknown;
   try {
-    parsed = isJson ? JSON.parse(substituted) : parseYaml(substituted);
+    parsed = isJson ? JSON.parse(textToParse) : parseYaml(textToParse);
   } catch (err) {
     const format = isJson ? "JSON" : "YAML";
     const msg = err instanceof Error ? err.message : String(err);
