@@ -21,6 +21,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Runtime API calls — `dot apis.Core.version`
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
+- ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
 
 ### Preconfigured chains
 
@@ -774,6 +775,32 @@ dot hash blake2b256 0xdeadbeef --output json
 ```
 
 Run `dot hash` with no arguments to see all available algorithms.
+
+### Parachain sovereign accounts
+
+Derive the sovereign account addresses for a parachain. These are deterministic accounts derived from a parachain ID — no chain connection required.
+
+- **Child** accounts represent a parachain on the relay chain (prefix `"para"`)
+- **Sibling** accounts represent a parachain on another parachain (prefix `"sibl"`)
+
+```bash
+# Show both child and sibling accounts
+dot parachain 1000
+
+# Show only the child (relay chain) account
+dot parachain 2004 --type child
+
+# Show only the sibling (parachain-to-parachain) account
+dot parachain 2004 --type sibling
+
+# Use Polkadot SS58 prefix (default: 42)
+dot parachain 1000 --prefix 0
+
+# JSON output
+dot parachain 1000 --output json
+```
+
+Run `dot parachain` with no arguments to see usage and examples.
 
 ### Getting help
 
