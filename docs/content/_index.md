@@ -698,6 +698,28 @@ dot tx.Sudo.sudo $(dot tx.System.remark 0xcafe --encode) --from alice
 
 `--encode` and `--dry-run` are mutually exclusive. `--encode` cannot be used with raw call hex (it is already encoded).
 
+### Decode call data to YAML / JSON
+
+Decode a hex-encoded call into a YAML or JSON file that is compatible with [file-based commands](#file-based-commands). This is useful for inspecting opaque call data, sharing human-readable transaction definitions, or editing parameters before re-submitting. Works offline from cached metadata and does not require `--from`.
+
+```
+# Decode a raw hex call to YAML
+dot tx.0x0001076465616462656566 --yaml
+
+# Decode a raw hex call to JSON
+dot tx.0x0001076465616462656566 --json
+
+# Encode a named call and output as YAML
+dot tx.System.remark 0xdeadbeef --yaml
+
+# Round-trip: encode to hex, decode to YAML, re-encode from file
+dot tx.System.remark 0xdeadbeef --encode           # 0x0001076465616462656566
+dot tx.0x0001076465616462656566 --yaml > remark.yaml
+dot ./remark.yaml --encode                          # same hex
+```
+
+`--yaml` / `--json` are mutually exclusive with each other and with `--encode` and `--dry-run`.
+
 ### Transaction output
 
 Both dry-run and submission display the encoded call hex and a decoded human-readable form:
@@ -813,7 +835,7 @@ dot ./transfer.xcm.yaml --chain kusama --from alice
 dot ./remark.json --encode
 ```
 
-All existing flags work: `--from`, `--dry-run`, `--encode`, `--chain`, `--output`, `--wait`, `--ext`, etc.
+All existing flags work: `--from`, `--dry-run`, `--encode`, `--yaml`, `--json`, `--chain`, `--output`, `--wait`, `--ext`, etc.
 
 ### Variable substitution
 

@@ -6,6 +6,7 @@ import {
   autoDefaultForType,
   buildCustomSignedExtensions,
   decodeCallFallback,
+  decodeCallToFileFormat,
   fileArgsToStrings,
   formatDispatchError,
   formatEventValue,
@@ -18,6 +19,7 @@ import {
   parsePrimitive,
   parseTypedArg,
   parseWaitLevel,
+  sanitizeForSerialization,
   typeHint,
 } from "./tx.ts";
 
@@ -1205,6 +1207,141 @@ describe("decodeCallFallback", () => {
 });
 
 // ---------------------------------------------------------------------------
+// sanitizeForSerialization
+// ---------------------------------------------------------------------------
+
+describe("sanitizeForSerialization", () => {
+  test("converts Binary to hex string", () => {
+    expect(sanitizeForSerialization(Binary.fromHex("0xdeadbeef"))).toBe("0xdeadbeef");
+  });
+
+  test("converts BigInt within safe range to number", () => {
+    expect(sanitizeForSerialization(1000000000000n)).toBe(1000000000000);
+  });
+
+  test("converts BigInt outside safe range to string", () => {
+    const big = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
+    expect(sanitizeForSerialization(big)).toBe(big.toString());
+  });
+
+  test("converts undefined to null", () => {
+    expect(sanitizeForSerialization(undefined)).toBe(null);
+  });
+
+  test("passes through strings, numbers, booleans", () => {
+    expect(sanitizeForSerialization("hello")).toBe("hello");
+    expect(sanitizeForSerialization(42)).toBe(42);
+    expect(sanitizeForSerialization(true)).toBe(true);
+  });
+
+  test("recursively processes objects", () => {
+    const input = { a: Binary.fromHex("0xaa"), b: 100n };
+    expect(sanitizeForSerialization(input)).toEqual({ a: "0xaa", b: 100 });
+  });
+
+  test("recursively processes arrays", () => {
+    const input = [Binary.fromHex("0xbb"), 200n];
+    expect(sanitizeForSerialization(input)).toEqual(["0xbb", 200]);
+  });
+
+  test("handles nested enum-like structures", () => {
+    const input = { type: "Fungible", value: 1000000000000n };
+    expect(sanitizeForSerialization(input)).toEqual({ type: "Fungible", value: 1000000000000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// decodeCallToFileFormat
+// ---------------------------------------------------------------------------
+
+describe("decodeCallToFileFormat", () => {
+  test("System.remark produces file-compatible object", () => {
+    const { codec, location } = meta.builder.buildCall("System", "remark");
+    const callData = { remark: Binary.fromHex("0xdeadbeef") };
+    const encodedArgs = codec.enc(callData);
+    const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
+    const callHex = Binary.fromBytes(fullCall).asHex();
+
+    const result = decodeCallToFileFormat(meta, callHex, "polkadot");
+    expect(result.chain).toBe("polkadot");
+    expect(result.tx).toBeDefined();
+    const tx = result.tx as Record<string, any>;
+    expect(tx.System).toBeDefined();
+    expect(tx.System.remark).toBeDefined();
+    expect(tx.System.remark.remark).toBe("0xdeadbeef");
+  });
+
+  test("Balances.transfer_keep_alive produces file-compatible object", () => {
+    const { codec, location } = meta.builder.buildCall("Balances", "transfer_keep_alive");
+    const callData = {
+      dest: { type: "Id", value: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty" },
+      value: 1000000000000n,
+    };
+    const encodedArgs = codec.enc(callData);
+    const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
+    const callHex = Binary.fromBytes(fullCall).asHex();
+
+    const result = decodeCallToFileFormat(meta, callHex, "polkadot");
+    const tx = result.tx as Record<string, any>;
+    expect(tx.Balances).toBeDefined();
+    expect(tx.Balances.transfer_keep_alive).toBeDefined();
+    expect(tx.Balances.transfer_keep_alive.dest.type).toBe("Id");
+    expect(tx.Balances.transfer_keep_alive.value).toBe(1000000000000);
+  });
+
+  test("XCM call produces file-compatible object with enum structure", () => {
+    const { codec, location } = meta.builder.buildCall("XcmPallet", "teleport_assets");
+    const callData = {
+      dest: {
+        type: "V3",
+        value: {
+          parents: 0,
+          interior: { type: "X1", value: { type: "Parachain", value: 1000 } },
+        },
+      },
+      beneficiary: {
+        type: "V3",
+        value: {
+          parents: 0,
+          interior: {
+            type: "X1",
+            value: {
+              type: "AccountId32",
+              value: {
+                network: undefined,
+                id: Binary.fromHex(
+                  "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+                ),
+              },
+            },
+          },
+        },
+      },
+      assets: {
+        type: "V3",
+        value: [
+          {
+            id: { type: "Concrete", value: { parents: 0, interior: { type: "Here" } } },
+            fun: { type: "Fungible", value: 1000000000000n },
+          },
+        ],
+      },
+      fee_asset_item: 0,
+    };
+    const encodedArgs = codec.enc(callData);
+    const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
+    const callHex = Binary.fromBytes(fullCall).asHex();
+
+    const result = decodeCallToFileFormat(meta, callHex, "polkadot");
+    const tx = result.tx as Record<string, any>;
+    expect(tx.XcmPallet).toBeDefined();
+    expect(tx.XcmPallet.teleport_assets).toBeDefined();
+    expect(tx.XcmPallet.teleport_assets.dest.type).toBe("V3");
+    expect(tx.XcmPallet.teleport_assets.assets.type).toBe("V3");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Layer 1: CLI integration tests (subprocess)
 // ---------------------------------------------------------------------------
 
@@ -1446,5 +1583,118 @@ describe("dot tx CLI integration", () => {
     const { stderr, exitCode } = await runCli(["tx.0x0001"]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("--from");
+  });
+
+  // --yaml / --json tests
+  test("--yaml with named call outputs valid YAML", async () => {
+    const { stdout, exitCode, stderr } = await runCli(["tx.System.remark", "0xdeadbeef", "--yaml"]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("chain:");
+    expect(stdout).toContain("tx:");
+    expect(stdout).toContain("System:");
+    expect(stdout).toContain("remark:");
+  });
+
+  test("--json with named call outputs valid JSON", async () => {
+    const { stdout, exitCode, stderr } = await runCli(["tx.System.remark", "0xdeadbeef", "--json"]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBeDefined();
+    expect(parsed.tx.System.remark).toBeDefined();
+  });
+
+  test("--yaml with raw hex decodes correctly", async () => {
+    // First encode a call to get valid hex
+    const { stdout: hex } = await runCli(["tx.System.remark", "0xdeadbeef", "--encode"]);
+    // Then decode with --yaml
+    const { stdout, exitCode, stderr } = await runCli([`tx.${hex}`, "--yaml"]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("System:");
+    expect(stdout).toContain("remark:");
+  });
+
+  test("--json with raw hex decodes correctly", async () => {
+    const { stdout: hex } = await runCli(["tx.System.remark", "0xdeadbeef", "--encode"]);
+    const { stdout, exitCode, stderr } = await runCli([`tx.${hex}`, "--json"]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.tx.System.remark).toBeDefined();
+  });
+
+  test("--yaml and --encode are mutually exclusive", async () => {
+    const { stderr, exitCode } = await runCli(["tx.System.remark", "0xaa", "--yaml", "--encode"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("mutually exclusive");
+  });
+
+  test("--json and --dry-run are mutually exclusive", async () => {
+    const { stderr, exitCode } = await runCli([
+      "tx.System.remark",
+      "0xaa",
+      "--json",
+      "--dry-run",
+      "--from",
+      "alice",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("mutually exclusive");
+  });
+
+  test("--yaml and --json are mutually exclusive", async () => {
+    const { stderr, exitCode } = await runCli(["tx.System.remark", "0xaa", "--yaml", "--json"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("mutually exclusive");
+  });
+
+  test("--yaml without --from succeeds (no signer needed)", async () => {
+    const { exitCode } = await runCli(["tx.System.remark", "0xaa", "--yaml"]);
+    expect(exitCode).toBe(0);
+  });
+
+  test("round-trip: encode → --yaml → file input → --encode produces same hex", async () => {
+    // Step 1: Encode a call
+    const { stdout: originalHex } = await runCli(["tx.System.remark", "0xdeadbeef", "--encode"]);
+    expect(originalHex).toMatch(/^0x[0-9a-f]+$/);
+
+    // Step 2: Decode to YAML
+    const { stdout: yamlContent } = await runCli([`tx.${originalHex}`, "--yaml"]);
+
+    // Step 3: Feed YAML back as file input with --encode
+    const {
+      stdout: roundTripHex,
+      exitCode,
+      stderr,
+    } = await runCli(["{{HOME}}/decoded.yaml", "--encode"], {
+      files: { "decoded.yaml": yamlContent },
+    });
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(roundTripHex).toBe(originalHex);
+  });
+
+  test("round-trip: encode → --json → file input → --encode produces same hex", async () => {
+    const { stdout: originalHex } = await runCli([
+      "tx.Balances.transfer_keep_alive",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+      "1000000000000",
+      "--encode",
+    ]);
+
+    const { stdout: jsonContent } = await runCli([`tx.${originalHex}`, "--json"]);
+
+    const {
+      stdout: roundTripHex,
+      exitCode,
+      stderr,
+    } = await runCli(["{{HOME}}/decoded.json", "--encode"], {
+      files: { "decoded.json": jsonContent },
+    });
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(roundTripHex).toBe(originalHex);
   });
 });

@@ -65,6 +65,8 @@ if (process.argv[2] === "__complete") {
     .option("--from <name>", "Account to sign with (for tx)")
     .option("--dry-run", "Estimate fees without submitting (for tx)")
     .option("--encode", "Encode call to hex without signing (for tx)")
+    .option("--yaml", "Decode call to YAML file format (for tx)")
+    .option("--json", "Decode call to JSON file format (for tx)")
     .option("--ext <json>", "Custom signed extension values as JSON (for tx)")
     .option(
       "-w, --wait <level>",
@@ -89,6 +91,8 @@ if (process.argv[2] === "__complete") {
           from?: string;
           dryRun?: boolean;
           encode?: boolean;
+          yaml?: boolean;
+          json?: boolean;
           ext?: string;
           wait?: string;
           limit: number;
@@ -119,6 +123,8 @@ if (process.argv[2] === "__complete") {
                 from: opts.from,
                 dryRun: opts.dryRun,
                 encode: opts.encode,
+                yaml: opts.yaml,
+                json: opts.json,
                 ext: opts.ext,
                 wait: opts.wait,
                 parsedArgs: cmd.args,
@@ -202,6 +208,8 @@ if (process.argv[2] === "__complete") {
                 from: opts.from,
                 dryRun: opts.dryRun,
                 encode: opts.encode,
+                yaml: opts.yaml,
+                json: opts.json,
                 ext: opts.ext,
                 wait: opts.wait,
               });
@@ -211,6 +219,8 @@ if (process.argv[2] === "__complete") {
                 from: opts.from,
                 dryRun: opts.dryRun,
                 encode: opts.encode,
+                yaml: opts.yaml,
+                json: opts.json,
                 ext: opts.ext,
                 wait: opts.wait,
               });
@@ -274,6 +284,8 @@ if (process.argv[2] === "__complete") {
     console.log("  dot apis.Core.version                    Call a runtime API");
     console.log("  dot polkadot.query.System.Number        With chain prefix");
     console.log("  dot ./transfer.yaml --from alice        Run from file");
+    console.log("  dot tx.0x1f0003... --yaml               Decode hex call to YAML");
+    console.log("  dot tx.System.remark 0xdead --json      Encode & output as JSON file format");
     console.log();
     console.log("Commands:");
     console.log("  inspect [target]   Inspect chain metadata (alias: explore)");
