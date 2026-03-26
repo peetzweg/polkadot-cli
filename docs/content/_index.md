@@ -17,6 +17,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Runtime API calls — `dot apis.Core.version`
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
+- ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
 
 ## Install
 
@@ -1080,6 +1081,77 @@ dot hash blake2b256 0xdeadbeef --output json
 ```
 
 Run `dot hash` with no arguments to see all available algorithms and examples.
+
+## Parachain Sovereign Accounts
+
+Derive the sovereign account addresses for a parachain. Runs offline — no chain connection required.
+
+Every parachain has two types of sovereign account:
+
+- **Child** — the account a parachain has on the relay chain. Uses the `"para"` prefix (`0x70617261`).
+- **Sibling** — the account a parachain has on another parachain. Uses the `"sibl"` prefix (`0x7369626c`).
+
+These accounts are deterministic: the 32-byte account ID is constructed as `prefix (4 bytes) + paraId as little-endian u32 (4 bytes) + zero padding (24 bytes)`.
+
+### Show both accounts
+
+```
+dot parachain 1000
+```
+
+Output:
+
+```
+Parachain 1000 — Sovereign Accounts
+
+  Child:
+    Public Key:  0x70617261e8030000000000000000000000000000000000000000000000000000
+    SS58:        5Ec4AhPZk8STuex8Wsi9TwDtJQxKqzPJRCH7348Xtcs9vZLJ
+    Prefix:      42
+
+  Sibling:
+    Public Key:  0x7369626ce8030000000000000000000000000000000000000000000000000000
+    SS58:        5Eg2fntNprdN3FgH4sfEaaZhYtddZQSQUqvYJ1f2mLtinVhV
+    Prefix:      42
+```
+
+### Filter by type
+
+```
+dot parachain 2004 --type child
+dot parachain 2004 --type sibling
+```
+
+### Custom SS58 prefix
+
+Use `--prefix` to encode the address for a specific network (e.g., `0` for Polkadot, `2` for Kusama):
+
+```
+dot parachain 1000 --prefix 0
+```
+
+### JSON output
+
+```
+dot parachain 1000 --output json
+```
+
+```json
+{
+  "paraId": 1000,
+  "prefix": 42,
+  "child": {
+    "publicKey": "0x70617261e8030000000000000000000000000000000000000000000000000000",
+    "ss58": "5Ec4AhPZk8STuex8Wsi9TwDtJQxKqzPJRCH7348Xtcs9vZLJ"
+  },
+  "sibling": {
+    "publicKey": "0x7369626ce8030000000000000000000000000000000000000000000000000000",
+    "ss58": "5Eg2fntNprdN3FgH4sfEaaZhYtddZQSQUqvYJ1f2mLtinVhV"
+  }
+}
+```
+
+Run `dot parachain` with no arguments to see usage and examples.
 
 ## Shell Completions
 
