@@ -2,6 +2,7 @@ import type { Decoded } from "@polkadot-api/view-builder";
 import { getViewBuilder } from "@polkadot-api/view-builder";
 import type { TxBestBlocksState, TxBroadcasted, TxEvent, TxFinalized } from "polkadot-api";
 import { Binary } from "polkadot-api";
+import { stringify as stringifyYaml } from "yaml";
 import { loadConfig, resolveChain } from "../config/store.ts";
 import { primaryRpc } from "../config/types.ts";
 import { resolveAccountSigner, toSs58 } from "../core/accounts.ts";
@@ -64,6 +65,8 @@ export async function handleTx(
     from?: string;
     dryRun?: boolean;
     encode?: boolean;
+    yaml?: boolean;
+    json?: boolean;
     output?: string;
     ext?: string;
     wait?: string;
@@ -114,7 +117,7 @@ export async function handleTx(
     return;
   }
 
-  if (!opts.from && !opts.encode) {
+  if (!opts.from && !opts.encode && !opts.yaml && !opts.json) {
     if (isRawCall) {
       throw new Error("--from is required (or use --encode to output hex without signing)");
     }
@@ -128,6 +131,16 @@ export async function handleTx(
 
   if (opts.encode && isRawCall) {
     throw new Error("--encode cannot be used with raw call hex (already encoded)");
+  }
+
+  if ((opts.yaml || opts.json) && opts.encode) {
+    throw new Error("--yaml/--json and --encode are mutually exclusive");
+  }
+  if ((opts.yaml || opts.json) && opts.dryRun) {
+    throw new Error("--yaml/--json and --dry-run are mutually exclusive");
+  }
+  if (opts.yaml && opts.json) {
+    throw new Error("--yaml and --json are mutually exclusive");
   }
 
   const config = await loadConfig();
@@ -144,11 +157,12 @@ export async function handleTx(
 
   const { name: chainName, chain: chainConfig } = resolveChain(config, effectiveChain);
 
-  const signer = opts.encode ? undefined : await resolveAccountSigner(opts.from!);
+  const decodeOnly = opts.encode || opts.yaml || opts.json;
+  const signer = decodeOnly ? undefined : await resolveAccountSigner(opts.from!);
 
   let clientHandle: ClientHandle | undefined;
 
-  if (!opts.encode) {
+  if (!decodeOnly) {
     clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
   }
 
@@ -169,7 +183,7 @@ export async function handleTx(
     let unsafeApi: any;
     let txOptions: { customSignedExtensions: Record<string, any> } | undefined;
 
-    if (!opts.encode) {
+    if (!decodeOnly) {
       const userExtOverrides = parseExtOption(opts.ext);
       const customSignedExtensions = buildCustomSignedExtensions(meta, userExtOverrides);
       txOptions =
@@ -187,9 +201,16 @@ export async function handleTx(
             "Usage: dot tx 0x<call_hex> --from <account>",
         );
       }
+      callHex = target;
+
+      if (opts.yaml || opts.json) {
+        const fileObj = decodeCallToFileFormat(meta, callHex, chainName);
+        outputFileFormat(fileObj, !!opts.yaml);
+        return;
+      }
+
       const callBinary = Binary.fromHex(target as `0x${string}`);
       tx = await (unsafeApi as any).txFromCallData(callBinary);
-      callHex = target;
     } else {
       // Validate pallet
       const palletNames = getPalletNames(meta);
@@ -212,11 +233,17 @@ export async function handleTx(
         opts.parsedArgs !== undefined ? fileArgsToStrings(opts.parsedArgs) : args;
       const callData = await parseCallArgs(meta, palletInfo.name, callInfo.name, effectiveArgs);
 
-      if (opts.encode) {
+      if (opts.encode || opts.yaml || opts.json) {
         const { codec, location } = meta.builder.buildCall(palletInfo.name, callInfo.name);
         const encodedArgs = codec.enc(callData);
         const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
-        console.log(Binary.fromBytes(fullCall).asHex());
+        const hex = Binary.fromBytes(fullCall).asHex();
+        if (opts.encode) {
+          console.log(hex);
+          return;
+        }
+        const fileObj = decodeCallToFileFormat(meta, hex, chainName);
+        outputFileFormat(fileObj, !!opts.yaml);
         return;
       }
 
@@ -358,6 +385,63 @@ function decodeCallFallback(meta: MetadataBundle, callHex: string): string {
   }
   const argsStr = formatRawDecoded(args);
   return `${palletName}.${callName} ${argsStr}`;
+}
+
+function decodeCallToFileFormat(
+  meta: MetadataBundle,
+  callHex: string,
+  chainName: string,
+): Record<string, unknown> {
+  const callTypeId = meta.lookup.call;
+  if (callTypeId == null) throw new Error("No RuntimeCall type ID in metadata");
+  const codec = meta.builder.buildDefinition(callTypeId);
+  const decoded = codec.dec(Binary.fromHex(callHex as `0x${string}`).asBytes());
+  // decoded is { type: "PalletName", value: { type: "call_name", value: { ...args } } }
+  const palletName: string = decoded.type;
+  const call = decoded.value;
+  const callName: string = call.type;
+  const args = call.value;
+  return {
+    chain: chainName,
+    tx: {
+      [palletName]: {
+        [callName]: sanitizeForSerialization(args) ?? null,
+      },
+    },
+  };
+}
+
+function sanitizeForSerialization(value: unknown): unknown {
+  if (value === undefined || value === null) return null;
+  if (value instanceof Binary) return value.asHex();
+  if (typeof value === "bigint") {
+    if (value >= Number.MIN_SAFE_INTEGER && value <= Number.MAX_SAFE_INTEGER) {
+      return Number(value);
+    }
+    return value.toString();
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(sanitizeForSerialization);
+  }
+  if (typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      result[k] = sanitizeForSerialization(v);
+    }
+    return result;
+  }
+  return String(value);
+}
+
+function outputFileFormat(obj: Record<string, unknown>, asYaml: boolean): void {
+  if (asYaml) {
+    process.stdout.write(stringifyYaml(obj));
+  } else {
+    console.log(JSON.stringify(obj, null, 2));
+  }
 }
 
 function formatRawDecoded(value: unknown): string {
@@ -1118,6 +1202,7 @@ export {
   autoDefaultForType,
   buildCustomSignedExtensions,
   decodeCallFallback,
+  decodeCallToFileFormat,
   formatDispatchError,
   formatEventValue,
   formatRawDecoded,
@@ -1129,5 +1214,6 @@ export {
   parsePrimitive,
   parseStructArgs,
   parseTypedArg,
+  sanitizeForSerialization,
   typeHint,
 };
