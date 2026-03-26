@@ -20,6 +20,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Named address resolution across all commands
 - ✅ Runtime API calls — `dot apis.Core.version`
 - ✅ Batteries included — all system parachains and testnets already setup to be used
+- ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 
 ### Preconfigured chains
 
@@ -571,6 +572,185 @@ For manual override, use `--ext` with a JSON object:
 ```bash
 dot tx System.remark 0xdeadbeef --from alice --ext '{"MyExtension":{"value":"..."}}'
 ```
+
+### File-based commands
+
+Run any `dot` command from a YAML or JSON file. Especially useful for complex calls like XCM messages that are hard to construct inline.
+
+**Teleport DOT** from Asset Hub to the relay chain:
+
+```yaml
+# teleport-dot.xcm.yaml
+chain: polkadot-asset-hub
+tx:
+  PolkadotXcm:
+    limited_teleport_assets:
+      dest:
+        type: V4
+        value:
+          parents: 1
+          interior:
+            type: Here
+      beneficiary:
+        type: V4
+        value:
+          parents: 0
+          interior:
+            type: X1
+            value:
+              - type: AccountId32
+                value:
+                  network: null
+                  id: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"
+      assets:
+        type: V4
+        value:
+          - id:
+              parents: 1
+              interior:
+                type: Here
+            fun:
+              type: Fungible
+              value: 10000000000
+      fee_asset_item: 0
+      weight_limit:
+        type: Unlimited
+```
+
+**Reserve transfer USDC** (asset 1337, 6 decimals) from Asset Hub to Hydration:
+
+```yaml
+# reserve-transfer-usdc.xcm.yaml
+chain: polkadot-asset-hub
+tx:
+  PolkadotXcm:
+    limited_reserve_transfer_assets:
+      dest:
+        type: V4
+        value:
+          parents: 1
+          interior:
+            type: X1
+            value:
+              - type: Parachain
+                value: 2034
+      beneficiary:
+        type: V4
+        value:
+          parents: 0
+          interior:
+            type: X1
+            value:
+              - type: AccountId32
+                value:
+                  network: null
+                  id: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"
+      assets:
+        type: V4
+        value:
+          - id:
+              parents: 0
+              interior:
+                type: X2
+                value:
+                  - type: PalletInstance
+                    value: 50
+                  - type: GeneralIndex
+                    value: 1337
+            fun:
+              type: Fungible
+              value: 10000000
+      fee_asset_item: 0
+      weight_limit:
+        type: Unlimited
+```
+
+The same teleport in JSON:
+
+```json
+{
+  "chain": "polkadot-asset-hub",
+  "tx": {
+    "PolkadotXcm": {
+      "limited_teleport_assets": {
+        "dest": { "type": "V4", "value": { "parents": 1, "interior": { "type": "Here" } } },
+        "beneficiary": {
+          "type": "V4",
+          "value": {
+            "parents": 0,
+            "interior": {
+              "type": "X1",
+              "value": [{ "type": "AccountId32", "value": { "network": null, "id": "0xd435...a27d" } }]
+            }
+          }
+        },
+        "assets": {
+          "type": "V4",
+          "value": [{
+            "id": { "parents": 1, "interior": { "type": "Here" } },
+            "fun": { "type": "Fungible", "value": 10000000000 }
+          }]
+        },
+        "fee_asset_item": 0,
+        "weight_limit": { "type": "Unlimited" }
+      }
+    }
+  }
+}
+```
+
+```bash
+# Run from file
+dot ./teleport-dot.xcm.yaml --from alice --dry-run
+
+# Encode only
+dot ./reserve-transfer-usdc.xcm.yaml --encode
+
+# Override variables
+dot ./transfer.xcm.yaml --var AMOUNT=2000000000000 --from alice
+```
+
+The file format uses a required category wrapper (`tx`, `query`, `const`, or `apis`) with the structure `category > Pallet > Item > args`:
+
+```yaml
+# Simple transaction
+tx:
+  System:
+    remark:
+      - "0xdeadbeef"
+```
+
+```yaml
+# Storage query
+chain: polkadot
+query:
+  System:
+    Account:
+      - "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+```
+
+```yaml
+# Constant lookup
+chain: polkadot
+const:
+  Balances:
+    ExistentialDeposit:
+```
+
+**Variable substitution** uses shell-style `${VAR}` with optional defaults `${VAR:-default}`. Variables are resolved in order: `--var` flags > environment variables > `vars:` section defaults.
+
+```yaml
+chain: ${CHAIN:-polkadot}
+vars:
+  AMOUNT: "1000000000000"
+tx:
+  Balances:
+    transfer_keep_alive:
+      dest: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+      value: ${AMOUNT}
+```
+
+All existing flags work with file input — `--chain` overrides the file's `chain:` field, `--from`, `--dry-run`, `--encode`, `--output`, etc. behave identically to inline commands.
 
 ### Compute hashes
 

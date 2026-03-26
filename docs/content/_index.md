@@ -16,6 +16,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Named address resolution across all commands
 - ✅ Runtime API calls — `dot apis.Core.version`
 - ✅ Batteries included — all system parachains and testnets already setup to be used
+- ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 
 ## Install
 
@@ -777,6 +778,262 @@ For manual override, use `--ext` with a JSON object:
 dot tx.System.remark 0xdeadbeef --from alice \
   --ext '{"MyExtension":{"value":"..."}}'
 ```
+
+## File-Based Commands
+
+Run any `dot` command from a YAML or JSON file instead of typing complex arguments inline. This is especially useful for XCM messages and other deeply nested call data.
+
+### File format
+
+Files use a required category wrapper (`tx`, `query`, `const`, or `apis`) with an optional `chain` field:
+
+```yaml
+chain: people-paseo          # optional, overridable with --chain
+tx:                           # category: tx, query, const, or apis
+  PolkadotXcm:               # pallet name
+    send:                     # call / storage item / constant / api method
+      dest: ...               # arguments (named or positional)
+      message: ...
+```
+
+### Running from a file
+
+```bash
+# Run a transaction from a YAML file
+dot ./transfer.xcm.yaml --from alice --dry-run
+
+# Encode only (no signing)
+dot ./transfer.xcm.yaml --encode
+
+# Override the chain from the file
+dot ./transfer.xcm.yaml --chain kusama --from alice
+
+# JSON files also work
+dot ./remark.json --encode
+```
+
+All existing flags work: `--from`, `--dry-run`, `--encode`, `--chain`, `--output`, `--wait`, `--ext`, etc.
+
+### Variable substitution
+
+Files support shell-style `${VAR}` placeholders with optional defaults via `${VAR:-default}`.
+
+```yaml
+chain: ${CHAIN:-polkadot}
+vars:
+  AMOUNT: "1000000000000"
+tx:
+  Balances:
+    transfer_keep_alive:
+      dest: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+      value: ${AMOUNT}
+```
+
+Variables are resolved in this order (first match wins):
+
+1. `--var KEY=VALUE` flags (highest priority)
+2. Environment variables
+3. `vars:` section in the file (defaults)
+
+```bash
+# Uses defaults from vars section
+dot ./transfer.yaml --from alice
+
+# Override with --var
+dot ./transfer.yaml --var AMOUNT=2000000000000 --from alice
+
+# Override via environment
+AMOUNT=5000000000000 dot ./transfer.yaml --from alice
+```
+
+### Examples for each category
+
+**Transaction (tx):**
+
+```yaml
+tx:
+  System:
+    remark:
+      - "0xdeadbeef"
+```
+
+**Storage query:**
+
+```yaml
+chain: polkadot
+query:
+  System:
+    Account:
+      - "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+```
+
+**Constant lookup:**
+
+```yaml
+chain: polkadot
+const:
+  Balances:
+    ExistentialDeposit:
+```
+
+**Runtime API call:**
+
+```yaml
+chain: polkadot
+apis:
+  Core:
+    version:
+```
+
+### XCM transfer examples
+
+File-based commands are especially useful for XCM transfers. The following examples use `polkadot-asset-hub` as the source chain.
+
+**Teleport DOT** from Asset Hub to the Polkadot relay chain (1 DOT = 10,000,000,000 planck):
+
+```yaml
+# teleport-dot.xcm.yaml — Teleport 1 DOT to relay chain
+chain: polkadot-asset-hub
+tx:
+  PolkadotXcm:
+    limited_teleport_assets:
+      dest:
+        type: V4
+        value:
+          parents: 1
+          interior:
+            type: Here
+      beneficiary:
+        type: V4
+        value:
+          parents: 0
+          interior:
+            type: X1
+            value:
+              - type: AccountId32
+                value:
+                  network: null
+                  id: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"
+      assets:
+        type: V4
+        value:
+          - id:
+              parents: 1
+              interior:
+                type: Here
+            fun:
+              type: Fungible
+              value: 10000000000
+      fee_asset_item: 0
+      weight_limit:
+        type: Unlimited
+```
+
+The same teleport in JSON:
+
+```json
+{
+  "chain": "polkadot-asset-hub",
+  "tx": {
+    "PolkadotXcm": {
+      "limited_teleport_assets": {
+        "dest": { "type": "V4", "value": { "parents": 1, "interior": { "type": "Here" } } },
+        "beneficiary": {
+          "type": "V4",
+          "value": {
+            "parents": 0,
+            "interior": {
+              "type": "X1",
+              "value": [{ "type": "AccountId32", "value": { "network": null, "id": "0xd435...a27d" } }]
+            }
+          }
+        },
+        "assets": {
+          "type": "V4",
+          "value": [{
+            "id": { "parents": 1, "interior": { "type": "Here" } },
+            "fun": { "type": "Fungible", "value": 10000000000 }
+          }]
+        },
+        "fee_asset_item": 0,
+        "weight_limit": { "type": "Unlimited" }
+      }
+    }
+  }
+}
+```
+
+**Reserve transfer USDC** from Asset Hub to Hydration (parachain 2034). USDC is asset ID 1337 on Asset Hub with 6 decimals (10 USDC = 10,000,000):
+
+```yaml
+# reserve-transfer-usdc.xcm.yaml — Reserve transfer 10 USDC to Hydration
+chain: polkadot-asset-hub
+tx:
+  PolkadotXcm:
+    limited_reserve_transfer_assets:
+      dest:
+        type: V4
+        value:
+          parents: 1
+          interior:
+            type: X1
+            value:
+              - type: Parachain
+                value: 2034
+      beneficiary:
+        type: V4
+        value:
+          parents: 0
+          interior:
+            type: X1
+            value:
+              - type: AccountId32
+                value:
+                  network: null
+                  id: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"
+      assets:
+        type: V4
+        value:
+          - id:
+              parents: 0
+              interior:
+                type: X2
+                value:
+                  - type: PalletInstance
+                    value: 50
+                  - type: GeneralIndex
+                    value: 1337
+            fun:
+              type: Fungible
+              value: 10000000
+      fee_asset_item: 0
+      weight_limit:
+        type: Unlimited
+```
+
+**Remote execution** via `PolkadotXcm.send` — see [`transfer.xcm.yaml`](transfer.xcm.yaml) for a full example that constructs an XCM program with `WithdrawAsset`, `BuyExecution`, `Transact`, `RefundSurplus`, and `DepositAsset`.
+
+```bash
+# Teleport DOT
+dot ./teleport-dot.xcm.yaml --from alice --dry-run
+
+# Reserve transfer USDC
+dot ./reserve-transfer-usdc.xcm.yaml --from alice --dry-run
+
+# Encode without submitting
+dot ./teleport-dot.xcm.yaml --encode
+```
+
+> **Teleport vs reserve transfer**: Teleports burn assets on the source and mint on the destination — used between chains that trust each other (e.g. Asset Hub and the relay chain). Reserve transfers lock assets on the source (the reserve) and mint derivatives on the destination — used for assets like USDC where Asset Hub holds the real tokens.
+
+### File detection
+
+A first argument is treated as a file when it:
+
+- Ends with `.json`, `.yaml`, or `.yml`
+- Starts with `./` or `/`
+
+Otherwise, the normal dot-path syntax is used.
 
 ## Hash
 

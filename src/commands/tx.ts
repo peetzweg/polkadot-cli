@@ -67,6 +67,8 @@ export async function handleTx(
     output?: string;
     ext?: string;
     wait?: string;
+    /** Pre-parsed args from a file (skip CLI string parsing, still normalize) */
+    parsedArgs?: unknown;
   },
 ) {
   if (!target) {
@@ -205,8 +207,10 @@ export async function handleTx(
         throw new Error(suggestMessage(`call in ${palletInfo.name}`, callName!, callNames));
       }
 
-      // Parse args against metadata
-      const callData = await parseCallArgs(meta, palletInfo.name, callInfo.name, args);
+      // Parse args: convert file args to strings for the existing pipeline, or use CLI strings
+      const effectiveArgs =
+        opts.parsedArgs !== undefined ? fileArgsToStrings(opts.parsedArgs) : args;
+      const callData = await parseCallArgs(meta, palletInfo.name, callInfo.name, effectiveArgs);
 
       if (opts.encode) {
         const { codec, location } = meta.builder.buildCall(palletInfo.name, callInfo.name);
@@ -713,9 +717,9 @@ function normalizeValue(lookup: Lookup, entry: any, value: unknown): unknown {
     }
 
     case "primitive": {
+      const prim = resolved.value as string;
       // Convert string values from JSON to proper primitive types
       if (typeof value === "string") {
-        const prim = resolved.value as string;
         switch (prim) {
           case "bool":
             return value === "true";
@@ -735,6 +739,18 @@ function normalizeValue(lookup: Lookup, entry: any, value: unknown): unknown {
             return parseInt(value, 10);
         }
       }
+      // Convert JS numbers to BigInt for large-integer SCALE types (file/YAML input)
+      if (typeof value === "number") {
+        switch (prim) {
+          case "u64":
+          case "u128":
+          case "u256":
+          case "i64":
+          case "i128":
+          case "i256":
+            return BigInt(value);
+        }
+      }
       return value;
     }
 
@@ -743,12 +759,43 @@ function normalizeValue(lookup: Lookup, entry: any, value: unknown): unknown {
       if (typeof value === "string") {
         return resolved.isBig ? BigInt(value) : parseInt(value, 10);
       }
+      // Convert JS numbers to BigInt for big compact types (file/YAML input)
+      if (typeof value === "number" && resolved.isBig) {
+        return BigInt(value);
+      }
       return value;
     }
 
     default:
       return value;
   }
+}
+
+/**
+ * Convert pre-parsed file args to string[] for the existing parseCallArgs pipeline.
+ *
+ * File args are already typed (from YAML/JSON parsing) but parseCallArgs expects
+ * string arguments. We serialize each value individually so both struct-variant
+ * (named fields matched by position) and tuple-variant calls work correctly.
+ */
+export function fileArgsToStrings(args: unknown): string[] {
+  if (args == null) return [];
+  if (typeof args === "object" && !Array.isArray(args)) {
+    // Named args: serialize each value as a separate positional arg
+    return Object.values(args as Record<string, unknown>).map(serializeForCli);
+  }
+  if (Array.isArray(args)) {
+    return args.map(serializeForCli);
+  }
+  // Scalar
+  return [serializeForCli(args)];
+}
+
+function serializeForCli(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "bigint") return String(v);
+  if (typeof v === "boolean" || v === null) return String(v);
+  return JSON.stringify(v);
 }
 
 function parseEnumShorthand(arg: string): { variant: string; inner: string } | null {

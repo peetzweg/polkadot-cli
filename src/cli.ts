@@ -12,6 +12,7 @@ import { registerInspectCommand } from "./commands/inspect.ts";
 import { handleQuery } from "./commands/query.ts";
 import { handleTx } from "./commands/tx.ts";
 import { loadConfig } from "./config/store.ts";
+import { isFilePath, loadCommandFile, parseVarFlags } from "./core/file-loader.ts";
 import {
   getUpdateNotification,
   startBackgroundCheck,
@@ -74,6 +75,7 @@ if (process.argv[2] === "__complete") {
       default: 100,
     })
     .option("--dump", "Dump all entries of a storage map (without specifying a key)")
+    .option("--var <kv>", "Template variable for file input (KEY=VALUE, repeatable)")
     .action(
       async (
         dotpath: string | undefined,
@@ -89,10 +91,55 @@ if (process.argv[2] === "__complete") {
           wait?: string;
           limit: number;
           dump?: boolean;
+          var?: string | string[];
         },
       ) => {
         if (!dotpath) {
           printHelp();
+          return;
+        }
+
+        // --- File-based command input ---
+        if (isFilePath(dotpath)) {
+          // Collect all --var flags from process.argv (CAC only keeps the last)
+          const cliVars = collectVarFlags(process.argv);
+          const cmd = await loadCommandFile(dotpath, cliVars);
+
+          // --chain flag overrides file's chain
+          const effectiveChain = opts.chain ?? cmd.chain;
+          const handlerOpts = { chain: effectiveChain, rpc: opts.rpc, output: opts.output };
+          const target = `${cmd.pallet}.${cmd.item}`;
+
+          switch (cmd.category) {
+            case "tx":
+              await handleTx(target, args, {
+                ...handlerOpts,
+                from: opts.from,
+                dryRun: opts.dryRun,
+                encode: opts.encode,
+                ext: opts.ext,
+                wait: opts.wait,
+                parsedArgs: cmd.args,
+              });
+              break;
+            case "query":
+              await handleQuery(target, args, {
+                ...handlerOpts,
+                limit: opts.limit,
+                dump: opts.dump,
+                parsedArgs: cmd.args,
+              });
+              break;
+            case "const":
+              await handleConst(target, handlerOpts);
+              break;
+            case "apis":
+              await handleApis(target, args, {
+                ...handlerOpts,
+                parsedArgs: cmd.args,
+              });
+              break;
+          }
           return;
         }
 
@@ -186,12 +233,27 @@ if (process.argv[2] === "__complete") {
   cli.option("--help, -h", "Display this message");
   cli.version(version);
 
+  /** Collect all --var KEY=VALUE flags from argv (CAC only keeps the last for repeated options) */
+  function collectVarFlags(argv: string[]): Record<string, string> {
+    const vars: string[] = [];
+    for (let i = 0; i < argv.length; i++) {
+      if (argv[i] === "--var" && i + 1 < argv.length) {
+        vars.push(argv[i + 1]!);
+        i++;
+      } else if (argv[i]!.startsWith("--var=")) {
+        vars.push(argv[i]!.slice(6));
+      }
+    }
+    return parseVarFlags(vars);
+  }
+
   function printHelp() {
     console.log(`dot/${version} — Polkadot CLI`);
     console.log();
     console.log("Usage:");
     console.log("  dot <category>[.Pallet[.Item]] [args] [options]");
     console.log("  dot [Chain.]<category>[.Pallet[.Item]] [args] [options]");
+    console.log("  dot <file.yaml|file.json> [options]");
     console.log();
     console.log("Categories:");
     console.log("  query     Query on-chain storage");
@@ -209,6 +271,7 @@ if (process.argv[2] === "__complete") {
     console.log("  dot events.Balances                     List events in Balances");
     console.log("  dot apis.Core.version                    Call a runtime API");
     console.log("  dot polkadot.query.System.Number        With chain prefix");
+    console.log("  dot ./transfer.yaml --from alice        Run from file");
     console.log();
     console.log("Commands:");
     console.log("  inspect [target]   Inspect chain metadata (alias: explore)");

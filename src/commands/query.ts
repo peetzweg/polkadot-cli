@@ -25,7 +25,15 @@ import { parseStructArgs, parseTypedArg } from "./tx.ts";
 export async function handleQuery(
   target: string | undefined,
   keys: string[],
-  opts: { chain?: string; rpc?: string; output?: string; limit: number; dump?: boolean },
+  opts: {
+    chain?: string;
+    rpc?: string;
+    output?: string;
+    limit: number;
+    dump?: boolean;
+    /** Pre-parsed args from a file */
+    parsedArgs?: unknown;
+  },
 ) {
   if (!target) {
     // List all pallets with storage item counts
@@ -100,7 +108,20 @@ export async function handleQuery(
     const unsafeApi = clientHandle.client.getUnsafeApi();
     const storageApi = (unsafeApi as any).query[palletInfo.name][storageItem.name];
 
-    const parsedKeys = await parseStorageKeys(meta, palletInfo.name, storageItem, keys);
+    // Merge file args into keys: convert pre-parsed values to strings for parseStorageKeys
+    const effectiveKeys =
+      keys.length > 0 || opts.parsedArgs == null
+        ? keys
+        : Array.isArray(opts.parsedArgs)
+          ? opts.parsedArgs.map((v: unknown) =>
+              typeof v === "object" ? JSON.stringify(v) : String(v),
+            )
+          : [
+              typeof opts.parsedArgs === "object"
+                ? JSON.stringify(opts.parsedArgs)
+                : String(opts.parsedArgs),
+            ];
+    const parsedKeys = await parseStorageKeys(meta, palletInfo.name, storageItem, effectiveKeys);
     const format = opts.output ?? "pretty";
 
     if (storageItem.type === "map" && parsedKeys.length === 0) {
