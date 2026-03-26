@@ -1,5 +1,28 @@
 # polkadot-cli
 
+## 1.8.0
+
+### Minor Changes
+
+- 55cff47: Add `dot parachain` command to derive sovereign account addresses for parachains.
+
+  - `dot parachain 1000` shows both child and sibling sovereign accounts for a given parachain ID
+  - Child accounts (`"para"` prefix) represent a parachain on the relay chain
+  - Sibling accounts (`"sibl"` prefix) represent a parachain on another parachain
+  - `--type child` or `--type sibling` to show only one type
+  - `--prefix <N>` to control the SS58 address encoding (default: 42)
+  - `--output json` for pipe-safe structured output
+  - Runs offline — no chain connection required
+  - No new dependencies — uses existing SS58 encoding utilities
+
+- f637890: Add `--yaml` and `--json` flags to decode transaction call data into file-compatible formats.
+
+  - `dot tx.0x1f0003... --yaml` decodes a raw hex call to YAML
+  - `dot tx.System.remark 0xdead --json` encodes then outputs as JSON
+  - Output matches the file input format, enabling a round-trip workflow: encode a call, decode to YAML/JSON, tweak parameters, re-execute via file input
+  - Works offline from cached metadata, does not require `--from`
+  - Mutually exclusive with `--encode` and `--dry-run`
+
 ## 1.7.0
 
 ### Minor Changes
