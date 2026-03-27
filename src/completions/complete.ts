@@ -38,7 +38,17 @@ const ACCOUNT_SUBCOMMANDS = [
 ];
 
 const GLOBAL_OPTIONS = ["--chain", "--rpc", "--light-client", "--output", "--help", "--version"];
-const TX_OPTIONS = ["--from", "--dry-run", "--encode", "--ext", "--wait"];
+const TX_OPTIONS = [
+  "--from",
+  "--dry-run",
+  "--encode",
+  "--ext",
+  "--wait",
+  "--nonce",
+  "--tip",
+  "--mortality",
+  "--at",
+];
 const QUERY_OPTIONS = ["--limit"];
 
 function matchCategory(s: string): string | undefined {
