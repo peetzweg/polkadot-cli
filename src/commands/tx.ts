@@ -57,6 +57,52 @@ export function parseWaitLevel(raw?: string): WaitLevel {
   }
 }
 
+export function parseNonceOption(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new CliError(`Invalid --nonce value "${raw}". Must be a non-negative integer.`);
+  }
+  return n;
+}
+
+export function parseTipOption(raw: string | undefined): bigint | undefined {
+  if (raw === undefined) return undefined;
+  try {
+    const t = BigInt(raw);
+    if (t < 0n) {
+      throw new CliError(`Invalid --tip value "${raw}". Must be a non-negative integer.`);
+    }
+    return t;
+  } catch (err) {
+    if (err instanceof CliError) throw err;
+    throw new CliError(`Invalid --tip value "${raw}". Must be a non-negative integer.`);
+  }
+}
+
+export type MortalityOption = { mortal: false } | { mortal: true; period: number };
+
+export function parseMortalityOption(raw: string | undefined): MortalityOption | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === "immortal") return { mortal: false };
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 4) {
+    throw new CliError(
+      `Invalid --mortality value "${raw}". Use "immortal" or a period number (minimum 4).`,
+    );
+  }
+  return { mortal: true, period: n };
+}
+
+export function parseAtOption(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === "best" || raw === "finalized") return raw;
+  if (/^0x[0-9a-fA-F]{64}$/.test(raw)) return raw;
+  throw new CliError(
+    `Invalid --at value "${raw}". Use "best", "finalized", or a 0x-prefixed 32-byte block hash.`,
+  );
+}
+
 export async function handleTx(
   target: string | undefined,
   args: string[],
@@ -71,6 +117,10 @@ export async function handleTx(
     output?: string;
     ext?: string;
     wait?: string;
+    nonce?: string;
+    tip?: string;
+    mortality?: string;
+    at?: string;
     /** Pre-parsed args from a file (skip CLI string parsing, still normalize) */
     parsedArgs?: unknown;
   },
@@ -180,15 +230,28 @@ export async function handleTx(
       }
     }
 
-    // Build custom signed extensions for non-standard chains
+    // Build transaction options (custom extensions + nonce/tip/mortality/at)
     let unsafeApi: any;
-    let txOptions: { customSignedExtensions: Record<string, any> } | undefined;
+    let txOptions: Record<string, any> | undefined;
+
+    const nonce = parseNonceOption(opts.nonce);
+    const tip = parseTipOption(opts.tip);
+    const mortality = parseMortalityOption(opts.mortality);
+    const at = parseAtOption(opts.at);
 
     if (!decodeOnly) {
       const userExtOverrides = parseExtOption(opts.ext);
       const customSignedExtensions = buildCustomSignedExtensions(meta, userExtOverrides);
-      txOptions =
-        Object.keys(customSignedExtensions).length > 0 ? { customSignedExtensions } : undefined;
+
+      const built: Record<string, any> = {};
+      if (Object.keys(customSignedExtensions).length > 0)
+        built.customSignedExtensions = customSignedExtensions;
+      if (nonce !== undefined) built.nonce = nonce;
+      if (tip !== undefined) built.tip = tip;
+      if (mortality !== undefined) built.mortality = mortality;
+      if (at !== undefined) built.at = at;
+
+      txOptions = Object.keys(built).length > 0 ? built : undefined;
       unsafeApi = clientHandle?.client.getUnsafeApi();
     }
 
@@ -263,6 +326,13 @@ export async function handleTx(
       console.log(`  ${BOLD}From:${RESET}   ${opts.from} (${signerAddress})`);
       console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
       console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
+      if (nonce !== undefined) console.log(`  ${BOLD}Nonce:${RESET} ${nonce}`);
+      if (tip !== undefined) console.log(`  ${BOLD}Tip:${RESET}   ${tip}`);
+      if (mortality !== undefined)
+        console.log(
+          `  ${BOLD}Mortality:${RESET} ${mortality.mortal ? `mortal (period ${mortality.period})` : "immortal"}`,
+        );
+      if (at !== undefined) console.log(`  ${BOLD}At:${RESET}    ${at}`);
 
       try {
         const fees = await tx.getEstimatedFees(signer?.publicKey, txOptions);
@@ -281,6 +351,13 @@ export async function handleTx(
     console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
     console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
     console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
+    if (nonce !== undefined) console.log(`  ${BOLD}Nonce:${RESET} ${nonce}`);
+    if (tip !== undefined) console.log(`  ${BOLD}Tip:${RESET}   ${tip}`);
+    if (mortality !== undefined)
+      console.log(
+        `  ${BOLD}Mortality:${RESET} ${mortality.mortal ? `mortal (period ${mortality.period})` : "immortal"}`,
+      );
+    if (at !== undefined) console.log(`  ${BOLD}At:${RESET}    ${at}`);
     console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
 
     if (result.type === "broadcasted") {

@@ -617,6 +617,40 @@ For manual override, use `--ext` with a JSON object:
 dot tx System.remark 0xdeadbeef --from alice --ext '{"MyExtension":{"value":"..."}}'
 ```
 
+#### Transaction options
+
+Override low-level transaction parameters. Useful for rapid-fire submission (custom nonce), priority fees (tip), or controlling transaction lifetime (mortality).
+
+| Flag | Value | Description |
+|------|-------|-------------|
+| `--nonce <n>` | non-negative integer | Override the auto-detected nonce |
+| `--tip <amount>` | non-negative integer (planck) | Priority tip for the transaction pool |
+| `--mortality <spec>` | `immortal` or period (min 4) | Transaction mortality window |
+| `--at <block>` | `best`, `finalized`, or 0x-prefixed block hash | Block state to validate against |
+
+```bash
+# Fire-and-forget: submit two txs in rapid succession with manual nonces
+dot tx System.remark 0xdead --from alice --nonce 0 --wait broadcast
+dot tx System.remark 0xbeef --from alice --nonce 1 --wait broadcast
+
+# Add a priority tip (in planck)
+dot tx Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice --tip 1000000
+
+# Submit an immortal transaction (no expiry)
+dot tx System.remark 0xdead --from alice --mortality immortal
+
+# Set a custom mortality period (rounds up to nearest power of two)
+dot tx System.remark 0xdead --from alice --mortality 128
+
+# Validate against the best (not finalized) block
+dot tx System.remark 0xdead --from alice --at best
+
+# Combine: rapid-fire with tip and broadcast-only
+dot tx System.remark 0xdead --from alice --nonce 5 --tip 500000 --wait broadcast
+```
+
+When set, nonce / tip / mortality / at are shown in both `--dry-run` and submission output. These flags are silently ignored with `--encode`, `--yaml`, and `--json` (which return before signing).
+
 ### File-based commands
 
 Run any `dot` command from a YAML or JSON file. Especially useful for complex calls like XCM messages that are hard to construct inline.

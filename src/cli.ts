@@ -80,6 +80,10 @@ if (process.argv[2] === "__complete") {
     })
     .option("--dump", "Dump all entries of a storage map (without specifying a key)")
     .option("--var <kv>", "Template variable for file input (KEY=VALUE, repeatable)")
+    .option("--nonce <n>", "Custom nonce for manual tx sequencing (for tx)")
+    .option("--tip <amount>", "Tip to prioritize transaction (for tx)")
+    .option("--mortality <spec>", '"immortal" or period number (for tx)')
+    .option("--at <block>", 'Block hash, "best", or "finalized" to validate against (for tx)')
     .action(
       async (
         dotpath: string | undefined,
@@ -95,6 +99,10 @@ if (process.argv[2] === "__complete") {
           json?: boolean;
           ext?: string;
           wait?: string;
+          nonce?: string;
+          tip?: string;
+          mortality?: string;
+          at?: string;
           limit: number;
           dump?: boolean;
           var?: string | string[];
@@ -127,6 +135,10 @@ if (process.argv[2] === "__complete") {
                 json: opts.json,
                 ext: opts.ext,
                 wait: opts.wait,
+                nonce: opts.nonce,
+                tip: opts.tip,
+                mortality: opts.mortality,
+                at: opts.at,
                 parsedArgs: cmd.args,
               });
               break;
@@ -200,32 +212,29 @@ if (process.argv[2] === "__complete") {
           case "query":
             await handleQuery(target, args, { ...handlerOpts, limit: opts.limit, dump: opts.dump });
             break;
-          case "tx":
+          case "tx": {
             // Handle raw hex: if pallet starts with 0x, it's a raw call hex
+            const txOpts = {
+              ...handlerOpts,
+              from: opts.from,
+              dryRun: opts.dryRun,
+              encode: opts.encode,
+              yaml: opts.yaml,
+              json: opts.json,
+              ext: opts.ext,
+              wait: opts.wait,
+              nonce: opts.nonce,
+              tip: opts.tip,
+              mortality: opts.mortality,
+              at: opts.at,
+            };
             if (parsed.pallet && /^0x[0-9a-fA-F]+$/.test(parsed.pallet)) {
-              await handleTx(parsed.pallet, args, {
-                ...handlerOpts,
-                from: opts.from,
-                dryRun: opts.dryRun,
-                encode: opts.encode,
-                yaml: opts.yaml,
-                json: opts.json,
-                ext: opts.ext,
-                wait: opts.wait,
-              });
+              await handleTx(parsed.pallet, args, txOpts);
             } else {
-              await handleTx(target, args, {
-                ...handlerOpts,
-                from: opts.from,
-                dryRun: opts.dryRun,
-                encode: opts.encode,
-                yaml: opts.yaml,
-                json: opts.json,
-                ext: opts.ext,
-                wait: opts.wait,
-              });
+              await handleTx(target, args, txOpts);
             }
             break;
+          }
           case "const":
             await handleConst(target, handlerOpts);
             break;

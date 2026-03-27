@@ -13,10 +13,14 @@ import {
   formatRawDecoded,
   NO_DEFAULT,
   normalizeValue,
+  parseAtOption,
   parseCallArgs,
   parseEnumShorthand,
   parseExtOption,
+  parseMortalityOption,
+  parseNonceOption,
   parsePrimitive,
+  parseTipOption,
   parseTypedArg,
   parseWaitLevel,
   sanitizeForSerialization,
@@ -52,6 +56,111 @@ describe("parseWaitLevel", () => {
 
   test("invalid value throws CliError", () => {
     expect(() => parseWaitLevel("invalid")).toThrow('Invalid --wait value "invalid"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseNonceOption
+// ---------------------------------------------------------------------------
+
+describe("parseNonceOption", () => {
+  test("undefined returns undefined", () => {
+    expect(parseNonceOption(undefined)).toBeUndefined();
+  });
+
+  test("valid integer returns number", () => {
+    expect(parseNonceOption("0")).toBe(0);
+    expect(parseNonceOption("42")).toBe(42);
+  });
+
+  test("negative value throws", () => {
+    expect(() => parseNonceOption("-1")).toThrow("Invalid --nonce");
+  });
+
+  test("non-integer throws", () => {
+    expect(() => parseNonceOption("1.5")).toThrow("Invalid --nonce");
+  });
+
+  test("non-numeric string throws", () => {
+    expect(() => parseNonceOption("abc")).toThrow("Invalid --nonce");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseTipOption
+// ---------------------------------------------------------------------------
+
+describe("parseTipOption", () => {
+  test("undefined returns undefined", () => {
+    expect(parseTipOption(undefined)).toBeUndefined();
+  });
+
+  test("valid value returns bigint", () => {
+    expect(parseTipOption("0")).toBe(0n);
+    expect(parseTipOption("1000000")).toBe(1000000n);
+  });
+
+  test("negative value throws", () => {
+    expect(() => parseTipOption("-1")).toThrow("Invalid --tip");
+  });
+
+  test("non-numeric string throws", () => {
+    expect(() => parseTipOption("abc")).toThrow("Invalid --tip");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseMortalityOption
+// ---------------------------------------------------------------------------
+
+describe("parseMortalityOption", () => {
+  test("undefined returns undefined", () => {
+    expect(parseMortalityOption(undefined)).toBeUndefined();
+  });
+
+  test('"immortal" returns { mortal: false }', () => {
+    expect(parseMortalityOption("immortal")).toEqual({ mortal: false });
+  });
+
+  test("valid period returns mortal config", () => {
+    expect(parseMortalityOption("64")).toEqual({ mortal: true, period: 64 });
+    expect(parseMortalityOption("128")).toEqual({ mortal: true, period: 128 });
+  });
+
+  test("period below 4 throws", () => {
+    expect(() => parseMortalityOption("2")).toThrow("Invalid --mortality");
+  });
+
+  test("non-numeric string throws", () => {
+    expect(() => parseMortalityOption("mortal")).toThrow("Invalid --mortality");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseAtOption
+// ---------------------------------------------------------------------------
+
+describe("parseAtOption", () => {
+  test("undefined returns undefined", () => {
+    expect(parseAtOption(undefined)).toBeUndefined();
+  });
+
+  test('"best" returns "best"', () => {
+    expect(parseAtOption("best")).toBe("best");
+  });
+
+  test('"finalized" returns "finalized"', () => {
+    expect(parseAtOption("finalized")).toBe("finalized");
+  });
+
+  test("valid block hash returns hash", () => {
+    const hash = `0x${"ab".repeat(32)}`;
+    expect(parseAtOption(hash)).toBe(hash);
+  });
+
+  test("invalid value throws", () => {
+    expect(() => parseAtOption("0x123")).toThrow("Invalid --at");
+    expect(() => parseAtOption("latest")).toThrow("Invalid --at");
   });
 });
 
