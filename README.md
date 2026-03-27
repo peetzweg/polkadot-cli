@@ -309,6 +309,26 @@ dot query System.Number --output json | jq '.+1'
 dot query kusama.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 ```
 
+#### Partial key queries
+
+For storage maps with multiple keys (NMaps), you can provide fewer keys than
+expected to retrieve all entries matching that prefix. This uses the chain's
+prefix-based iteration and does not require `--dump`.
+
+```bash
+# Full key — returns a single value
+dot query Staking.ErasStakers 100 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+
+# Partial key — returns all entries matching the first key
+dot query Staking.ErasStakers 100
+
+# No keys — requires --dump (safety net for large maps)
+dot query Staking.ErasStakers --dump --limit 10
+```
+
+The `--limit` option applies to partial key results just like it does for
+`--dump` (default: 100, use `--limit 0` for unlimited).
+
 #### Output formatting
 
 Query results automatically convert on-chain types for readability:

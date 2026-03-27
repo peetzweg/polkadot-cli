@@ -214,23 +214,58 @@ describe("parseStorageKeys — single-hasher non-struct key", () => {
 describe("parseStorageKeys — multi-hasher NMap key", () => {
   const storageItem = getStorageItem("Staking", "ErasStakers");
 
-  test("parses era + account args", async () => {
+  test("parses era + account args (full key)", async () => {
     const addr = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
     const result = await parseStorageKeys(meta, "Staking", storageItem, ["100", addr]);
     expect(result).toEqual([100, addr]);
   });
 
-  test("throws on wrong arg count (1 arg for 2-key NMap)", async () => {
-    expect(parseStorageKeys(meta, "Staking", storageItem, ["100"])).rejects.toThrow(
-      /expects 2 key arg/,
-    );
+  test("partial key (1 arg for 2-key NMap) returns parsed subset", async () => {
+    const result = await parseStorageKeys(meta, "Staking", storageItem, ["100"]);
+    expect(result).toEqual([100]);
+  });
+
+  test("no args returns empty (for getEntries)", async () => {
+    const result = await parseStorageKeys(meta, "Staking", storageItem, []);
+    expect(result).toEqual([]);
   });
 
   test("throws on too many args", async () => {
     const addr = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
     expect(parseStorageKeys(meta, "Staking", storageItem, ["100", addr, "extra"])).rejects.toThrow(
-      /expects 2 key arg/,
+      /expects at most 2 key arg/,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseStorageKeys — partial key queries
+// ---------------------------------------------------------------------------
+describe("parseStorageKeys — partial key queries", () => {
+  test("partial key returns fewer args than expected for NMap", async () => {
+    const storageItem = getStorageItem("Staking", "ErasStakers");
+    const result = await parseStorageKeys(meta, "Staking", storageItem, ["42"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(42);
+  });
+
+  test("partial key types are parsed correctly", async () => {
+    const storageItem = getStorageItem("Staking", "ErasStakers");
+    // First key is era index (u32), should parse as number
+    const result = await parseStorageKeys(meta, "Staking", storageItem, ["999"]);
+    expect(result).toEqual([999]);
+  });
+
+  test("single-hasher map with no args returns empty (not partial)", async () => {
+    const storageItem = getStorageItem("System", "Account");
+    const result = await parseStorageKeys(meta, "System", storageItem, []);
+    expect(result).toEqual([]);
+  });
+
+  test("single-hasher map with full key returns parsed key", async () => {
+    const storageItem = getStorageItem("System", "BlockHash");
+    const result = await parseStorageKeys(meta, "System", storageItem, ["10"]);
+    expect(result).toEqual([10]);
   });
 });
 
