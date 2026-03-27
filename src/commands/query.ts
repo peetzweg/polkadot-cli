@@ -124,16 +124,25 @@ export async function handleQuery(
     const parsedKeys = await parseStorageKeys(meta, palletInfo.name, storageItem, effectiveKeys);
     const format = opts.output ?? "pretty";
 
-    if (storageItem.type === "map" && parsedKeys.length === 0) {
-      if (!opts.dump) {
+    // Determine expected key count for maps
+    const expectedLen =
+      storageItem.type === "map" && storageItem.keyTypeId != null
+        ? meta.builder.buildStorage(palletInfo.name, storageItem.name).len
+        : 0;
+
+    if (storageItem.type === "map" && parsedKeys.length < expectedLen) {
+      // Partial keys (including 0 keys) → getEntries()
+      if (parsedKeys.length === 0 && !opts.dump) {
         // No key and no --dump: show help instead of fetching all entries
         clientHandle.destroy();
         await showItemHelp("query", target!, { chain: opts.chain, rpc: opts.rpc });
         console.log(`${DIM}Hint: use --dump to fetch all entries${RESET}`);
         return;
       }
-      // Fetch all entries
-      const entries: Array<{ keyArgs: any; value: any }> = await storageApi.getEntries();
+      // Fetch entries with partial (or no) keys
+      const entries: Array<{ keyArgs: any; value: any }> = await storageApi.getEntries(
+        ...parsedKeys,
+      );
 
       const limit = Number(opts.limit);
       const truncated = limit > 0 && entries.length > limit;
@@ -153,7 +162,7 @@ export async function handleQuery(
         );
       }
     } else {
-      // Single value lookup
+      // Full key → single value lookup
       const result = await storageApi.getValue(...parsedKeys);
       printResult(result, format);
     }
@@ -215,8 +224,8 @@ async function parseStorageKeys(
   }
 
   // Multi-hasher NMap: getValue() takes N separate arguments
-  if (args.length !== len) {
-    // Build description of expected key types
+  if (args.length > len) {
+    // Too many args — error
     let typeDesc: string;
     if (keyEntry.type === "tuple") {
       typeDesc = (keyEntry.value as any[])
@@ -226,15 +235,17 @@ async function parseStorageKeys(
       typeDesc = describeType(meta.lookup, storageItem.keyTypeId);
     }
     throw new Error(
-      `${palletName}.${storageItem.name} expects ${len} key arg(s): (${typeDesc}). Got ${args.length}.`,
+      `${palletName}.${storageItem.name} expects at most ${len} key arg(s): (${typeDesc}). Got ${args.length}.`,
     );
   }
 
-  // Parse each arg against its corresponding tuple element type
+  // Parse provided args (may be partial or full) against corresponding tuple element types
   if (keyEntry.type === "tuple") {
     const entries = keyEntry.value as any[];
     return Promise.all(
-      entries.map((entry: any, i: number) => parseTypedArg(meta, entry, args[i]!)),
+      entries
+        .slice(0, args.length)
+        .map((entry: any, i: number) => parseTypedArg(meta, entry, args[i]!)),
     );
   }
 
