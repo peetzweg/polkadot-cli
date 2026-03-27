@@ -1,4 +1,5 @@
 import { Binary } from "polkadot-api";
+import { binaryToDisplay } from "../utils/binary-display.ts";
 
 const isTTY = process.stdout.isTTY ?? false;
 
@@ -14,8 +15,7 @@ const BOLD = isTTY ? "\x1b[1m" : "";
 function replacer(_key: string, value: unknown): unknown {
   if (typeof value === "bigint") return value.toString();
   if (value instanceof Binary) {
-    const text = value.asText();
-    return text.includes("\uFFFD") ? value.asHex() : text;
+    return binaryToDisplay(value);
   }
   if (value instanceof Uint8Array) return `0x${Buffer.from(value).toString("hex")}`;
   return value;

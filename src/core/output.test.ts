@@ -53,6 +53,17 @@ describe("formatJson", () => {
     expect(formatJson({ data: Binary.fromBytes(new Uint8Array([])) })).toBe('{\n  "data": ""\n}');
   });
 
+  test("converts Binary with control characters to hex", () => {
+    const bytes = new Uint8Array([0x48, 0x65, 0x6c, 0x00, 0x6c, 0x6f]); // "Hel\0lo"
+    expect(formatJson({ data: Binary.fromBytes(bytes) })).toBe('{\n  "data": "0x48656c006c6f"\n}');
+  });
+
+  test("converts Binary with C1 control characters to hex", () => {
+    // 0xc2 0x80 is U+0080 (PAD) in UTF-8 -- valid UTF-8, but not readable
+    const bytes = new Uint8Array([0x41, 0xc2, 0x80, 0x42]);
+    expect(formatJson({ data: Binary.fromBytes(bytes) })).toBe('{\n  "data": "0x41c28042"\n}');
+  });
+
   test("converts FixedSizeBinary with invalid UTF-8 to hex", () => {
     expect(formatJson({ hash: FixedSizeBinary.fromBytes(new Uint8Array([0xfe, 0xff])) })).toBe(
       '{\n  "hash": "0xfeff"\n}',
