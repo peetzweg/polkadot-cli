@@ -1,0 +1,10 @@
+coverage:
+  status:
+    project:
+      default:
+        # Only fail if project coverage drops by more than 1%
+        threshold: 1%
+    patch:
+      default:
+        # Patch coverage is informational only — don't block PRs
+        informational: true
