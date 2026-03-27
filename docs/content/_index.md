@@ -400,7 +400,7 @@ The `--limit` option applies to partial key results just like it does for `--dum
 Query results automatically convert on-chain types for readability:
 
 - **BigInt** values (e.g. balances) render as decimal strings
-- **Binary** fields (e.g. token `name`, `symbol`) render as text when valid UTF-8, or as `0x`-prefixed hex otherwise
+- **Binary** fields (e.g. token `name`, `symbol`) render as text when the value contains only printable characters, or as `0x`-prefixed hex otherwise (values containing control characters, Private Use Area code points, or invalid UTF-8 sequences always fall back to hex)
 - **Uint8Array** values render as `0x`-prefixed hex
 
 ```

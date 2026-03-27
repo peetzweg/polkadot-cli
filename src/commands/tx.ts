@@ -32,6 +32,7 @@ import {
   YELLOW,
 } from "../core/output.ts";
 import { resolveAccountAddress } from "../core/resolve-address.ts";
+import { binaryToDisplay } from "../utils/binary-display.ts";
 import { CliError } from "../utils/errors.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseValue } from "../utils/parse-value.ts";
@@ -557,8 +558,7 @@ function formatEventValue(v: unknown): string {
   if (typeof v === "boolean") return v.toString();
   if (v === null || v === undefined) return "null";
   if (v instanceof Binary) {
-    const text = v.asText();
-    return text.includes("\uFFFD") ? v.asHex() : text;
+    return binaryToDisplay(v);
   }
   return JSON.stringify(v, (_k, val) => (typeof val === "bigint" ? val.toString() : val));
 }

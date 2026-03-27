@@ -895,6 +895,21 @@ describe("formatEventValue", () => {
   test("object is JSON-stringified", () => {
     expect(formatEventValue({ a: 1 })).toBe('{"a":1}');
   });
+
+  test("Binary with control characters returns hex", () => {
+    const bytes = new Uint8Array([0x48, 0x65, 0x6c, 0x00, 0x6f]); // "Hel\0o"
+    expect(formatEventValue(Binary.fromBytes(bytes))).toStartWith("0x");
+  });
+
+  test("Binary with C1 control characters returns hex", () => {
+    // 0xc2 0x80 is U+0080 (PAD) in UTF-8 — valid UTF-8, but not readable
+    const bytes = new Uint8Array([0x41, 0xc2, 0x80, 0x42]);
+    expect(formatEventValue(Binary.fromBytes(bytes))).toStartWith("0x");
+  });
+
+  test("Binary with readable multi-word text returns text", () => {
+    expect(formatEventValue(Binary.fromText("Paseo Token"))).toBe("Paseo Token");
+  });
 });
 
 describe("formatDispatchError", () => {
