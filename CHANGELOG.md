@@ -1,5 +1,19 @@
 # polkadot-cli
 
+## 1.9.0
+
+### Minor Changes
+
+- dfd359d: Support partial key queries for multi-key storage maps (NMaps). You can now pass fewer key arguments than expected to retrieve all entries matching that prefix via `getEntries()`, without requiring `--dump`. For example, querying a 2-key map with only the first key returns all entries under that prefix.
+
+### Patch Changes
+
+- 115b751: Improve best-effort hex-to-text conversion for Binary values.
+
+  Binary fields that contain control characters (C0/C1), DEL, or Private Use Area code points now correctly fall back to hex display instead of rendering as garbled text. This fixes storage keys and other identifiers that start with a text-based prefix but contain binary hash data after it.
+
+- f0516ef: Add npm version badge to README
+
 ## 1.8.1
 
 ### Patch Changes
