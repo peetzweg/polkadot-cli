@@ -1,3 +1,4 @@
+[![npm version](https://img.shields.io/npm/v/polkadot-cli)](https://www.npmjs.com/package/polkadot-cli)
 [![codecov](https://codecov.io/gh/peetzweg/polkadot-cli/branch/main/graph/badge.svg)](https://codecov.io/gh/peetzweg/polkadot-cli)
 
 # polkadot-cli
