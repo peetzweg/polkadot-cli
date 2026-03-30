@@ -75,9 +75,6 @@ if (process.argv[2] === "__complete") {
         default: "finalized",
       },
     )
-    .option("--limit <n>", "Max entries to return for map queries (0 = unlimited)", {
-      default: 100,
-    })
     .option("--dump", "Dump all entries of a storage map (without specifying a key)")
     .option("--var <kv>", "Template variable for file input (KEY=VALUE, repeatable)")
     .option("--nonce <n>", "Custom nonce for manual tx sequencing (for tx)")
@@ -103,7 +100,6 @@ if (process.argv[2] === "__complete") {
           tip?: string;
           mortality?: string;
           at?: string;
-          limit: number;
           dump?: boolean;
           var?: string | string[];
         },
@@ -145,7 +141,6 @@ if (process.argv[2] === "__complete") {
             case "query":
               await handleQuery(target, args, {
                 ...handlerOpts,
-                limit: opts.limit,
                 dump: opts.dump,
                 parsedArgs: cmd.args,
               });
@@ -210,7 +205,7 @@ if (process.argv[2] === "__complete") {
 
         switch (parsed.category) {
           case "query":
-            await handleQuery(target, args, { ...handlerOpts, limit: opts.limit, dump: opts.dump });
+            await handleQuery(target, args, { ...handlerOpts, dump: opts.dump });
             break;
           case "tx": {
             // Handle raw hex: if pallet starts with 0x, it's a raw call hex

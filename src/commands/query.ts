@@ -29,7 +29,6 @@ export async function handleQuery(
     chain?: string;
     rpc?: string;
     output?: string;
-    limit: number;
     dump?: boolean;
     /** Pre-parsed args from a file */
     parsedArgs?: unknown;
@@ -144,23 +143,13 @@ export async function handleQuery(
         ...parsedKeys,
       );
 
-      const limit = Number(opts.limit);
-      const truncated = limit > 0 && entries.length > limit;
-      const display = truncated ? entries.slice(0, limit) : entries;
-
       printResult(
-        display.map((e: any) => ({
+        entries.map((e: any) => ({
           keys: e.keyArgs,
           value: e.value,
         })),
         format,
       );
-
-      if (truncated) {
-        console.error(
-          `\n${DIM}Showing ${limit} of ${entries.length} entries. Use --limit 0 for all.${RESET}`,
-        );
-      }
     } else {
       // Full key → single value lookup
       const result = await storageApi.getValue(...parsedKeys);
