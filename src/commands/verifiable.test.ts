@@ -38,21 +38,28 @@ describe("dot verifiable", { timeout: 15_000 }, () => {
     expect(stdout).toContain("Account:");
     expect(stdout).toContain("Member Key:");
     expect(stdout).toContain("0x");
-    // Should NOT show separate Key: line for unkeyed (only Member Key:)
-    expect(stdout).not.toMatch(/^\s+Key:/m);
+    // Should NOT show separate Context: line for unkeyed (only Member Key:)
+    expect(stdout).not.toMatch(/^\s+Context:/m);
   });
 
-  test("alice candidate derives keyed member key", async () => {
-    const { stdout, exitCode } = await runCli(["verifiable", "alice", "candidate"]);
+  test("alice --context candidate derives keyed member key", async () => {
+    const { stdout, exitCode } = await runCli(["verifiable", "alice", "--context", "candidate"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Bandersnatch Member Key");
-    expect(stdout).toContain("Key:        candidate");
+    expect(stdout).toContain("Context:    candidate");
     expect(stdout).toContain("Member Key:");
   });
 
-  test("unkeyed and candidate produce different keys for alice", async () => {
+  test("unkeyed and --context candidate produce different keys for alice", async () => {
     const unkeyed = await runCli(["verifiable", "alice", "--output", "json"]);
-    const candidate = await runCli(["verifiable", "alice", "candidate", "--output", "json"]);
+    const candidate = await runCli([
+      "verifiable",
+      "alice",
+      "--context",
+      "candidate",
+      "--output",
+      "json",
+    ]);
     expect(unkeyed.exitCode).toBe(0);
     expect(candidate.exitCode).toBe(0);
     const unkeyedKey = JSON.parse(unkeyed.stdout).memberKey;
@@ -94,18 +101,20 @@ describe("dot verifiable", { timeout: 15_000 }, () => {
     expect(stdout).toContain("Member Key:");
   });
 
-  test("stored account with candidate key", async () => {
-    const { stdout, exitCode } = await runCli(["verifiable", "my-account", "candidate"], {
-      accounts: [STORED_ACCOUNT],
-    });
+  test("stored account with --context candidate", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["verifiable", "my-account", "--context", "candidate"],
+      { accounts: [STORED_ACCOUNT] },
+    );
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("Key:        candidate");
+    expect(stdout).toContain("Context:    candidate");
   });
 
   test("JSON output has correct structure", async () => {
     const { stdout, exitCode } = await runCli([
       "verifiable",
       "alice",
+      "--context",
       "candidate",
       "--output",
       "json",
@@ -113,17 +122,17 @@ describe("dot verifiable", { timeout: 15_000 }, () => {
     expect(exitCode).toBe(0);
     const result = JSON.parse(stdout);
     expect(result.account).toBe("alice");
-    expect(result.key).toBe("candidate");
+    expect(result.context).toBe("candidate");
     expect(result.memberKey).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
-  test("JSON output without key omits key field", async () => {
+  test("JSON output without context omits context field", async () => {
     const { stdout, exitCode } = await runCli(["verifiable", "alice", "--output", "json"]);
     expect(exitCode).toBe(0);
     const result = JSON.parse(stdout);
     expect(result.account).toBe("alice");
     expect(result.memberKey).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(result.key).toBeUndefined();
+    expect(result.context).toBeUndefined();
   });
 
   test("unknown account errors", async () => {
@@ -149,23 +158,37 @@ describe("dot verifiable", { timeout: 15_000 }, () => {
     expect(stderr).toContain("BIP39 mnemonic");
   });
 
-  test("arbitrary key string works", async () => {
-    const { stdout, exitCode } = await runCli(["verifiable", "alice", "pps", "--output", "json"]);
+  test("arbitrary --context string works", async () => {
+    const { stdout, exitCode } = await runCli([
+      "verifiable",
+      "alice",
+      "--context",
+      "pps",
+      "--output",
+      "json",
+    ]);
     expect(exitCode).toBe(0);
     const result = JSON.parse(stdout);
-    expect(result.key).toBe("pps");
+    expect(result.context).toBe("pps");
     expect(result.memberKey).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
-  test("different key strings produce different member keys", async () => {
-    const candidate = await runCli(["verifiable", "alice", "candidate", "--output", "json"]);
-    const pps = await runCli(["verifiable", "alice", "pps", "--output", "json"]);
+  test("different --context strings produce different member keys", async () => {
+    const candidate = await runCli([
+      "verifiable",
+      "alice",
+      "--context",
+      "candidate",
+      "--output",
+      "json",
+    ]);
+    const pps = await runCli(["verifiable", "alice", "--context", "pps", "--output", "json"]);
     expect(JSON.parse(candidate.stdout).memberKey).not.toBe(JSON.parse(pps.stdout).memberKey);
   });
 
   test("saves bandersnatch key for stored accounts", async () => {
     // First derive
-    const derive = await runCli(["verifiable", "my-account", "candidate"], {
+    const derive = await runCli(["verifiable", "my-account", "--context", "candidate"], {
       accounts: [STORED_ACCOUNT],
     });
     expect(derive.exitCode).toBe(0);

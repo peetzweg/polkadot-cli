@@ -1260,17 +1260,17 @@ The derivation converts a BIP39 mnemonic into a 32-byte Bandersnatch public key 
 Mnemonic (12 or 24 words)
     │  mnemonicToEntropy()  (raw BIP39 entropy, NOT miniSecret)
     ▼
-blake2b256(entropy, key?)   keyed or unkeyed
+blake2b256(entropy, context?)   keyed or unkeyed
     ▼
-member_from_entropy()       verifiablejs WASM (Bandersnatch curve)
+member_from_entropy()           verifiablejs WASM (Bandersnatch curve)
     ▼
-32-byte member key          for on-chain member set registration
+32-byte member key              for on-chain member set registration
 ```
 
-- **Unkeyed**: `blake2b256(entropy)` — the blake2b key parameter is omitted
-- **Keyed** (e.g. `candidate`): `blake2b256(entropy, key="candidate")` — the blake2b key parameter is the raw UTF-8 bytes of the key string
+- **Unkeyed** (no `--context`): `blake2b256(entropy)` — the blake2b key parameter is omitted
+- **With context** (e.g. `--context candidate`): `blake2b256(entropy, key="candidate")` — the `--context` value is passed as the raw UTF-8 bytes of the blake2b key parameter
 
-These produce different member keys from the same mnemonic. The unkeyed derivation is used for lite person registration, while the `candidate`-keyed derivation is used for full person registration.
+These produce different member keys from the same mnemonic. The unkeyed derivation is used for lite person registration, while the `candidate` context is used for full person registration.
 
 ### Derive a member key
 
@@ -1278,11 +1278,11 @@ These produce different member keys from the same mnemonic. The unkeyed derivati
 # Unkeyed derivation (lite person)
 dot verifiable alice
 
-# Keyed with "candidate" (full person)
-dot verifiable alice candidate
+# With "candidate" context (full person)
+dot verifiable alice --context candidate
 
-# Arbitrary key string
-dot verifiable alice pps
+# Arbitrary context string
+dot verifiable alice --context pps
 ```
 
 Output:
@@ -1291,47 +1291,47 @@ Output:
 Bandersnatch Member Key
 
   Account:    alice
-  Key:        candidate
+  Context:    candidate
   Member Key: 0x2fd5b74033d904cf5575b932507939c5d43811e488223229eaf5596565f15ae6
 ```
 
-When no key argument is given, the "Key:" line is omitted.
+When `--context` is omitted, the "Context:" line is not shown.
 
 ### JSON output
 
 ```
-dot verifiable alice candidate --output json
+dot verifiable alice --context candidate --output json
 ```
 
 ```json
 {
   "account": "alice",
   "memberKey": "0x2fd5b74033d904cf5575b932507939c5d43811e488223229eaf5596565f15ae6",
-  "key": "candidate"
+  "context": "candidate"
 }
 ```
 
 ### Saved keys
 
-Derived keys are automatically saved to the account store. They appear in `dot account inspect` output:
+Derived keys are automatically saved to the account store for stored accounts. They appear in `dot account inspect` output:
 
 ```
 Account Info
 
-  Name:        my-account
-  Public Key:  0x44a9...eb0f
-  SS58:        5DfhGyQ...
-  Bandersnatch: 0xabc1...
-         (candidate) 0xdef2...
-  Prefix:      42
+  Name:             my-account
+  Public Key:       0x44a9...eb0f
+  SS58:             5DfhGyQ...
+  Bandersnatch:     0xabc1...
+               (candidate) 0xdef2...
+  Prefix:           42
 ```
 
-When creating a new account with `dot account create`, both unkeyed and `candidate` keys are automatically derived and saved.
+When creating a new account with `dot account create`, both unkeyed and `candidate` keys are automatically derived and saved. For dev accounts (alice, bob, etc.), use `dot verifiable` directly to derive keys.
 
 ### Requirements
 
 - Account must have a BIP39 mnemonic (not a hex seed or watch-only)
-- Dev accounts (alice, bob, etc.) share the same mnemonic and produce the same Bandersnatch keys
+- Dev accounts share the same mnemonic and therefore produce the same Bandersnatch keys
 - Both 12-word and 24-word mnemonics are supported — blake2b256 normalizes any input to 32 bytes
 
 Run `dot verifiable` with no arguments to see usage, examples, and the full derivation diagram.

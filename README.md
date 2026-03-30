@@ -898,28 +898,27 @@ Derive Bandersnatch member keys from account mnemonics for on-chain member set r
 # Derive unkeyed member key (lite person)
 dot verifiable alice
 
-# Derive keyed member key (full person — "candidate" key)
-dot verifiable alice candidate
+# Derive keyed member key (full person — "candidate" context)
+dot verifiable alice --context candidate
 
-# Arbitrary key string
-dot verifiable alice pps
+# Arbitrary context string
+dot verifiable alice --context pps
 
 # JSON output (for scripting)
-dot verifiable alice candidate --output json
+dot verifiable alice --context candidate --output json
 ```
 
 The derivation flow:
 
 ```
-Mnemonic → mnemonicToEntropy() → blake2b256(entropy, key?) → member_from_entropy() → 32-byte member key
+Mnemonic → mnemonicToEntropy() → blake2b256(entropy, context?) → member_from_entropy() → 32-byte member key
 ```
 
-- **Unkeyed**: `blake2b256(entropy)` — used for lite person registration
-- **Keyed** (e.g. `candidate`): `blake2b256(entropy, key="candidate")` — used for full person registration
-- The blake2b `key` parameter is the raw UTF-8 bytes of the key string
+- **Unkeyed** (no `--context`): `blake2b256(entropy)` — used for lite person registration
+- **With context** (e.g. `--context candidate`): `blake2b256(entropy, key="candidate")` — used for full person registration. The `--context` value is passed as the raw UTF-8 bytes of the blake2b key parameter.
 - Both 12-word and 24-word mnemonics are supported
 
-Derived keys are saved to the account store and displayed in `dot account inspect` and `dot account create` output. Dev accounts share the same mnemonic and therefore produce the same Bandersnatch keys.
+Derived keys are saved to the account store. For stored accounts, saved keys appear in `dot account inspect` output. When creating a new account with `dot account create`, both unkeyed and `candidate` keys are automatically derived and saved.
 
 Run `dot verifiable` with no arguments to see usage and the full derivation diagram.
 

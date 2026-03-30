@@ -10,7 +10,7 @@ import { member_from_entropy } from "verifiablejs/nodejs";
  *   Mnemonic (12/24 words)
  *       │  mnemonicToEntropy()  (raw BIP39 entropy, NOT miniSecret)
  *       ▼
- *   blake2b256(entropy, key?)   (keyed or unkeyed depending on purpose)
+ *   blake2b256(entropy, context?)   (keyed or unkeyed depending on context)
  *       │
  *       ▼
  *   member_from_entropy()       (verifiablejs WASM → Bandersnatch curve)
@@ -18,11 +18,11 @@ import { member_from_entropy } from "verifiablejs/nodejs";
  *       ▼
  *   32-byte Bandersnatch public key ("member key")
  */
-export function deriveBandersnatchMember(mnemonic: string, key?: string): Uint8Array {
+export function deriveBandersnatchMember(mnemonic: string, context?: string): Uint8Array {
   const entropy = mnemonicToEntropy(mnemonic);
   const opts: { dkLen: number; key?: Uint8Array } = { dkLen: 32 };
-  if (key) {
-    opts.key = new TextEncoder().encode(key);
+  if (context) {
+    opts.key = new TextEncoder().encode(context);
   }
   const hashed = blake2b(entropy, opts);
   return member_from_entropy(hashed);

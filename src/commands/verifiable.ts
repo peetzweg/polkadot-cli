@@ -15,23 +15,25 @@ const DEV_PHRASE = "bottom drive obey lake curtain smoke basket hold race lonely
 
 const VERIFIABLE_HELP = `
 ${BOLD}Usage:${RESET}
-  $ dot verifiable <account> [key]     Derive Bandersnatch member key from account mnemonic
+  $ dot verifiable <account> [--context <value>]
 
 ${BOLD}Arguments:${RESET}
   account    Account name (stored or dev account)
-  key        Optional blake2b key for keyed derivation (e.g. "candidate")
+
+${BOLD}Options:${RESET}
+  --context <value>    Blake2b context for keyed derivation (e.g. "candidate")
 
 ${BOLD}Examples:${RESET}
-  $ dot verifiable alice                        Unkeyed derivation (lite person)
-  $ dot verifiable alice candidate              Keyed with "candidate" (full person)
-  $ dot verifiable my-account candidate
+  $ dot verifiable alice                            Unkeyed derivation (lite person)
+  $ dot verifiable alice --context candidate         Keyed with "candidate" (full person)
+  $ dot verifiable my-account --context candidate
 
 ${BOLD}How it works:${RESET}
 
   Mnemonic (12/24 words)
       │  mnemonicToEntropy()  (raw BIP39 entropy, NOT miniSecret)
       ▼
-  blake2b256(entropy, key?)   keyed or unkeyed
+  blake2b256(entropy, context?)   keyed or unkeyed
       ▼
   member_from_entropy()       verifiablejs WASM (Bandersnatch curve)
       ▼
@@ -40,25 +42,20 @@ ${BOLD}How it works:${RESET}
 
 export function registerVerifiableCommands(cli: CAC) {
   cli
-    .command("verifiable [account] [key]", "Derive Bandersnatch member key from account mnemonic")
-    .action(
-      async (account: string | undefined, key: string | undefined, opts: { output?: string }) => {
-        if (!account) {
-          console.log(VERIFIABLE_HELP);
-          return;
-        }
-        return deriveVerifiable(account, key, opts);
-      },
-    );
+    .command("verifiable [account]", "Derive Bandersnatch member key from account mnemonic")
+    .option("--context <value>", "Blake2b context for keyed derivation (e.g. candidate)")
+    .action(async (account: string | undefined, opts: { output?: string; context?: string }) => {
+      if (!account) {
+        console.log(VERIFIABLE_HELP);
+        return;
+      }
+      return deriveVerifiable(account, opts);
+    });
 }
 
-async function deriveVerifiable(
-  account: string,
-  key: string | undefined,
-  opts: { output?: string },
-) {
+async function deriveVerifiable(account: string, opts: { output?: string; context?: string }) {
   const mnemonic = await resolveMnemonic(account);
-  const memberKey = deriveBandersnatchMember(mnemonic, key);
+  const memberKey = deriveBandersnatchMember(mnemonic, opts.context);
   const memberKeyHex = publicKeyToHex(memberKey);
 
   // Save to account store (skip dev accounts — they have no stored entry)
@@ -67,7 +64,7 @@ async function deriveVerifiable(
     const stored = findAccount(accountsFile, account);
     if (stored) {
       if (!stored.bandersnatch) stored.bandersnatch = {};
-      stored.bandersnatch[key ?? ""] = memberKeyHex;
+      stored.bandersnatch[opts.context ?? ""] = memberKeyHex;
       await saveAccounts(accountsFile);
     }
   }
@@ -77,12 +74,12 @@ async function deriveVerifiable(
       account,
       memberKey: memberKeyHex,
     };
-    if (key) result.key = key;
+    if (opts.context) result.context = opts.context;
     console.log(formatJson(result));
   } else {
     printHeading("Bandersnatch Member Key");
     console.log(`  ${BOLD}Account:${RESET}    ${account}`);
-    if (key) console.log(`  ${BOLD}Key:${RESET}        ${key}`);
+    if (opts.context) console.log(`  ${BOLD}Context:${RESET}    ${opts.context}`);
     console.log(`  ${BOLD}Member Key:${RESET} ${memberKeyHex}`);
     console.log();
   }
