@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -216,7 +216,7 @@ describe("loadCommandFile", () => {
     return path;
   }
 
-  afterEach(async () => {
+  afterAll(async () => {
     for (const f of tempFiles) {
       try {
         (await Bun.file(f).exists()) && (await Bun.$`rm ${f}`.quiet());
