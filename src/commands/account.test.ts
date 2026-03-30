@@ -46,6 +46,8 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stdout).toContain("Account Created");
     expect(stdout).toContain("Mnemonic:");
     expect(stdout).toContain("Address:");
+    expect(stdout).toContain("Bandersnatch:");
+    expect(stdout).toContain("(candidate)");
   });
 
   test("new is an alias for create", async () => {
@@ -54,6 +56,7 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stdout).toContain("Account Created");
     expect(stdout).toContain("Mnemonic:");
     expect(stdout).toContain("Address:");
+    expect(stdout).toContain("Bandersnatch:");
   });
 
   test("create (no name) errors", async () => {

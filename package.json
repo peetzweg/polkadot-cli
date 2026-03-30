@@ -45,6 +45,7 @@
     "@polkadot-labs/hdkd-helpers": "^0.0.27",
     "cac": "^6.7.14",
     "polkadot-api": "^1.23.3",
+    "verifiablejs": "^1.2.0",
     "ws": "^8.19.0",
     "yaml": "^2.8.3"
   },

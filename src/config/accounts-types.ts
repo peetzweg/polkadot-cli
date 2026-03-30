@@ -11,6 +11,7 @@ export interface StoredAccount {
   secret?: string | EnvSecret; // hex mini-secret (0x...), BIP39 mnemonic, or env var reference; undefined = watch-only
   publicKey: string; // hex 0x-prefixed, 32 bytes (may be "" for deferred env accounts)
   derivationPath: string; // "" for root
+  bandersnatch?: Record<string, string>; // key (""=unkeyed) → hex member key
 }
 
 export function isWatchOnly(account: StoredAccount): boolean {

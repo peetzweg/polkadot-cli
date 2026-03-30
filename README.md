@@ -23,6 +23,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 - ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
+- ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
 
 ### Preconfigured chains
 
@@ -888,6 +889,39 @@ dot parachain 1000 --output json
 ```
 
 Run `dot parachain` with no arguments to see usage and examples.
+
+### Bandersnatch member keys
+
+Derive Bandersnatch member keys from account mnemonics for on-chain member set registration (personhood proofs, Ring VRF). Uses the [`verifiablejs`](https://github.com/paritytech/verifiablejs) WASM library.
+
+```bash
+# Derive unkeyed member key (lite person)
+dot verifiable alice
+
+# Derive keyed member key (full person — "candidate" key)
+dot verifiable alice candidate
+
+# Arbitrary key string
+dot verifiable alice pps
+
+# JSON output (for scripting)
+dot verifiable alice candidate --output json
+```
+
+The derivation flow:
+
+```
+Mnemonic → mnemonicToEntropy() → blake2b256(entropy, key?) → member_from_entropy() → 32-byte member key
+```
+
+- **Unkeyed**: `blake2b256(entropy)` — used for lite person registration
+- **Keyed** (e.g. `candidate`): `blake2b256(entropy, key="candidate")` — used for full person registration
+- The blake2b `key` parameter is the raw UTF-8 bytes of the key string
+- Both 12-word and 24-word mnemonics are supported
+
+Derived keys are saved to the account store and displayed in `dot account inspect` and `dot account create` output. Dev accounts share the same mnemonic and therefore produce the same Bandersnatch keys.
+
+Run `dot verifiable` with no arguments to see usage and the full derivation diagram.
 
 ### Getting help
 

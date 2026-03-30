@@ -114,19 +114,28 @@ async function accountCreate(name: string | undefined, opts: { path?: string }) 
   const hexPub = publicKeyToHex(publicKey);
   const address = toSs58(publicKey);
 
+  // Auto-derive Bandersnatch member keys (unkeyed + candidate)
+  const { deriveBandersnatchMember } = await import("../core/bandersnatch.ts");
+  const bandersnatch: Record<string, string> = {};
+  bandersnatch[""] = publicKeyToHex(deriveBandersnatchMember(mnemonic));
+  bandersnatch.candidate = publicKeyToHex(deriveBandersnatchMember(mnemonic, "candidate"));
+
   accountsFile.accounts.push({
     name,
     secret: mnemonic,
     publicKey: hexPub,
     derivationPath: path,
+    bandersnatch,
   });
   await saveAccounts(accountsFile);
 
   printHeading("Account Created");
-  console.log(`  ${BOLD}Name:${RESET}     ${name}`);
-  if (path) console.log(`  ${BOLD}Path:${RESET}     ${path}`);
-  console.log(`  ${BOLD}Address:${RESET}  ${address}`);
-  console.log(`  ${BOLD}Mnemonic:${RESET} ${mnemonic}`);
+  console.log(`  ${BOLD}Name:${RESET}          ${name}`);
+  if (path) console.log(`  ${BOLD}Path:${RESET}          ${path}`);
+  console.log(`  ${BOLD}Address:${RESET}       ${address}`);
+  console.log(`  ${BOLD}Bandersnatch:${RESET}  ${bandersnatch[""]}`);
+  console.log(`    ${BOLD}(candidate)${RESET}  ${bandersnatch.candidate}`);
+  console.log(`  ${BOLD}Mnemonic:${RESET}      ${mnemonic}`);
   console.log();
   console.log(
     `  ${YELLOW}Save this mnemonic phrase! It is the only way to recover this account.${RESET}`,
@@ -458,6 +467,7 @@ async function accountInspect(
 
   let name: string | undefined;
   let publicKeyHex: string;
+  let bandersnatch: Record<string, string> | undefined;
 
   // 1. Dev account name
   if (isDevAccount(input)) {
@@ -471,6 +481,7 @@ async function accountInspect(
     const account = findAccount(accountsFile, input);
     if (account) {
       name = account.name;
+      bandersnatch = account.bandersnatch;
       if (account.publicKey) {
         publicKeyHex = account.publicKey;
       } else if (account.secret !== undefined && isEnvSecret(account.secret)) {
@@ -511,12 +522,25 @@ async function accountInspect(
   if (opts.output === "json") {
     const result: Record<string, unknown> = { publicKey: publicKeyHex!, ss58, prefix };
     if (name) result.name = name;
+    if (bandersnatch && Object.keys(bandersnatch).length > 0) result.bandersnatch = bandersnatch;
     console.log(formatJson(result));
   } else {
     printHeading("Account Info");
     if (name) console.log(`  ${BOLD}Name:${RESET}        ${name}`);
     console.log(`  ${BOLD}Public Key:${RESET}  ${publicKeyHex!}`);
     console.log(`  ${BOLD}SS58:${RESET}        ${ss58}`);
+    if (bandersnatch && Object.keys(bandersnatch).length > 0) {
+      const entries = Object.entries(bandersnatch);
+      for (let i = 0; i < entries.length; i++) {
+        const [key, hex] = entries[i]!;
+        const label = key ? `(${key})` : "";
+        if (i === 0) {
+          console.log(`  ${BOLD}Bandersnatch:${RESET}${label ? ` ${label}` : ""} ${hex}`);
+        } else {
+          console.log(`               ${label ? `${label} ` : ""}${hex}`);
+        }
+      }
+    }
     console.log(`  ${BOLD}Prefix:${RESET}      ${prefix}`);
     console.log();
   }
