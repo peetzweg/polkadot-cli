@@ -358,11 +358,11 @@ dot query.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 # Map without key — shows help/usage (use --dump to fetch all entries)
 dot query.System.Account
 
-# Dump all map entries (requires --dump, default limit: 100)
-dot query.System.Account --dump --limit 10
+# Dump all map entries (requires --dump)
+dot query.System.Account --dump
 
 # Pipe-safe — stdout is clean data, progress messages go to stderr
-dot query.System.Account --dump --limit 5 | jq '.[0].value.data.free'
+dot query.System.Account --dump | jq '.[0].value.data.free'
 dot query.System.Number --output json | jq '.+1'
 
 # Enum variant as map key (case-insensitive)
@@ -390,10 +390,8 @@ dot query.Staking.ErasStakers 100 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKut
 dot query.Staking.ErasStakers 100
 
 # No keys — requires --dump (safety net for large maps)
-dot query.Staking.ErasStakers --dump --limit 10
+dot query.Staking.ErasStakers --dump
 ```
-
-The `--limit` option applies to partial key results just like it does for `--dump` (default: 100, use `--limit 0` for unlimited).
 
 ### Output formatting
 
@@ -1295,7 +1293,7 @@ Completions are context-aware:
 - `errors.` shows only pallets with errors
 - `apis.` shows runtime API names
 - `--` after a tx dotpath includes `--from`, `--dry-run`, `--encode`, `--wait`
-- `--` after a query dotpath includes `--dump`, `--limit`
+- `--` after a query dotpath includes `--dump`
 
 Chain prefix paths work at any depth: `polkadot.query.System.Account` completes each segment individually.
 
@@ -1371,7 +1369,6 @@ These flags work with any command:
 | `--light-client` | Use Smoldot light client |
 | `--output json` | Raw JSON output (default: pretty) |
 | `--dump` | Dump all entries of a storage map (required for keyless map queries) |
-| `--limit <n>` | Max entries for map queries (0 = unlimited, default: 100) |
 | `-w, --wait <level>` | Tx wait level: `broadcast`, `best-block` / `best`, `finalized` (default) |
 
 ### Pipe-safe output

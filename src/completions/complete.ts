@@ -49,7 +49,7 @@ const TX_OPTIONS = [
   "--mortality",
   "--at",
 ];
-const QUERY_OPTIONS = ["--limit"];
+const QUERY_OPTIONS: string[] = [];
 
 function matchCategory(s: string): string | undefined {
   return CATEGORY_ALIASES[s.toLowerCase()];

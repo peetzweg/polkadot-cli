@@ -103,14 +103,14 @@ describe("dot query", { timeout: 15_000 }, () => {
     expect(numberLine).not.toContain("[map]");
   });
 
-  test("query.System.Account --help shows storage help with --dump", async () => {
+  test("query.System.Account --help shows storage help with --dump but not --limit", async () => {
     const { stdout, exitCode } = await runCli(["query.System.Account", "--help"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("(Storage)");
     expect(stdout).toContain("Type:");
     expect(stdout).toContain("Usage:");
     expect(stdout).toContain("--dump");
-    expect(stdout).toContain("--limit");
+    expect(stdout).not.toContain("--limit");
   });
 
   test("keyless map query without --dump shows help instead of fetching entries", async () => {

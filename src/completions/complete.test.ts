@@ -161,11 +161,11 @@ describe("option name completion", () => {
     expect(l).toContain("--chain");
   });
 
-  test("-- with query dotpath includes query-specific options", async () => {
+  test("-- with query dotpath includes global options but not --limit", async () => {
     const { stdout } = await runCli(["__complete", "--", "--", "query.System.Account"]);
     const l = lines(stdout);
-    expect(l).toContain("--limit");
     expect(l).toContain("--chain");
+    expect(l).not.toContain("--limit");
   });
 
   test("--f prefix filters to matching options", async () => {

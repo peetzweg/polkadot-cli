@@ -457,7 +457,6 @@ export async function showItemHelp(
       console.log(
         `  --dump           Dump all entries of a map (required for keyless map queries)`,
       );
-      console.log(`  --limit <n>      Max entries for map queries (0 = unlimited, default: 100)`);
       console.log();
       return;
     }
