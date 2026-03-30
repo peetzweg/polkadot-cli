@@ -764,8 +764,11 @@ function typeHint(entry: any, meta: MetadataBundle): string {
     case "tuple":
       return "a JSON array";
     case "sequence":
-    case "array":
-      return "a JSON array or hex-encoded bytes";
+    case "array": {
+      const inner = resolved.value;
+      if (inner?.type === "primitive" && inner.value === "u8") return "hex-encoded bytes or text";
+      return "a JSON array, comma-separated values, or hex-encoded bytes";
+    }
     default:
       return describeType(meta.lookup, entry.id);
   }
@@ -1066,6 +1069,11 @@ async function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): Pro
         } catch {
           // fall through
         }
+      }
+      // Comma-separated elements → parse each individually
+      if (arg.includes(",")) {
+        const elements = arg.split(",");
+        return Promise.all(elements.map((el) => parseTypedArg(meta, inner, el.trim())));
       }
       // Hex bytes
       if (/^0x[0-9a-fA-F]*$/.test(arg)) return Binary.fromHex(arg as any);

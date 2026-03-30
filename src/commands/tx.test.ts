@@ -557,6 +557,70 @@ describe("parseTypedArg", () => {
     // Plain "Parachain" without value should fall through (not match void path)
     expect(await parseTypedArg(meta, enumEntry, "Parachain")).toBe("Parachain");
   });
+
+  test("comma-separated values parsed as array for Vec<u32>", async () => {
+    const seqEntry = { type: "sequence", value: { type: "primitive", value: "u32" } };
+    expect(await parseTypedArg(meta, seqEntry, "1,2,3")).toEqual([1, 2, 3]);
+  });
+
+  test("comma-separated hex values parsed as array for Vec<RuntimeCall>", async () => {
+    const callTypeId = meta.lookup.call;
+    if (callTypeId == null) throw new Error("No RuntimeCall in metadata");
+    const callEntry = meta.lookup(callTypeId);
+    const seqEntry = { type: "sequence", value: callEntry };
+
+    // Encode two calls
+    const { codec: remarkCodec, location: remarkLoc } = meta.builder.buildCall("System", "remark");
+    const remarkData = remarkCodec.enc({ remark: Binary.fromHex("0xaa") });
+    const hex1 = Binary.fromBytes(
+      new Uint8Array([remarkLoc[0], remarkLoc[1], ...remarkData]),
+    ).asHex();
+
+    const remarkData2 = remarkCodec.enc({ remark: Binary.fromHex("0xbb") });
+    const hex2 = Binary.fromBytes(
+      new Uint8Array([remarkLoc[0], remarkLoc[1], ...remarkData2]),
+    ).asHex();
+
+    const result = (await parseTypedArg(meta, seqEntry, `${hex1},${hex2}`)) as any[];
+    expect(result).toHaveLength(2);
+    expect(result[0].type).toBe("System");
+    expect(result[1].type).toBe("System");
+  });
+
+  test("comma-separated does not apply to Vec<u8>", async () => {
+    const seqEntry = { type: "sequence", value: { type: "primitive", value: "u8" } };
+    // "hello,world" should be treated as text, not split
+    const result = await parseTypedArg(meta, seqEntry, "hello,world");
+    expect(result).toBeInstanceOf(Binary);
+    expect((result as Binary).asText()).toBe("hello,world");
+  });
+
+  test("single element (no comma) still works for Vec<u32>", async () => {
+    const seqEntry = { type: "sequence", value: { type: "primitive", value: "u32" } };
+    // Without comma, falls through to parseValue which returns a number
+    expect(await parseTypedArg(meta, seqEntry, "42")).toBe(42);
+  });
+
+  test("JSON array still works when comma-separated is available", async () => {
+    const seqEntry = { type: "sequence", value: { type: "primitive", value: "u32" } };
+    expect(await parseTypedArg(meta, seqEntry, "[1,2,3]")).toEqual([1, 2, 3]);
+  });
+
+  test("comma-separated trims whitespace around elements", async () => {
+    const seqEntry = { type: "sequence", value: { type: "primitive", value: "u32" } };
+    expect(await parseTypedArg(meta, seqEntry, "1, 2, 3")).toEqual([1, 2, 3]);
+  });
+
+  test("comma-separated works for fixed-length array type", async () => {
+    const arrEntry = { type: "array", value: { type: "primitive", value: "u32" }, len: 3 };
+    expect(await parseTypedArg(meta, arrEntry, "10,20,30")).toEqual([10, 20, 30]);
+  });
+
+  test("comma-separated does not apply to [u8; N] byte arrays", async () => {
+    const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 4 };
+    const result = await parseTypedArg(meta, arrEntry, "0xdeadbeef");
+    expect(result).toBeInstanceOf(Binary);
+  });
 });
 
 describe("typeHint", () => {
@@ -597,14 +661,16 @@ describe("typeHint", () => {
     expect(typeHint(entry, meta)).toBe("a JSON array");
   });
 
-  test("sequence returns array/hex hint", () => {
+  test("sequence returns comma-separated hint for non-byte Vec", () => {
     const entry = { type: "sequence", value: { type: "primitive", value: "u32" } };
-    expect(typeHint(entry, meta)).toBe("a JSON array or hex-encoded bytes");
+    expect(typeHint(entry, meta)).toBe(
+      "a JSON array, comma-separated values, or hex-encoded bytes",
+    );
   });
 
-  test("array returns array/hex hint", () => {
+  test("array returns bytes hint for [u8; N]", () => {
     const entry = { type: "array", value: { type: "primitive", value: "u8" }, len: 32 };
-    expect(typeHint(entry, meta)).toBe("a JSON array or hex-encoded bytes");
+    expect(typeHint(entry, meta)).toBe("hex-encoded bytes or text");
   });
 
   test("resolves lookupEntry indirection", () => {
