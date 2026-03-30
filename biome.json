@@ -24,5 +24,17 @@
         "noExplicitAny": "off"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/core/file-loader.test.ts", "src/commands/file-input.test.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
+    }
+  ]
 }
