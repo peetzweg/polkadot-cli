@@ -18,6 +18,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 - ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
+- ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
 
 ## Install
 
@@ -1244,6 +1245,94 @@ dot parachain 1000 --output json
 ```
 
 Run `dot parachain` with no arguments to see usage and examples.
+
+## Bandersnatch Member Keys
+
+Derive Bandersnatch member keys from account mnemonics for on-chain member set registration. Uses the [`verifiablejs`](https://github.com/paritytech/verifiablejs) WASM library (Ring VRF on the Bandersnatch elliptic curve). Runs offline — no chain connection required.
+
+### How it works
+
+The derivation converts a BIP39 mnemonic into a 32-byte Bandersnatch public key ("member key") that can be registered in on-chain member sets for anonymous membership proofs:
+
+```
+Mnemonic (12 or 24 words)
+    │  mnemonicToEntropy()  (raw BIP39 entropy, NOT miniSecret)
+    ▼
+blake2b256(entropy, context?)   keyed or unkeyed
+    ▼
+member_from_entropy()           verifiablejs WASM (Bandersnatch curve)
+    ▼
+32-byte member key              for on-chain member set registration
+```
+
+- **Unkeyed** (no `--context`): `blake2b256(entropy)` — the blake2b key parameter is omitted
+- **With context** (e.g. `--context candidate`): `blake2b256(entropy, key="candidate")` — the `--context` value is passed as the raw UTF-8 bytes of the blake2b key parameter
+
+These produce different member keys from the same mnemonic. The unkeyed derivation is used for lite person registration, while the `candidate` context is used for full person registration.
+
+### Derive a member key
+
+```
+# Unkeyed derivation (lite person)
+dot verifiable alice
+
+# With "candidate" context (full person)
+dot verifiable alice --context candidate
+
+# Arbitrary context string
+dot verifiable alice --context pps
+```
+
+Output:
+
+```
+Bandersnatch Member Key
+
+  Account:    alice
+  Context:    candidate
+  Member Key: 0x2fd5b74033d904cf5575b932507939c5d43811e488223229eaf5596565f15ae6
+```
+
+When `--context` is omitted, the "Context:" line is not shown.
+
+### JSON output
+
+```
+dot verifiable alice --context candidate --output json
+```
+
+```json
+{
+  "account": "alice",
+  "memberKey": "0x2fd5b74033d904cf5575b932507939c5d43811e488223229eaf5596565f15ae6",
+  "context": "candidate"
+}
+```
+
+### Saved keys
+
+Derived keys are automatically saved to the account store for stored accounts. They appear in `dot account inspect` output:
+
+```
+Account Info
+
+  Name:             my-account
+  Public Key:       0x44a9...eb0f
+  SS58:             5DfhGyQ...
+  Bandersnatch:     0xabc1...
+               (candidate) 0xdef2...
+  Prefix:           42
+```
+
+When creating a new account with `dot account create`, both unkeyed and `candidate` keys are automatically derived and saved. For dev accounts (alice, bob, etc.), use `dot verifiable` directly to derive keys.
+
+### Requirements
+
+- Account must have a BIP39 mnemonic (not a hex seed or watch-only)
+- Dev accounts share the same mnemonic and therefore produce the same Bandersnatch keys
+- Both 12-word and 24-word mnemonics are supported — blake2b256 normalizes any input to 32 bytes
+
+Run `dot verifiable` with no arguments to see usage, examples, and the full derivation diagram.
 
 ## Shell Completions
 

@@ -23,6 +23,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 - ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
+- ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
 
 ### Preconfigured chains
 
@@ -885,6 +886,38 @@ dot parachain 1000 --output json
 ```
 
 Run `dot parachain` with no arguments to see usage and examples.
+
+### Bandersnatch member keys
+
+Derive Bandersnatch member keys from account mnemonics for on-chain member set registration (personhood proofs, Ring VRF). Uses the [`verifiablejs`](https://github.com/paritytech/verifiablejs) WASM library.
+
+```bash
+# Derive unkeyed member key (lite person)
+dot verifiable alice
+
+# Derive keyed member key (full person — "candidate" context)
+dot verifiable alice --context candidate
+
+# Arbitrary context string
+dot verifiable alice --context pps
+
+# JSON output (for scripting)
+dot verifiable alice --context candidate --output json
+```
+
+The derivation flow:
+
+```
+Mnemonic → mnemonicToEntropy() → blake2b256(entropy, context?) → member_from_entropy() → 32-byte member key
+```
+
+- **Unkeyed** (no `--context`): `blake2b256(entropy)` — used for lite person registration
+- **With context** (e.g. `--context candidate`): `blake2b256(entropy, key="candidate")` — used for full person registration. The `--context` value is passed as the raw UTF-8 bytes of the blake2b key parameter.
+- Both 12-word and 24-word mnemonics are supported
+
+Derived keys are saved to the account store. For stored accounts, saved keys appear in `dot account inspect` output. When creating a new account with `dot account create`, both unkeyed and `candidate` keys are automatically derived and saved.
+
+Run `dot verifiable` with no arguments to see usage and the full derivation diagram.
 
 ### Getting help
 

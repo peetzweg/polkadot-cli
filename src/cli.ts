@@ -12,6 +12,7 @@ import { registerInspectCommand } from "./commands/inspect.ts";
 import { registerParachainCommand } from "./commands/parachain.ts";
 import { handleQuery } from "./commands/query.ts";
 import { handleTx } from "./commands/tx.ts";
+import { registerVerifiableCommands } from "./commands/verifiable.ts";
 import { loadConfig } from "./config/store.ts";
 import { isFilePath, loadCommandFile, parseVarFlags } from "./core/file-loader.ts";
 import {
@@ -58,6 +59,7 @@ if (process.argv[2] === "__complete") {
   registerHashCommand(cli);
   registerParachainCommand(cli);
   registerCompletionsCommand(cli);
+  registerVerifiableCommands(cli);
 
   // Default command: dot-path syntax for query, tx, const, events, errors
   cli
@@ -297,6 +299,7 @@ if (process.argv[2] === "__complete") {
     console.log("  account            Manage accounts");
     console.log("  hash               Hash utilities");
     console.log("  parachain          Derive parachain sovereign accounts");
+    console.log("  verifiable         Derive Bandersnatch member key from mnemonic");
     console.log("  completions <sh>   Generate shell completions (zsh, bash, fish)");
     console.log();
     console.log("Global options:");

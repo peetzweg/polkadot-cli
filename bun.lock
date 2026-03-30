@@ -13,6 +13,7 @@
         "@polkadot-labs/hdkd-helpers": "^0.0.27",
         "cac": "^6.7.14",
         "polkadot-api": "^1.23.3",
+        "verifiablejs": "^1.2.0",
         "ws": "^8.19.0",
         "yaml": "^2.8.3",
       },
@@ -615,6 +616,8 @@
     "universalify": ["universalify@0.1.2", "", {}, "sha512-rBJeI5CXAlmy1pV+617WB9J63U6XcazHHF2f2dbJix4XzpUF0RS3Zbj0FGIOCAva5P/d/GBOYaACQ1w+0azUkg=="],
 
     "validate-npm-package-license": ["validate-npm-package-license@3.0.4", "", { "dependencies": { "spdx-correct": "^3.0.0", "spdx-expression-parse": "^3.0.0" } }, "sha512-DpKm2Ui/xN7/HQKCtpZxoRWBhZ9Z0kqtygG8XCgNQ8ZlDnxuQmWhj566j8fN4Cu3/JmbhsDo7fcAJq4s9h27Ew=="],
+
+    "verifiablejs": ["verifiablejs@1.2.0", "", {}, "sha512-+VVQo9yZko+w3THKaYvLbjXdfaiw1WJnX12wJEU5jHsHrMkjDrAMWoKYcBvtlHXufJirr8FlT6v2i/0yA3/ivQ=="],
 
     "webidl-conversions": ["webidl-conversions@4.0.2", "", {}, "sha512-YQ+BmxuTgd6UXZW3+ICGfyqRyHXVlD5GtQr5+qjiNW7bF0cqrzX500HVXPBOvgXb5YnzDd+h0zqyv61KUD7+Sg=="],
 
