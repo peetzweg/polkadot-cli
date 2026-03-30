@@ -646,7 +646,20 @@ dot tx 0x0503008eaf04151687736326c9fea17e25fc528761369... --from alice
 
 ### Batch calls
 
-Use `Utility.batchAll` to combine multiple calls into one transaction:
+Use `Utility.batchAll` to combine multiple calls into one transaction. The easiest way is to encode individual calls first, then pass them comma-separated:
+
+```
+# Encode individual calls
+A=$(dot tx Balances.transfer_keep_alive 5FHneW46... 1000000000000 --encode)
+B=$(dot tx Balances.transfer_keep_alive 5FLSigC9... 2000000000000 --encode)
+
+# Batch them (comma-separated encoded calls)
+dot tx Utility.batchAll $A,$B --from alice
+```
+
+Any `Vec<T>` parameter accepts comma-separated elements as an alternative to JSON arrays. This works for all calls, not just batch.
+
+You can also use a JSON array for complex call objects:
 
 ```
 dot tx.Utility.batchAll '[
