@@ -22,7 +22,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
   api: "apis",
 };
 
-const NAMED_COMMANDS = ["chain", "account", "inspect", "hash", "parachain", "completions"];
+const NAMED_COMMANDS = ["chain", "account", "inspect", "hash", "sign", "parachain", "completions"];
 
 const CHAIN_SUBCOMMANDS = ["add", "remove", "update", "list", "default"];
 const ACCOUNT_SUBCOMMANDS = [

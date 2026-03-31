@@ -23,6 +23,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 - ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
+- ✅ Message signing — sign arbitrary bytes with account keypairs for use as `MultiSignature` arguments
 - ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
 
 ### Preconfigured chains
@@ -860,6 +861,29 @@ dot hash blake2b256 0xdeadbeef --output json
 ```
 
 Run `dot hash` with no arguments to see all available algorithms.
+
+### Sign messages
+
+Sign arbitrary messages with an account keypair. Output is a `Sr25519(0x...)` value directly usable as a `MultiSignature` enum argument in transaction calls.
+
+```bash
+# Sign a text message
+dot sign "hello world" --from alice
+
+# Sign hex-encoded bytes
+dot sign 0xdeadbeef --from alice
+
+# Sign file contents
+dot sign --file ./payload.bin --from alice
+
+# Read from stdin
+echo -n "hello" | dot sign --stdin --from alice
+
+# Use the output directly in a tx argument (e.g. candidate_signature for PeopleLite.attest)
+dot tx.PeopleLite.attest <candidate> $(dot sign 0x<message_hex> --from alice) <ring_vrf_key> ...
+```
+
+Use `--type` to select the signature algorithm (default: `sr25519`). Run `dot sign` with no arguments to see usage and examples.
 
 ### Parachain sovereign accounts
 
