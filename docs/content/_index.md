@@ -1189,7 +1189,14 @@ dot sign "hello world" --from alice
 dot sign 0xdeadbeef --from alice
 ```
 
-Output: `Sr25519(0x<128 hex chars>)` — the wrapped Sr25519 signature.
+Output shows the crypto type, message bytes, raw signature, and an `Enum` value directly pasteable into tx arguments:
+
+```
+  Type:       Sr25519
+  Message:    0xdeadbeef
+  Signature:  0xabcdef...
+  Enum:       Sr25519(0xabcdef...)
+```
 
 ### Sign a file
 
@@ -1207,6 +1214,14 @@ Pipe data into the sign command:
 echo -n "hello" | dot sign --stdin --from alice
 ```
 
+### JSON output
+
+```
+dot sign "hello" --from alice --output json
+```
+
+Returns a JSON object with `type`, `message`, `signature`, and `enum` fields.
+
 ### Signature type
 
 The `--type` flag selects the signature algorithm (default: `sr25519`):
@@ -1219,18 +1234,16 @@ Currently only `sr25519` is supported. Additional types (ed25519, ecdsa) may be 
 
 ### Use with transactions
 
-The output is directly pasteable as a `MultiSignature` enum argument. For example, to produce the `candidate_signature` for `PeopleLite.attest`:
+The `enum` value in the output is directly pasteable as a `MultiSignature` enum argument. For example, to produce the `candidate_signature` for `PeopleLite.attest`:
 
 ```
 # 1. Construct the message bytes (prefix + encoded candidate + encoded ring_vrf_key)
 # 2. Sign with the candidate's account
 dot sign 0x<message_hex> --from candidate-account
 
-# 3. Pass the output as the candidate_signature argument
+# 3. Pass the Enum value as the candidate_signature argument
 dot tx.PeopleLite.attest <candidate> Sr25519(0x...) <ring_vrf_key> ...
 ```
-
-When stderr is a TTY, an info line is printed to stderr (e.g. `Signed with Sr25519 using "alice"`) so it doesn't pollute piped output.
 
 ## Parachain Sovereign Accounts
 

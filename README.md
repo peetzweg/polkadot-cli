@@ -879,9 +879,11 @@ dot sign --file ./payload.bin --from alice
 # Read from stdin
 echo -n "hello" | dot sign --stdin --from alice
 
-# Use the output directly in a tx argument (e.g. candidate_signature for PeopleLite.attest)
-dot tx.PeopleLite.attest <candidate> $(dot sign 0x<message_hex> --from alice) <ring_vrf_key> ...
+# JSON output (for scripting)
+dot sign "hello" --from alice --output json
 ```
+
+Output shows the crypto type, message bytes in hex, raw signature, and an `Enum` value directly pasteable into tx arguments (e.g. `Sr25519(0x...)`).
 
 Use `--type` to select the signature algorithm (default: `sr25519`). Run `dot sign` with no arguments to see usage and examples.
 

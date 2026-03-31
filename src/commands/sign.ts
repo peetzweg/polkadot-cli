@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { CAC } from "cac";
 import { resolveAccountKeypair } from "../core/accounts.ts";
 import { parseInputData, toHex } from "../core/hash.ts";
-import { BOLD, CYAN, DIM, RESET } from "../core/output.ts";
+import { BOLD, CYAN, DIM, printResult, RESET } from "../core/output.ts";
 import { CliError } from "../utils/errors.ts";
 
 const SUPPORTED_TYPES = ["sr25519"] as const;
@@ -58,11 +58,13 @@ function printSignHelp(): void {
   console.log(`  ${CYAN}--type <algo>${RESET}    ${DIM}Signature type: sr25519 (default)${RESET}`);
   console.log(`  ${CYAN}--file <path>${RESET}    ${DIM}Sign file contents${RESET}`);
   console.log(`  ${CYAN}--stdin${RESET}           ${DIM}Read from stdin${RESET}`);
+  console.log(`  ${CYAN}--output json${RESET}    ${DIM}Output as JSON${RESET}`);
   console.log(`\n${BOLD}Examples:${RESET}`);
   console.log(`  ${DIM}$ dot sign "hello world" --from alice${RESET}`);
   console.log(`  ${DIM}$ dot sign 0xdeadbeef --from alice${RESET}`);
   console.log(`  ${DIM}$ dot sign --file ./payload.bin --from alice${RESET}`);
   console.log(`  ${DIM}$ echo -n "hello" | dot sign --stdin --from alice${RESET}`);
+  console.log(`  ${DIM}$ dot sign "hello" --from alice --output json${RESET}`);
 }
 
 export function registerSignCommand(cli: CAC) {
@@ -75,7 +77,7 @@ export function registerSignCommand(cli: CAC) {
     .action(
       async (
         message: string | undefined,
-        opts: { from?: string; type?: string; file?: string; stdin?: boolean },
+        opts: { from?: string; type?: string; file?: string; stdin?: boolean; output?: string },
       ) => {
         if (!message && !opts.file && !opts.stdin) {
           printSignHelp();
@@ -96,13 +98,27 @@ export function registerSignCommand(cli: CAC) {
         const input = await resolveInput(message, opts);
         const keypair = await resolveAccountKeypair(opts.from);
         const signature = keypair.sign(input);
+        const hexMessage = toHex(input);
         const hexSignature = toHex(signature);
+        const variant = variantName(type);
+        const enumValue = `${variant}(${hexSignature})`;
 
-        if (process.stderr.isTTY) {
-          process.stderr.write(`Signed with ${variantName(type)} using "${opts.from}"\n`);
+        const result = {
+          type: variant,
+          message: hexMessage,
+          signature: hexSignature,
+          enum: enumValue,
+        };
+
+        const format = opts.output ?? "pretty";
+        if (format === "json") {
+          printResult(result, "json");
+        } else {
+          console.log(`  ${BOLD}Type:${RESET}       ${result.type}`);
+          console.log(`  ${BOLD}Message:${RESET}    ${result.message}`);
+          console.log(`  ${BOLD}Signature:${RESET}  ${result.signature}`);
+          console.log(`  ${BOLD}Enum:${RESET}       ${result.enum}`);
         }
-
-        console.log(`${variantName(type)}(${hexSignature})`);
       },
     );
 }
