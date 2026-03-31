@@ -138,11 +138,12 @@ export function tryDerivePublicKey(envVarName: string, path = ""): string | null
   }
 }
 
-export async function resolveAccountSigner(name: string): Promise<PolkadotSigner> {
+export async function resolveAccountKeypair(
+  name: string,
+): Promise<{ publicKey: Uint8Array; sign: (msg: Uint8Array) => Uint8Array }> {
   // Check dev accounts first
   if (isDevAccount(name)) {
-    const keypair = getDevKeypair(name);
-    return getPolkadotSigner(keypair.publicKey, "Sr25519", keypair.sign);
+    return getDevKeypair(name);
   }
 
   // Check stored accounts
@@ -161,9 +162,12 @@ export async function resolveAccountSigner(name: string): Promise<PolkadotSigner
 
   const secret = resolveSecret(account.secret);
   const isHexSeed = /^0x[0-9a-fA-F]{64}$/.test(secret);
-  const keypair = isHexSeed
+  return isHexSeed
     ? deriveFromHexSeed(secret, account.derivationPath)
     : deriveFromMnemonic(secret, account.derivationPath);
+}
 
+export async function resolveAccountSigner(name: string): Promise<PolkadotSigner> {
+  const keypair = await resolveAccountKeypair(name);
   return getPolkadotSigner(keypair.publicKey, "Sr25519", keypair.sign);
 }

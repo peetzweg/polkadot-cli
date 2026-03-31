@@ -18,6 +18,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 - ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
+- ✅ Message signing — sign arbitrary bytes with account keypairs for use as `MultiSignature` arguments
 - ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
 
 ## Install
@@ -1174,6 +1175,75 @@ dot hash blake2b256 0xdeadbeef --output json
 ```
 
 Run `dot hash` with no arguments to see all available algorithms and examples.
+
+## Sign
+
+Sign arbitrary messages with an account keypair. Output is a `Sr25519(0x...)` value directly usable as a `MultiSignature` enum argument in transaction calls. Runs offline — no chain connection required.
+
+### Sign inline data
+
+Pass hex-encoded bytes (with `0x` prefix) or plain text (UTF-8 encoded):
+
+```
+dot sign "hello world" --from alice
+dot sign 0xdeadbeef --from alice
+```
+
+Output shows the crypto type, message bytes, raw signature, and an `Enum` value directly pasteable into tx arguments:
+
+```
+  Type:       Sr25519
+  Message:    0xdeadbeef
+  Signature:  0xabcdef...
+  Enum:       Sr25519(0xabcdef...)
+```
+
+### Sign a file
+
+Read raw file contents and sign them:
+
+```
+dot sign --file ./payload.bin --from alice
+```
+
+### Sign from stdin
+
+Pipe data into the sign command:
+
+```
+echo -n "hello" | dot sign --stdin --from alice
+```
+
+### JSON output
+
+```
+dot sign "hello" --from alice --output json
+```
+
+Returns a JSON object with `type`, `message`, `signature`, and `enum` fields.
+
+### Signature type
+
+The `--type` flag selects the signature algorithm (default: `sr25519`):
+
+```
+dot sign "hello" --from alice --type sr25519
+```
+
+Currently only `sr25519` is supported. Additional types (ed25519, ecdsa) may be added in future releases.
+
+### Use with transactions
+
+The `enum` value in the output is directly pasteable as a `MultiSignature` enum argument. For example, to produce the `candidate_signature` for `PeopleLite.attest`:
+
+```
+# 1. Construct the message bytes (prefix + encoded candidate + encoded ring_vrf_key)
+# 2. Sign with the candidate's account
+dot sign 0x<message_hex> --from candidate-account
+
+# 3. Pass the Enum value as the candidate_signature argument
+dot tx.PeopleLite.attest <candidate> Sr25519(0x...) <ring_vrf_key> ...
+```
 
 ## Parachain Sovereign Accounts
 
