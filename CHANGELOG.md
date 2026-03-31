@@ -1,5 +1,17 @@
 # polkadot-cli
 
+## 1.12.0
+
+### Minor Changes
+
+- 1ff250b: Add `dot sign` command for signing arbitrary messages with account keypairs. Accepts inline text, hex bytes (`0x`-prefixed), file contents (`--file`), or stdin (`--stdin`). Output shows the crypto type, message bytes in hex, raw signature, and a `Sr25519(0x...)` enum value directly usable as a `MultiSignature` argument in transaction calls. Supports `--output json` for structured output. Supports dev accounts, stored accounts, and env-backed accounts via `--from`. Signature type is configurable with `--type` (default: sr25519).
+- cb7c058: Add `dot verifiable` command to derive Bandersnatch member keys from account mnemonics using the `verifiablejs` WASM library. Supports unkeyed (lite person) and keyed derivation via `--context` flag (e.g. `--context candidate` for full person). Derived keys are saved to the account store and displayed in `account inspect` and `account create` output.
+- 9240771: Remove `--limit` option from map queries.
+
+  The `--limit` flag only truncated displayed results after all entries were already fetched from the chain, providing no performance benefit. The default limit of 100 silently hid results, which could confuse users who didn't realize their output was truncated.
+
+  All map query results are now returned in full. Users who want to limit output can pipe through standard Unix tools (e.g. `| head -n 10` or `| jq '.[0:5]'`).
+
 ## 1.11.0
 
 ### Minor Changes
