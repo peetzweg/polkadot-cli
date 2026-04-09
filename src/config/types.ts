@@ -1,6 +1,5 @@
 export interface ChainConfig {
   rpc: string | string[];
-  lightClient?: boolean;
 }
 
 export interface Config {

@@ -7,27 +7,6 @@ import { loadMetadata, saveMetadata } from "../config/store.ts";
 import type { ChainConfig } from "../config/types.ts";
 import { ConnectionError } from "../utils/errors.ts";
 
-// Known chain specs for light client usage
-interface ChainSpecEntry {
-  spec: string;
-  relay?: string;
-}
-
-const KNOWN_CHAIN_SPECS: Record<string, ChainSpecEntry> = {
-  polkadot: { spec: "polkadot-api/chains/polkadot" },
-  kusama: { spec: "polkadot-api/chains/ksmcc3" },
-  westend: { spec: "polkadot-api/chains/westend2" },
-  paseo: { spec: "polkadot-api/chains/paseo" },
-  "polkadot-asset-hub": { spec: "polkadot-api/chains/polkadot_asset_hub", relay: "polkadot" },
-  "polkadot-bridge-hub": { spec: "polkadot-api/chains/polkadot_bridge_hub", relay: "polkadot" },
-  "polkadot-collectives": { spec: "polkadot-api/chains/polkadot_collectives", relay: "polkadot" },
-  "polkadot-coretime": { spec: "polkadot-api/chains/polkadot_coretime", relay: "polkadot" },
-  "polkadot-people": { spec: "polkadot-api/chains/polkadot_people", relay: "polkadot" },
-  "paseo-asset-hub": { spec: "polkadot-api/chains/paseo_asset_hub", relay: "paseo" },
-  "paseo-coretime": { spec: "polkadot-api/chains/paseo_coretime", relay: "paseo" },
-  "paseo-people": { spec: "polkadot-api/chains/paseo_people", relay: "paseo" },
-};
-
 export interface ClientHandle {
   client: ReturnType<typeof createClient>;
   destroy: () => void;
@@ -51,29 +30,21 @@ export async function createChainClient(
   chainConfig: ChainConfig,
   rpcOverride?: string | string[],
 ): Promise<ClientHandle> {
-  const useLight = !rpcOverride && chainConfig.lightClient;
-
   const restoreConsole = suppressWsNoise();
 
-  let provider: JsonRpcProvider;
-
-  if (useLight) {
-    provider = await createSmoldotProvider(chainName);
-  } else {
-    const rpc = rpcOverride ?? chainConfig.rpc;
-    if (!rpc) {
-      restoreConsole();
-      throw new ConnectionError(
-        `No RPC endpoint configured for chain "${chainName}". Use --rpc or configure one with: dot chain add ${chainName} --rpc <url>`,
-      );
-    }
-    provider = withPolkadotSdkCompat(
-      getWsProvider(rpc, {
-        timeout: 10_000,
-        websocketClass: WebSocket as unknown as typeof globalThis.WebSocket,
-      }),
+  const rpc = rpcOverride ?? chainConfig.rpc;
+  if (!rpc) {
+    restoreConsole();
+    throw new ConnectionError(
+      `No RPC endpoint configured for chain "${chainName}". Use --rpc or configure one with: dot chain add ${chainName} --rpc <url>`,
     );
   }
+  const provider: JsonRpcProvider = withPolkadotSdkCompat(
+    getWsProvider(rpc, {
+      timeout: 10_000,
+      websocketClass: WebSocket as unknown as typeof globalThis.WebSocket,
+    }),
+  );
 
   const client = createClient(provider, {
     getMetadata: async () => loadMetadata(chainName),
@@ -89,34 +60,4 @@ export async function createChainClient(
       restoreConsole();
     },
   };
-}
-
-async function createSmoldotProvider(chainName: string) {
-  const { start } = await import("polkadot-api/smoldot");
-  const { getSmProvider } = await import("polkadot-api/sm-provider");
-
-  const entry = KNOWN_CHAIN_SPECS[chainName];
-  if (!entry) {
-    throw new ConnectionError(
-      `Light client is only supported for known chains: ${Object.keys(KNOWN_CHAIN_SPECS).join(", ")}. ` +
-        `Use --rpc to connect to "${chainName}" instead.`,
-    );
-  }
-
-  const { chainSpec } = await import(entry.spec);
-  const smoldot = start();
-
-  if (entry.relay) {
-    const relayEntry = KNOWN_CHAIN_SPECS[entry.relay];
-    if (!relayEntry) {
-      throw new ConnectionError(`Relay chain "${entry.relay}" not found in known chain specs.`);
-    }
-    const { chainSpec: relaySpec } = await import(relayEntry.spec);
-    const relayChain = await smoldot.addChain({ chainSpec: relaySpec, disableJsonRpc: true });
-    const chain = await smoldot.addChain({ chainSpec, potentialRelayChains: [relayChain] });
-    return getSmProvider(chain);
-  }
-
-  const chain = await smoldot.addChain({ chainSpec });
-  return getSmProvider(chain);
 }

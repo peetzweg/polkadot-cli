@@ -147,7 +147,12 @@ describe("option name completion", () => {
     expect(l).toContain("--output");
     expect(l).toContain("--help");
     expect(l).toContain("--version");
-    expect(l).toContain("--light-client");
+  });
+
+  test("-- prefix does not include removed --light-client option", async () => {
+    const { stdout } = await runCli(["__complete", "--", "--", ""]);
+    const l = lines(stdout);
+    expect(l).not.toContain("--light-client");
   });
 
   test("-- with tx dotpath includes tx-specific options", async () => {

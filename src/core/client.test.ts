@@ -83,6 +83,21 @@ describe("createChainClient", () => {
     );
   });
 
+  test("ignores legacy lightClient field and uses RPC", async () => {
+    mockGetWsProvider.mockClear();
+
+    // Old configs may have lightClient: true — the field is no longer in the
+    // ChainConfig interface but could still exist in user config files on disk.
+    const legacyConfig = { rpc: "wss://example.com", lightClient: true } as ChainConfig;
+    const handle = await createChainClient("polkadot", legacyConfig);
+
+    expect(mockGetWsProvider).toHaveBeenCalledTimes(1);
+    const [endpoints] = mockGetWsProvider.mock.calls[0]!;
+    expect(endpoints).toBe("wss://example.com");
+
+    handle.destroy();
+  });
+
   test("wraps provider with withPolkadotSdkCompat", async () => {
     mockWithCompat.mockClear();
 

@@ -49,7 +49,6 @@ if (process.argv[2] === "__complete") {
 
   cli.option("--chain <name>", "Target chain (default from config)");
   cli.option("--rpc <url>", "Override RPC endpoint for this call");
-  cli.option("--light-client", "Use Smoldot light client instead of WebSocket");
   cli.option("--output <format>", "Output format: pretty or json", {
     default: "pretty",
   });
@@ -308,7 +307,6 @@ if (process.argv[2] === "__complete") {
     console.log("Global options:");
     console.log("  --chain <name>     Target chain (default from config)");
     console.log("  --rpc <url>        Override RPC endpoint");
-    console.log("  --light-client     Use Smoldot light client");
     console.log("  --output <format>  Output format: pretty or json");
     console.log("  --help, -h         Display this message");
     console.log("  --version          Show version");
