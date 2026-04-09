@@ -495,4 +495,54 @@ describe("stdout/stderr separation (pipe-safe output)", () => {
     expect(stdout).not.toContain("Fetching metadata");
     expect(stdout).not.toContain("Connecting");
   });
+
+  // --json output tests
+  test("events --json lists pallets with event counts", async () => {
+    const { stdout, exitCode } = await runCli(["events", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(Array.isArray(parsed.pallets)).toBe(true);
+    const balances = parsed.pallets.find((p: any) => p.name === "Balances");
+    expect(balances).toBeDefined();
+    expect(balances.events).toBeGreaterThan(0);
+  });
+
+  test("events.Balances --json lists events in pallet", async () => {
+    const { stdout, exitCode } = await runCli(["events.Balances", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("Balances");
+    expect(Array.isArray(parsed.events)).toBe(true);
+    const transfer = parsed.events.find((e: any) => e.name === "Transfer");
+    expect(transfer).toBeDefined();
+    expect(transfer.fields).toBeDefined();
+    expect(transfer.docs).toBeDefined();
+  });
+
+  test("events.Balances.Transfer --json returns event detail", async () => {
+    const { stdout, exitCode } = await runCli(["events.Balances.Transfer", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("Balances");
+    expect(parsed.item).toBe("Transfer");
+    expect(parsed.category).toBe("event");
+  });
+
+  test("errors --json lists pallets with error counts", async () => {
+    const { stdout, exitCode } = await runCli(["errors", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(Array.isArray(parsed.pallets)).toBe(true);
+  });
+
+  test("errors.Balances --json lists errors in pallet", async () => {
+    const { stdout, exitCode } = await runCli(["errors.Balances", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("Balances");
+    expect(Array.isArray(parsed.errors)).toBe(true);
+    expect(parsed.errors.length).toBeGreaterThan(0);
+  });
 });

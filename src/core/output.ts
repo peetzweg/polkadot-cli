@@ -50,6 +50,14 @@ export function printResult(data: unknown, format: string = "pretty"): void {
   }
 }
 
+export function isJsonOutput(opts: { json?: boolean; output?: string }): boolean {
+  return opts.json === true || opts.output === "json";
+}
+
+export function printJsonLine(data: unknown): void {
+  console.log(JSON.stringify(data, replacer));
+}
+
 export function printHeading(text: string): void {
   console.log(`\n${BOLD}${text}${RESET}\n`);
 }

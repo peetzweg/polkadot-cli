@@ -10,7 +10,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Exposes all on-chain metadata documentation
 - ✅ Encode, dry-run, and submit extrinsics
 - ✅ Support for custom signed extensions
-- ✅ Built with agent use in mind — pipe-safe JSON output (`--output json`)
+- ✅ Built with agent use in mind — structured JSON output on every command (`--json`)
 - ✅ Fuzzy matching with typo suggestions
 - ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
 - ✅ Named address resolution across all commands
@@ -298,7 +298,7 @@ Output:
 JSON output:
 
 ```
-dot account inspect alice --output json
+dot account inspect alice --json
 # {"publicKey":"0xd435...a27d","ss58":"5Grw...utQY","prefix":42,"name":"Alice"}
 ```
 
@@ -362,7 +362,7 @@ dot query.System.Account --dump
 
 # Pipe-safe — stdout is clean data, progress messages go to stderr
 dot query.System.Account --dump | jq '.[0].value.data.free'
-dot query.System.Number --output json | jq '.+1'
+dot query.System.Number --json | jq '.+1'
 
 # Enum variant as map key (case-insensitive)
 dot people-preview.query.ChunksManager.Chunks R2e9 1
@@ -422,7 +422,7 @@ dot const
 dot const.Balances
 
 # Pipe-safe — stdout is clean JSON, progress messages go to stderr
-dot const.Balances.ExistentialDeposit --output json | jq
+dot const.Balances.ExistentialDeposit --json | jq
 ```
 
 `consts` and `constants` are aliases for `const`.
@@ -731,21 +731,21 @@ Decode a hex-encoded call into a YAML or JSON file that is compatible with [file
 
 ```
 # Decode a raw hex call to YAML
-dot tx.0x0001076465616462656566 --yaml
+dot tx.0x0001076465616462656566 --to-yaml
 
 # Decode a raw hex call to JSON
-dot tx.0x0001076465616462656566 --json
+dot tx.0x0001076465616462656566 --to-json
 
 # Encode a named call and output as YAML
-dot tx.System.remark 0xdeadbeef --yaml
+dot tx.System.remark 0xdeadbeef --to-yaml
 
 # Round-trip: encode to hex, decode to YAML, re-encode from file
-dot tx.System.remark 0xdeadbeef --encode           # 0x0001076465616462656566
-dot tx.0x0001076465616462656566 --yaml > remark.yaml
-dot ./remark.yaml --encode                          # same hex
+dot tx.System.remark 0xdeadbeef --encode              # 0x0001076465616462656566
+dot tx.0x0001076465616462656566 --to-yaml > remark.yaml
+dot ./remark.yaml --encode                             # same hex
 ```
 
-`--yaml` / `--json` are mutually exclusive with each other and with `--encode` and `--dry-run`.
+`--to-yaml` / `--to-json` are mutually exclusive with each other and with `--encode` and `--dry-run`.
 
 ### Transaction output
 
@@ -861,7 +861,7 @@ dot tx.System.remark 0xdead --from alice --at best
 dot tx.System.remark 0xdead --from alice --nonce 5 --tip 500000 --wait broadcast
 ```
 
-When set, nonce / tip / mortality / at are shown in both `--dry-run` and submission output. These flags are silently ignored with `--encode`, `--yaml`, and `--json` (which return before signing).
+When set, nonce / tip / mortality / at are shown in both `--dry-run` and submission output. These flags are silently ignored with `--encode`, `--to-yaml`, and `--to-json` (which return before signing).
 
 ## File-Based Commands
 
@@ -896,7 +896,7 @@ dot ./transfer.xcm.yaml --chain kusama --from alice
 dot ./remark.json --encode
 ```
 
-All existing flags work: `--from`, `--dry-run`, `--encode`, `--yaml`, `--json`, `--chain`, `--output`, `--wait`, `--ext`, etc.
+All existing flags work: `--from`, `--dry-run`, `--encode`, `--to-yaml`, `--to-json`, `--json`, `--chain`, `--output`, `--wait`, `--ext`, etc.
 
 ### Variable substitution
 
@@ -1168,7 +1168,7 @@ echo -n "hello" | dot hash sha256 --stdin
 ### JSON output
 
 ```
-dot hash blake2b256 0xdeadbeef --output json
+dot hash blake2b256 0xdeadbeef --json
 ```
 
 Run `dot hash` with no arguments to see all available algorithms and examples.
@@ -1214,7 +1214,7 @@ echo -n "hello" | dot sign --stdin --from alice
 ### JSON output
 
 ```
-dot sign "hello" --from alice --output json
+dot sign "hello" --from alice --json
 ```
 
 Returns a JSON object with `type`, `message`, `signature`, and `enum` fields.
@@ -1293,7 +1293,7 @@ dot parachain 1000 --prefix 0
 ### JSON output
 
 ```
-dot parachain 1000 --output json
+dot parachain 1000 --json
 ```
 
 ```json
@@ -1365,7 +1365,7 @@ When `--context` is omitted, the "Context:" line is not shown.
 ### JSON output
 
 ```
-dot verifiable alice --context candidate --output json
+dot verifiable alice --context candidate --json
 ```
 
 ```json
@@ -1523,17 +1523,45 @@ These flags work with any command:
 | `--chain <name>` | Target chain (default from config) |
 | `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback) |
 
-| `--output json` | Raw JSON output (default: pretty) |
+| `--json` | Structured JSON output (shorthand for `--output json`) |
+| `--output json` | Structured JSON output |
 | `--dump` | Dump all entries of a storage map (required for keyless map queries) |
 | `-w, --wait <level>` | Tx wait level: `broadcast`, `best-block` / `best`, `finalized` (default) |
 
-### Pipe-safe output
+### Structured JSON output
 
-All commands follow Unix conventions: **data goes to stdout, progress goes to stderr**. This means you can safely pipe `--output json` into `jq` or other tools without progress messages ("Fetching metadata...", spinner output, "Connecting...") corrupting the data stream:
+Every command supports `--json` for machine-readable output. This works on data queries, metadata inspection, account management, chain configuration, and transaction submission:
 
 ```
-dot const.System.SS58Prefix --output json | jq '.+1'
-dot query.System.Number --output json | jq
+dot inspect --json                          # All pallets as JSON
+dot inspect Balances --json                 # Pallet detail with storage, constants, calls, events, errors
+dot chain list --json                       # Configured chains
+dot account list --json                     # Dev and stored accounts
+dot account create my-key --json            # New account details (mnemonic warning on stderr)
+dot tx.System.remark 0xdead --encode --json # Encoded call hex wrapped in JSON
+dot events.Balances --json                  # Event listing with field signatures
+dot const.System --json                     # Constant listing with types
+```
+
+For transaction submission, `--json` emits NDJSON (one JSON object per lifecycle event):
+
+```
+dot tx.System.remark 0xdead --from alice --json
+# {"event":"signed","txHash":"0x..."}
+# {"event":"broadcasted","txHash":"0x..."}
+# {"event":"finalized","blockNumber":123,"blockHash":"0x...","ok":true,"events":[...]}
+```
+
+### Pipe-safe output
+
+All commands follow Unix conventions: **data goes to stdout, progress goes to stderr**. This means you can safely pipe `--json` into `jq` or other tools without progress messages ("Fetching metadata...", spinner output, "Connecting...") corrupting the data stream:
+
+```
+dot const.System.SS58Prefix --json | jq '.+1'
+dot query.System.Number --json | jq
+dot chain list --json | jq '.chains[].name'
+dot account list --json | jq '.stored[].address'
+dot inspect --json | jq '.pallets[] | select(.events > 10) | .name'
 ```
 
 In an interactive terminal, both streams render together so you see progress and results normally.

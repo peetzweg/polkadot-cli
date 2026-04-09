@@ -9,7 +9,18 @@ import {
 import { BUILTIN_CHAIN_NAMES } from "../config/types.ts";
 import { createChainClient } from "../core/client.ts";
 import { fetchMetadataFromChain } from "../core/metadata.ts";
-import { BOLD, CHECK_MARK, CYAN, DIM, GREEN, printHeading, RED, RESET } from "../core/output.ts";
+import {
+  BOLD,
+  CHECK_MARK,
+  CYAN,
+  DIM,
+  formatJson,
+  GREEN,
+  isJsonOutput,
+  printHeading,
+  RED,
+  RESET,
+} from "../core/output.ts";
 
 const CHAIN_HELP = `
 ${BOLD}Usage:${RESET}
@@ -40,10 +51,10 @@ export function registerChainCommands(cli: CAC) {
       async (
         action: string | undefined,
         name: string | undefined,
-        opts: { rpc?: string | string[]; all?: boolean },
+        opts: { rpc?: string | string[]; all?: boolean; output?: string; json?: boolean },
       ) => {
         if (!action) {
-          if (process.argv[2] === "chains") return chainList();
+          if (process.argv[2] === "chains") return chainList(opts);
           console.log(CHAIN_HELP);
           return;
         }
@@ -51,13 +62,13 @@ export function registerChainCommands(cli: CAC) {
           case "add":
             return chainAdd(name, opts);
           case "remove":
-            return chainRemove(name);
+            return chainRemove(name, opts);
           case "list":
-            return chainList();
+            return chainList(opts);
           case "update":
             return chainUpdate(name, opts);
           case "default":
-            return chainDefault(name);
+            return chainDefault(name, opts);
           default:
             console.error(`Unknown action "${action}".\n`);
             console.log(CHAIN_HELP);
@@ -67,7 +78,10 @@ export function registerChainCommands(cli: CAC) {
     );
 }
 
-async function chainAdd(name: string | undefined, opts: { rpc?: string | string[] }) {
+async function chainAdd(
+  name: string | undefined,
+  opts: { rpc?: string | string[]; output?: string; json?: boolean },
+) {
   if (!name) {
     console.error("Chain name is required.\n");
     console.error("Usage: dot chain add <name> --rpc <url>");
@@ -95,13 +109,20 @@ async function chainAdd(name: string | undefined, opts: { rpc?: string | string[
     config.chains[name] = chainConfig;
     await saveConfig(config);
 
-    console.log(`Chain "${name}" added successfully.`);
+    if (isJsonOutput(opts)) {
+      console.log(formatJson({ action: "added", chain: name }));
+    } else {
+      console.log(`Chain "${name}" added successfully.`);
+    }
   } finally {
     clientHandle.destroy();
   }
 }
 
-async function chainRemove(name: string | undefined) {
+async function chainRemove(
+  name: string | undefined,
+  opts: { output?: string; json?: boolean } = {},
+) {
   if (!name) {
     console.error("Usage: dot chain remove <name>");
     process.exit(1);
@@ -122,16 +143,32 @@ async function chainRemove(name: string | undefined) {
 
   if (config.defaultChain === resolved) {
     config.defaultChain = "polkadot";
-    console.log(`Default chain reset to "polkadot".`);
+    if (!isJsonOutput(opts)) console.log(`Default chain reset to "polkadot".`);
   }
 
   await saveConfig(config);
   await removeChainData(resolved);
-  console.log(`Chain "${resolved}" removed.`);
+
+  if (isJsonOutput(opts)) {
+    console.log(formatJson({ action: "removed", chain: resolved }));
+  } else {
+    console.log(`Chain "${resolved}" removed.`);
+  }
 }
 
-async function chainList() {
+async function chainList(opts: { output?: string; json?: boolean } = {}) {
   const config = await loadConfig();
+
+  if (isJsonOutput(opts)) {
+    const chains = Object.entries(config.chains).map(([name, chainConfig]) => ({
+      name,
+      default: name === config.defaultChain,
+      rpc: Array.isArray(chainConfig.rpc) ? chainConfig.rpc : [chainConfig.rpc],
+    }));
+    console.log(formatJson({ chains }));
+    return;
+  }
+
   printHeading("Configured Chains");
 
   for (const [name, chainConfig] of Object.entries(config.chains)) {
@@ -148,7 +185,7 @@ async function chainList() {
 
 async function chainUpdate(
   name: string | undefined,
-  opts: { rpc?: string | string[]; all?: boolean },
+  opts: { rpc?: string | string[]; all?: boolean; output?: string; json?: boolean },
 ) {
   const config = await loadConfig();
 
@@ -165,7 +202,11 @@ async function chainUpdate(
   try {
     console.error("Fetching metadata...");
     await fetchMetadataFromChain(clientHandle, chainName);
-    console.log(`Metadata for "${chainName}" updated.`);
+    if (isJsonOutput(opts)) {
+      console.log(formatJson({ action: "updated", chain: chainName }));
+    } else {
+      console.log(`Metadata for "${chainName}" updated.`);
+    }
   } finally {
     clientHandle.destroy();
   }
@@ -209,7 +250,10 @@ async function chainUpdateAll(config: {
   }
 }
 
-async function chainDefault(name: string | undefined) {
+async function chainDefault(
+  name: string | undefined,
+  opts: { output?: string; json?: boolean } = {},
+) {
   if (!name) {
     console.error("Usage: dot chain default <name>");
     process.exit(1);
@@ -225,5 +269,10 @@ async function chainDefault(name: string | undefined) {
 
   config.defaultChain = resolved;
   await saveConfig(config);
-  console.log(`Default chain set to "${resolved}".`);
+
+  if (isJsonOutput(opts)) {
+    console.log(formatJson({ action: "default", chain: resolved }));
+  } else {
+    console.log(`Default chain set to "${resolved}".`);
+  }
 }

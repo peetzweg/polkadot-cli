@@ -134,6 +134,40 @@ describe("dot query", { timeout: 15_000 }, () => {
     // Should return a numeric block number
     expect(stdout).toBeTruthy();
   }, 15_000);
+
+  // --json output tests
+  test("query --json lists pallets with storage counts", async () => {
+    const { stdout, exitCode } = await runCli(["query", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(Array.isArray(parsed.pallets)).toBe(true);
+    const system = parsed.pallets.find((p: any) => p.name === "System");
+    expect(system).toBeDefined();
+    expect(system.storage).toBeGreaterThan(0);
+  });
+
+  test("query.System --json lists storage items in pallet", async () => {
+    const { stdout, exitCode } = await runCli(["query.System", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("System");
+    expect(Array.isArray(parsed.storage)).toBe(true);
+    const account = parsed.storage.find((s: any) => s.name === "Account");
+    expect(account).toBeDefined();
+    expect(account.valueType).toBeDefined();
+    expect(account.keyType).toBeDefined();
+  });
+
+  test("--json flag works same as --output json for value queries", async () => {
+    const jsonFlag = await runCli(["query.System.Number", "--json"]);
+    const outputJson = await runCli(["query.System.Number", "--output", "json"]);
+    expect(jsonFlag.exitCode).toBe(0);
+    expect(outputJson.exitCode).toBe(0);
+    // Both should produce valid JSON (values may differ due to live chain)
+    expect(() => JSON.parse(jsonFlag.stdout)).not.toThrow();
+    expect(() => JSON.parse(outputJson.stdout)).not.toThrow();
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------

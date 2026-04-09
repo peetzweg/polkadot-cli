@@ -13,7 +13,15 @@ import {
   toSs58,
   tryDerivePublicKey,
 } from "../core/accounts.ts";
-import { BOLD, formatJson, printHeading, printItem, RESET, YELLOW } from "../core/output.ts";
+import {
+  BOLD,
+  formatJson,
+  isJsonOutput,
+  printHeading,
+  printItem,
+  RESET,
+  YELLOW,
+} from "../core/output.ts";
 
 const ACCOUNT_HELP = `
 ${BOLD}Usage:${RESET}
@@ -59,10 +67,17 @@ export function registerAccountCommands(cli: CAC) {
       async (
         action: string | undefined,
         names: string[],
-        opts: { secret?: string; env?: string; path?: string; prefix?: string; output?: string },
+        opts: {
+          secret?: string;
+          env?: string;
+          path?: string;
+          prefix?: string;
+          output?: string;
+          json?: boolean;
+        },
       ) => {
         if (!action) {
-          if (process.argv[2] === "accounts") return accountList();
+          if (process.argv[2] === "accounts") return accountList(opts);
           console.log(ACCOUNT_HELP);
           return;
         }
@@ -72,16 +87,16 @@ export function registerAccountCommands(cli: CAC) {
             return accountCreate(names[0], opts);
           case "add":
             if (opts.secret || opts.env) return accountImport(names[0], opts);
-            return accountAddWatchOnly(names[0], names[1]);
+            return accountAddWatchOnly(names[0], names[1], opts);
           case "import":
             return accountImport(names[0], opts);
           case "derive":
             return accountDerive(names[0], names[1], opts);
           case "list":
-            return accountList();
+            return accountList(opts);
           case "delete":
           case "remove":
-            return accountRemove(names);
+            return accountRemove(names, opts);
           case "inspect":
             return accountInspect(names[0], opts);
           default:
@@ -91,7 +106,10 @@ export function registerAccountCommands(cli: CAC) {
     );
 }
 
-async function accountCreate(name: string | undefined, opts: { path?: string }) {
+async function accountCreate(
+  name: string | undefined,
+  opts: { path?: string; output?: string; json?: boolean },
+) {
   if (!name) {
     console.error("Account name is required.\n");
     console.error("Usage: dot account create <name>");
@@ -129,6 +147,21 @@ async function accountCreate(name: string | undefined, opts: { path?: string }) 
   });
   await saveAccounts(accountsFile);
 
+  if (isJsonOutput(opts)) {
+    console.log(
+      formatJson({
+        name,
+        address,
+        publicKey: hexPub,
+        mnemonic,
+        path: path || undefined,
+        bandersnatch,
+      }),
+    );
+    console.error(`Save this mnemonic phrase! It is the only way to recover this account.`);
+    return;
+  }
+
   printHeading("Account Created");
   console.log(`  ${BOLD}Name:${RESET}          ${name}`);
   if (path) console.log(`  ${BOLD}Path:${RESET}          ${path}`);
@@ -145,7 +178,7 @@ async function accountCreate(name: string | undefined, opts: { path?: string }) 
 
 async function accountImport(
   name: string | undefined,
-  opts: { secret?: string; env?: string; path?: string },
+  opts: { secret?: string; env?: string; path?: string; output?: string; json?: boolean },
 ) {
   if (!name) {
     console.error("Account name is required.\n");
@@ -189,6 +222,12 @@ async function accountImport(
     });
     await saveAccounts(accountsFile);
 
+    if (isJsonOutput(opts)) {
+      const address = publicKey ? toSs58(publicKey) : undefined;
+      console.log(formatJson({ name, address, env: opts.env, path: path || undefined }));
+      return;
+    }
+
     printHeading("Account Imported");
     console.log(`  ${BOLD}Name:${RESET}    ${name}`);
     if (path) console.log(`  ${BOLD}Path:${RESET}    ${path}`);
@@ -212,6 +251,11 @@ async function accountImport(
     });
     await saveAccounts(accountsFile);
 
+    if (isJsonOutput(opts)) {
+      console.log(formatJson({ name, address, publicKey: hexPub, path: path || undefined }));
+      return;
+    }
+
     printHeading("Account Imported");
     console.log(`  ${BOLD}Name:${RESET}    ${name}`);
     if (path) console.log(`  ${BOLD}Path:${RESET}    ${path}`);
@@ -220,7 +264,11 @@ async function accountImport(
   }
 }
 
-async function accountAddWatchOnly(name: string | undefined, address: string | undefined) {
+async function accountAddWatchOnly(
+  name: string | undefined,
+  address: string | undefined,
+  opts: { output?: string; json?: boolean } = {},
+) {
   if (!name) {
     console.error("Account name is required.\n");
     console.error("Usage: dot account add <name> <ss58-address|0x-public-key>");
@@ -266,6 +314,11 @@ async function accountAddWatchOnly(name: string | undefined, address: string | u
   });
   await saveAccounts(accountsFile);
 
+  if (isJsonOutput(opts)) {
+    console.log(formatJson({ name, address: toSs58(hexPub), watchOnly: true }));
+    return;
+  }
+
   printHeading("Account Added (watch-only)");
   console.log(`  ${BOLD}Name:${RESET}    ${name}`);
   console.log(`  ${BOLD}Address:${RESET} ${toSs58(hexPub)}`);
@@ -275,7 +328,7 @@ async function accountAddWatchOnly(name: string | undefined, address: string | u
 async function accountDerive(
   sourceName: string | undefined,
   newName: string | undefined,
-  opts: { path?: string },
+  opts: { path?: string; output?: string; json?: boolean },
 ) {
   if (!sourceName) {
     console.error("Source account name is required.\n");
@@ -332,6 +385,14 @@ async function accountDerive(
     });
     await saveAccounts(accountsFile);
 
+    if (isJsonOutput(opts)) {
+      const address = publicKey ? toSs58(publicKey) : undefined;
+      console.log(
+        formatJson({ name: newName, source: sourceName, path, address, env: sourceSecret.env }),
+      );
+      return;
+    }
+
     printHeading("Account Derived");
     console.log(`  ${BOLD}Name:${RESET}    ${newName}`);
     console.log(`  ${BOLD}Source:${RESET}  ${sourceName}`);
@@ -356,6 +417,13 @@ async function accountDerive(
     });
     await saveAccounts(accountsFile);
 
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({ name: newName, source: sourceName, path, address, publicKey: hexPub }),
+      );
+      return;
+    }
+
     printHeading("Account Derived");
     console.log(`  ${BOLD}Name:${RESET}    ${newName}`);
     console.log(`  ${BOLD}Source:${RESET}  ${sourceName}`);
@@ -365,7 +433,42 @@ async function accountDerive(
   }
 }
 
-async function accountList() {
+async function accountList(opts: { output?: string; json?: boolean } = {}) {
+  const accountsFile = await loadAccounts();
+
+  if (isJsonOutput(opts)) {
+    const dev = DEV_NAMES.map((name) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      address: getDevAddress(name),
+    }));
+    const stored = accountsFile.accounts.map((account) => {
+      let address: string | undefined;
+      if (isWatchOnly(account)) {
+        address = account.publicKey ? toSs58(account.publicKey) : undefined;
+      } else if (account.secret !== undefined && isEnvSecret(account.secret)) {
+        let pubKey = account.publicKey;
+        if (!pubKey) {
+          pubKey = tryDerivePublicKey(account.secret.env, account.derivationPath) ?? "";
+        }
+        address = pubKey ? toSs58(pubKey) : undefined;
+      } else {
+        address = toSs58(account.publicKey);
+      }
+      return {
+        name: account.name,
+        address,
+        derivationPath: account.derivationPath || undefined,
+        watchOnly: isWatchOnly(account),
+        env:
+          account.secret !== undefined && isEnvSecret(account.secret)
+            ? account.secret.env
+            : undefined,
+      };
+    });
+    console.log(formatJson({ dev, stored }));
+    return;
+  }
+
   printHeading("Dev Accounts");
   for (const name of DEV_NAMES) {
     const display = name.charAt(0).toUpperCase() + name.slice(1);
@@ -373,7 +476,6 @@ async function accountList() {
     printItem(display, address);
   }
 
-  const accountsFile = await loadAccounts();
   if (accountsFile.accounts.length > 0) {
     printHeading("Stored Accounts");
     for (const account of accountsFile.accounts) {
@@ -406,7 +508,7 @@ async function accountList() {
   console.log();
 }
 
-async function accountRemove(names: string[]) {
+async function accountRemove(names: string[], opts: { output?: string; json?: boolean } = {}) {
   if (names.length === 0) {
     console.error("At least one account name is required.\n");
     console.error("Usage: dot account remove <name> [name2] ...");
@@ -443,6 +545,11 @@ async function accountRemove(names: string[]) {
     accountsFile.accounts.splice(idx, 1);
   }
   await saveAccounts(accountsFile);
+
+  if (isJsonOutput(opts)) {
+    console.log(formatJson({ removed: names }));
+    return;
+  }
 
   for (const name of names) {
     console.log(`Account "${name}" removed.`);
@@ -519,7 +626,7 @@ async function accountInspect(
 
   const ss58 = toSs58(publicKeyHex!, prefix);
 
-  if (opts.output === "json") {
+  if (isJsonOutput(opts)) {
     const result: Record<string, unknown> = { publicKey: publicKeyHex!, ss58, prefix };
     if (name) result.name = name;
     if (bandersnatch && Object.keys(bandersnatch).length > 0) result.bandersnatch = bandersnatch;

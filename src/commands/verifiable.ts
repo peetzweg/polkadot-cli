@@ -9,7 +9,7 @@ import {
   resolveSecret,
 } from "../core/accounts.ts";
 import { deriveBandersnatchMember } from "../core/bandersnatch.ts";
-import { BOLD, formatJson, printHeading, RESET } from "../core/output.ts";
+import { BOLD, formatJson, isJsonOutput, printHeading, RESET } from "../core/output.ts";
 
 const DEV_PHRASE = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
@@ -44,16 +44,24 @@ export function registerVerifiableCommands(cli: CAC) {
   cli
     .command("verifiable [account]", "Derive Bandersnatch member key from account mnemonic")
     .option("--context <value>", "Blake2b context for keyed derivation (e.g. candidate)")
-    .action(async (account: string | undefined, opts: { output?: string; context?: string }) => {
-      if (!account) {
-        console.log(VERIFIABLE_HELP);
-        return;
-      }
-      return deriveVerifiable(account, opts);
-    });
+    .action(
+      async (
+        account: string | undefined,
+        opts: { output?: string; json?: boolean; context?: string },
+      ) => {
+        if (!account) {
+          console.log(VERIFIABLE_HELP);
+          return;
+        }
+        return deriveVerifiable(account, opts);
+      },
+    );
 }
 
-async function deriveVerifiable(account: string, opts: { output?: string; context?: string }) {
+async function deriveVerifiable(
+  account: string,
+  opts: { output?: string; json?: boolean; context?: string },
+) {
   const mnemonic = await resolveMnemonic(account);
   const memberKey = deriveBandersnatchMember(mnemonic, opts.context);
   const memberKeyHex = publicKeyToHex(memberKey);
@@ -69,7 +77,7 @@ async function deriveVerifiable(account: string, opts: { output?: string; contex
     }
   }
 
-  if (opts.output === "json") {
+  if (isJsonOutput(opts)) {
     const result: Record<string, unknown> = {
       account,
       memberKey: memberKeyHex,

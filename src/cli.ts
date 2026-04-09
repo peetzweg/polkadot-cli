@@ -52,6 +52,7 @@ if (process.argv[2] === "__complete") {
   cli.option("--output <format>", "Output format: pretty or json", {
     default: "pretty",
   });
+  cli.option("--json", "Output as JSON (shorthand for --output json)");
 
   registerChainCommands(cli);
   registerInspectCommand(cli);
@@ -68,8 +69,8 @@ if (process.argv[2] === "__complete") {
     .option("--from <name>", "Account to sign with (for tx)")
     .option("--dry-run", "Estimate fees without submitting (for tx)")
     .option("--encode", "Encode call to hex without signing (for tx)")
-    .option("--yaml", "Decode call to YAML file format (for tx)")
-    .option("--json", "Decode call to JSON file format (for tx)")
+    .option("--to-yaml", "Decode call to YAML file format (for tx)")
+    .option("--to-json", "Decode call to JSON file format (for tx)")
     .option("--ext <json>", "Custom signed extension values as JSON (for tx)")
     .option(
       "-w, --wait <level>",
@@ -92,11 +93,12 @@ if (process.argv[2] === "__complete") {
           chain?: string;
           rpc?: string;
           output?: string;
+          json?: boolean;
           from?: string;
           dryRun?: boolean;
           encode?: boolean;
-          yaml?: boolean;
-          json?: boolean;
+          toYaml?: boolean;
+          toJson?: boolean;
           ext?: string;
           wait?: string;
           nonce?: string;
@@ -120,7 +122,12 @@ if (process.argv[2] === "__complete") {
 
           // --chain flag overrides file's chain
           const effectiveChain = opts.chain ?? cmd.chain;
-          const handlerOpts = { chain: effectiveChain, rpc: opts.rpc, output: opts.output };
+          const handlerOpts = {
+            chain: effectiveChain,
+            rpc: opts.rpc,
+            output: opts.output,
+            json: opts.json,
+          };
           const target = `${cmd.pallet}.${cmd.item}`;
 
           switch (cmd.category) {
@@ -130,8 +137,8 @@ if (process.argv[2] === "__complete") {
                 from: opts.from,
                 dryRun: opts.dryRun,
                 encode: opts.encode,
-                yaml: opts.yaml,
-                json: opts.json,
+                toYaml: opts.toYaml,
+                toJson: opts.toJson,
                 ext: opts.ext,
                 wait: opts.wait,
                 nonce: opts.nonce,
@@ -191,7 +198,12 @@ if (process.argv[2] === "__complete") {
           );
         }
         const effectiveChain = parsed.chain ?? opts.chain;
-        const handlerOpts = { chain: effectiveChain, rpc: opts.rpc, output: opts.output };
+        const handlerOpts = {
+          chain: effectiveChain,
+          rpc: opts.rpc,
+          output: opts.output,
+          json: opts.json,
+        };
 
         // Build target from pallet + item
         const target = parsed.pallet
@@ -217,8 +229,8 @@ if (process.argv[2] === "__complete") {
               from: opts.from,
               dryRun: opts.dryRun,
               encode: opts.encode,
-              yaml: opts.yaml,
-              json: opts.json,
+              toYaml: opts.toYaml,
+              toJson: opts.toJson,
               ext: opts.ext,
               wait: opts.wait,
               nonce: opts.nonce,
@@ -291,8 +303,9 @@ if (process.argv[2] === "__complete") {
     console.log("  dot apis.Core.version                    Call a runtime API");
     console.log("  dot polkadot.query.System.Number        With chain prefix");
     console.log("  dot ./transfer.yaml --from alice        Run from file");
-    console.log("  dot tx.0x1f0003... --yaml               Decode hex call to YAML");
-    console.log("  dot tx.System.remark 0xdead --json      Encode & output as JSON file format");
+    console.log("  dot tx.0x1f0003... --to-yaml             Decode hex call to YAML");
+    console.log("  dot tx.System.remark 0xdead --to-json   Encode & output as JSON file format");
+    console.log("  dot query.System.Number --json           Output as JSON");
     console.log();
     console.log("Commands:");
     console.log("  inspect [target]   Inspect chain metadata (alias: explore)");
@@ -307,6 +320,7 @@ if (process.argv[2] === "__complete") {
     console.log("Global options:");
     console.log("  --chain <name>     Target chain (default from config)");
     console.log("  --rpc <url>        Override RPC endpoint");
+    console.log("  --json             Output as JSON");
     console.log("  --output <format>  Output format: pretty or json");
     console.log("  --help, -h         Display this message");
     console.log("  --version          Show version");

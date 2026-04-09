@@ -1775,9 +1775,13 @@ describe("dot tx CLI integration", () => {
     expect(stderr).toContain("--from");
   });
 
-  // --yaml / --json tests
-  test("--yaml with named call outputs valid YAML", async () => {
-    const { stdout, exitCode, stderr } = await runCli(["tx.System.remark", "0xdeadbeef", "--yaml"]);
+  // --to-yaml / --to-json tests
+  test("--to-yaml with named call outputs valid YAML", async () => {
+    const { stdout, exitCode, stderr } = await runCli([
+      "tx.System.remark",
+      "0xdeadbeef",
+      "--to-yaml",
+    ]);
     expect(stderr).toBe("");
     expect(exitCode).toBe(0);
     expect(stdout).toContain("chain:");
@@ -1786,8 +1790,12 @@ describe("dot tx CLI integration", () => {
     expect(stdout).toContain("remark:");
   });
 
-  test("--json with named call outputs valid JSON", async () => {
-    const { stdout, exitCode, stderr } = await runCli(["tx.System.remark", "0xdeadbeef", "--json"]);
+  test("--to-json with named call outputs valid JSON", async () => {
+    const { stdout, exitCode, stderr } = await runCli([
+      "tx.System.remark",
+      "0xdeadbeef",
+      "--to-json",
+    ]);
     expect(stderr).toBe("");
     expect(exitCode).toBe(0);
     const parsed = JSON.parse(stdout);
@@ -1795,37 +1803,42 @@ describe("dot tx CLI integration", () => {
     expect(parsed.tx.System.remark).toBeDefined();
   });
 
-  test("--yaml with raw hex decodes correctly", async () => {
+  test("--to-yaml with raw hex decodes correctly", async () => {
     // First encode a call to get valid hex
     const { stdout: hex } = await runCli(["tx.System.remark", "0xdeadbeef", "--encode"]);
-    // Then decode with --yaml
-    const { stdout, exitCode, stderr } = await runCli([`tx.${hex}`, "--yaml"]);
+    // Then decode with --to-yaml
+    const { stdout, exitCode, stderr } = await runCli([`tx.${hex}`, "--to-yaml"]);
     expect(stderr).toBe("");
     expect(exitCode).toBe(0);
     expect(stdout).toContain("System:");
     expect(stdout).toContain("remark:");
   });
 
-  test("--json with raw hex decodes correctly", async () => {
+  test("--to-json with raw hex decodes correctly", async () => {
     const { stdout: hex } = await runCli(["tx.System.remark", "0xdeadbeef", "--encode"]);
-    const { stdout, exitCode, stderr } = await runCli([`tx.${hex}`, "--json"]);
+    const { stdout, exitCode, stderr } = await runCli([`tx.${hex}`, "--to-json"]);
     expect(stderr).toBe("");
     expect(exitCode).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(parsed.tx.System.remark).toBeDefined();
   });
 
-  test("--yaml and --encode are mutually exclusive", async () => {
-    const { stderr, exitCode } = await runCli(["tx.System.remark", "0xaa", "--yaml", "--encode"]);
+  test("--to-yaml and --encode are mutually exclusive", async () => {
+    const { stderr, exitCode } = await runCli([
+      "tx.System.remark",
+      "0xaa",
+      "--to-yaml",
+      "--encode",
+    ]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("mutually exclusive");
   });
 
-  test("--json and --dry-run are mutually exclusive", async () => {
+  test("--to-json and --dry-run are mutually exclusive", async () => {
     const { stderr, exitCode } = await runCli([
       "tx.System.remark",
       "0xaa",
-      "--json",
+      "--to-json",
       "--dry-run",
       "--from",
       "alice",
@@ -1834,24 +1847,29 @@ describe("dot tx CLI integration", () => {
     expect(stderr).toContain("mutually exclusive");
   });
 
-  test("--yaml and --json are mutually exclusive", async () => {
-    const { stderr, exitCode } = await runCli(["tx.System.remark", "0xaa", "--yaml", "--json"]);
+  test("--to-yaml and --to-json are mutually exclusive", async () => {
+    const { stderr, exitCode } = await runCli([
+      "tx.System.remark",
+      "0xaa",
+      "--to-yaml",
+      "--to-json",
+    ]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("mutually exclusive");
   });
 
-  test("--yaml without --from succeeds (no signer needed)", async () => {
-    const { exitCode } = await runCli(["tx.System.remark", "0xaa", "--yaml"]);
+  test("--to-yaml without --from succeeds (no signer needed)", async () => {
+    const { exitCode } = await runCli(["tx.System.remark", "0xaa", "--to-yaml"]);
     expect(exitCode).toBe(0);
   });
 
-  test("round-trip: encode → --yaml → file input → --encode produces same hex", async () => {
+  test("round-trip: encode → --to-yaml → file input → --encode produces same hex", async () => {
     // Step 1: Encode a call
     const { stdout: originalHex } = await runCli(["tx.System.remark", "0xdeadbeef", "--encode"]);
     expect(originalHex).toMatch(/^0x[0-9a-f]+$/);
 
     // Step 2: Decode to YAML
-    const { stdout: yamlContent } = await runCli([`tx.${originalHex}`, "--yaml"]);
+    const { stdout: yamlContent } = await runCli([`tx.${originalHex}`, "--to-yaml"]);
 
     // Step 3: Feed YAML back as file input with --encode
     const {
@@ -1866,7 +1884,7 @@ describe("dot tx CLI integration", () => {
     expect(roundTripHex).toBe(originalHex);
   });
 
-  test("round-trip: encode → --json → file input → --encode produces same hex", async () => {
+  test("round-trip: encode → --to-json → file input → --encode produces same hex", async () => {
     const { stdout: originalHex } = await runCli([
       "tx.Balances.transfer_keep_alive",
       "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
@@ -1874,7 +1892,7 @@ describe("dot tx CLI integration", () => {
       "--encode",
     ]);
 
-    const { stdout: jsonContent } = await runCli([`tx.${originalHex}`, "--json"]);
+    const { stdout: jsonContent } = await runCli([`tx.${originalHex}`, "--to-json"]);
 
     const {
       stdout: roundTripHex,
@@ -1886,5 +1904,46 @@ describe("dot tx CLI integration", () => {
     expect(stderr).toBe("");
     expect(exitCode).toBe(0);
     expect(roundTripHex).toBe(originalHex);
+  });
+
+  // --json output tests (global structured output flag)
+  test("tx --json lists pallets with call counts as JSON", async () => {
+    const { stdout, exitCode } = await runCli(["tx", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(Array.isArray(parsed.pallets)).toBe(true);
+    const system = parsed.pallets.find((p: any) => p.name === "System");
+    expect(system).toBeDefined();
+    expect(system.calls).toBeGreaterThan(0);
+  });
+
+  test("tx.System --json lists calls in pallet as JSON", async () => {
+    const { stdout, exitCode } = await runCli(["tx.System", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("System");
+    expect(Array.isArray(parsed.calls)).toBe(true);
+    const remark = parsed.calls.find((c: any) => c.name === "remark");
+    expect(remark).toBeDefined();
+    expect(remark.args).toBeDefined();
+  });
+
+  test("--encode --json wraps callHex in JSON", async () => {
+    const { stdout, exitCode } = await runCli([
+      "tx.System.remark",
+      "0xdeadbeef",
+      "--encode",
+      "--json",
+    ]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.callHex).toMatch(/^0x[0-9a-f]+$/);
+  });
+
+  test("--encode without --json still returns plain hex", async () => {
+    const { stdout, exitCode } = await runCli(["tx.System.remark", "0xdeadbeef", "--encode"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/^0x[0-9a-f]+$/);
   });
 });
