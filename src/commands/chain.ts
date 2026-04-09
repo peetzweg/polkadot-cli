@@ -67,10 +67,7 @@ export function registerChainCommands(cli: CAC) {
     );
 }
 
-async function chainAdd(
-  name: string | undefined,
-  opts: { rpc?: string | string[] },
-) {
+async function chainAdd(name: string | undefined, opts: { rpc?: string | string[] }) {
   if (!name) {
     console.error("Chain name is required.\n");
     console.error("Usage: dot chain add <name> --rpc <url>");

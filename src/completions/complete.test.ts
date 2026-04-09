@@ -147,7 +147,6 @@ describe("option name completion", () => {
     expect(l).toContain("--output");
     expect(l).toContain("--help");
     expect(l).toContain("--version");
-
   });
 
   test("-- prefix does not include removed --light-client option", async () => {
