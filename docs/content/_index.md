@@ -33,32 +33,32 @@ This installs the `dot` command globally. Ships with Polkadot and all system par
 
 ## Chains
 
-Manage chain connections. Polkadot is configured by default along with all system parachains for both Polkadot and Paseo networks. Add any Substrate-based chain by RPC endpoint or Smoldot light client.
+Manage chain connections. Polkadot is configured by default along with all system parachains for both Polkadot and Paseo networks. Add any Substrate-based chain by pointing to its RPC endpoint(s).
 
 ### Preconfigured chains
 
 The following chains are available out of the box — no `dot chain add` needed:
 
-| Network | Chain | Light client |
-|---------|-------|:---:|
-| Polkadot | `polkadot` (relay, default) | yes |
-| | `polkadot-asset-hub` | yes |
-| | `polkadot-bridge-hub` | yes |
-| | `polkadot-collectives` | yes |
-| | `polkadot-coretime` | yes |
-| | `polkadot-people` | yes |
-| Paseo (testnet) | `paseo` (relay) | yes |
-| | `paseo-asset-hub` | yes |
-| | `paseo-bridge-hub` | — |
-| | `paseo-collectives` | — |
-| | `paseo-coretime` | yes |
-| | `paseo-people` | yes |
+| Network | Chain |
+|---------|-------|
+| Polkadot | `polkadot` (relay, default) |
+| | `polkadot-asset-hub` |
+| | `polkadot-bridge-hub` |
+| | `polkadot-collectives` |
+| | `polkadot-coretime` |
+| | `polkadot-people` |
+| Paseo (testnet) | `paseo` (relay) |
+| | `paseo-asset-hub` |
+| | `paseo-bridge-hub` |
+| | `paseo-collectives` |
+| | `paseo-coretime` |
+| | `paseo-people` |
 
 Each chain ships with multiple RPC endpoints from decentralized infrastructure providers (IBP, Dotters, Dwellir, and others). The CLI automatically falls back to the next endpoint if the primary is unreachable. Use `dot chain list` to see all endpoints for each chain.
 
 ### Add a chain
 
-Connect to a chain via WebSocket RPC or the embedded Smoldot light client. Use repeated `--rpc` flags to configure multiple endpoints with automatic fallback — if the primary is unreachable, the CLI tries the next one:
+Connect to a chain via WebSocket RPC. Use repeated `--rpc` flags to configure multiple endpoints with automatic fallback — if the primary is unreachable, the CLI tries the next one:
 
 ```
 # Single RPC
@@ -66,9 +66,6 @@ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 
 # Multiple RPCs with fallback
 dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
-
-# Light client
-dot chain add westend --light-client
 ```
 
 ### List chains
@@ -1525,7 +1522,7 @@ These flags work with any command:
 | `--help` | Show help (global or command-specific) |
 | `--chain <name>` | Target chain (default from config) |
 | `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback) |
-| `--light-client` | Use Smoldot light client |
+
 | `--output json` | Raw JSON output (default: pretty) |
 | `--dump` | Dump all entries of a storage map (required for keyless map queries) |
 | `-w, --wait <level>` | Tx wait level: `broadcast`, `best-block` / `best`, `finalized` (default) |

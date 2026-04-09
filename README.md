@@ -28,20 +28,20 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 
 ### Preconfigured chains
 
-| Network | Chain | Light client |
-|---------|-------|:---:|
-| Polkadot | `polkadot` (relay, default) | yes |
-| | `polkadot-asset-hub` | yes |
-| | `polkadot-bridge-hub` | yes |
-| | `polkadot-collectives` | yes |
-| | `polkadot-coretime` | yes |
-| | `polkadot-people` | yes |
-| Paseo (testnet) | `paseo` (relay) | yes |
-| | `paseo-asset-hub` | yes |
-| | `paseo-bridge-hub` | — |
-| | `paseo-collectives` | — |
-| | `paseo-coretime` | yes |
-| | `paseo-people` | yes |
+| Network | Chain |
+|---------|-------|
+| Polkadot | `polkadot` (relay, default) |
+| | `polkadot-asset-hub` |
+| | `polkadot-bridge-hub` |
+| | `polkadot-collectives` |
+| | `polkadot-coretime` |
+| | `polkadot-people` |
+| Paseo (testnet) | `paseo` (relay) |
+| | `paseo-asset-hub` |
+| | `paseo-bridge-hub` |
+| | `paseo-collectives` |
+| | `paseo-coretime` |
+| | `paseo-people` |
 
 Each chain ships with multiple RPC endpoints from decentralized infrastructure providers (IBP, Dotters, Dwellir, and others). The CLI automatically falls back to the next endpoint if the primary is unreachable.
 
@@ -67,9 +67,6 @@ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 
 # Add a chain with fallback RPCs (repeat --rpc for each endpoint)
 dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
-
-# Add a chain via light client
-dot chain add westend --light-client
 
 # List configured chains
 dot chain list
@@ -982,7 +979,7 @@ dot tx.System.remark 0xdead               # shows call help (no error)
 | `--help` | Show help (global or command-specific) |
 | `--chain <name>` | Target chain (default from config) |
 | `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback) |
-| `--light-client` | Use Smoldot light client |
+
 | `--output json` | Raw JSON output (default: pretty) |
 | `--dump` | Dump all entries of a storage map (required for keyless map queries) |
 | `-w, --wait <level>` | Tx wait level: `broadcast`, `best-block` / `best`, `finalized` (default) |

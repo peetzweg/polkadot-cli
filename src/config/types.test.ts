@@ -19,6 +19,14 @@ describe("primaryRpc", () => {
   });
 });
 
+describe("ChainConfig", () => {
+  test("no built-in chain has a lightClient field", () => {
+    for (const [_name, config] of Object.entries(DEFAULT_CONFIG.chains)) {
+      expect(config).not.toHaveProperty("lightClient");
+    }
+  });
+});
+
 describe("DEFAULT_CONFIG", () => {
   test("built-in chains use array rpc", () => {
     for (const [_name, config] of Object.entries(DEFAULT_CONFIG.chains)) {

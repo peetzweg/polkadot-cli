@@ -124,17 +124,24 @@ describe("dot chain", () => {
     );
   });
 
-  test("list with light-client chain", async () => {
-    const { stdout, exitCode } = await runCli(["chain", "list"], {
-      config: {
-        chains: {
-          kusama: { rpc: "", lightClient: true },
-        },
-      },
-    });
+  test("help text does not mention --light-client", async () => {
+    const { stdout, exitCode } = await runCli(["chain"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("kusama");
-    expect(stdout).toContain("light-client");
+    expect(stdout).not.toContain("--light-client");
+    expect(stdout).not.toContain("light client");
+    expect(stdout).not.toContain("Smoldot");
+  });
+
+  test("add mychain (no --rpc) error does not mention --light-client", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "add", "mychain"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).not.toContain("--light-client");
+  });
+
+  test("list shows RPC for all chains (no light-client display)", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("light-client");
   });
 
   test("default kusama succeeds", async () => {
@@ -250,7 +257,7 @@ describe("dot chain", () => {
   test("add mychain (no --rpc) errors", async () => {
     const { stderr, exitCode } = await runCli(["chain", "add", "mychain"]);
     expect(exitCode).toBe(1);
-    expect(stderr).toContain("Must provide either --rpc");
+    expect(stderr).toContain("Must provide --rpc");
   });
 
   test("remove Polkadot (case-insensitive) errors as built-in", async () => {
