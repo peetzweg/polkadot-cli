@@ -1,6 +1,6 @@
 import type { CAC } from "cac";
 import { publicKeyToHex, toSs58 } from "../core/accounts.ts";
-import { BOLD, CYAN, DIM, formatJson, printHeading, RESET } from "../core/output.ts";
+import { BOLD, CYAN, DIM, formatJson, isJsonOutput, printHeading, RESET } from "../core/output.ts";
 import {
   deriveSovereignAccount,
   isValidParaId,
@@ -42,7 +42,7 @@ export function registerParachainCommand(cli: CAC) {
     .action(
       async (
         paraIdStr: string | undefined,
-        opts: { type?: string; prefix?: string; output?: string },
+        opts: { type?: string; prefix?: string; output?: string; json?: boolean },
       ) => {
         if (!paraIdStr) {
           printParachainHelp();
@@ -65,9 +65,7 @@ export function registerParachainCommand(cli: CAC) {
           ? [validateType(opts.type)]
           : SOVEREIGN_ACCOUNT_TYPES;
 
-        const format = opts.output ?? "pretty";
-
-        if (format === "json") {
+        if (isJsonOutput(opts)) {
           const result: Record<string, unknown> = { paraId, prefix };
           for (const type of types) {
             const accountId = deriveSovereignAccount(paraId, type);

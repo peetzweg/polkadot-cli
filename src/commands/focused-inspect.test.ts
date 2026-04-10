@@ -4,7 +4,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../config/types.ts";
 import { runCli } from "./__fixtures__/run-cli.ts";
-import { showItemHelp } from "./focused-inspect.ts";
+import {
+  handleCalls,
+  handleErrors,
+  handleEvents,
+  handleStorage,
+  showItemHelp,
+} from "./focused-inspect.ts";
 
 // ---------------------------------------------------------------------------
 // Ensure metadata + config exist in real $HOME for in-process tests.
@@ -98,6 +104,73 @@ describe("showItemHelp (in-process coverage)", { timeout: 15_000 }, () => {
 
   test("pallet-only errors delegates to listing", async () => {
     await showItemHelp("errors", "Balances", {});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// In-process JSON output coverage for handler functions.
+// Same approach as above — call handlers directly with { json: true } so
+// coverage instrumentation can see the JSON branches.
+// ---------------------------------------------------------------------------
+
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("handler JSON output (in-process coverage)", { timeout: 15_000 }, () => {
+  // handleCalls
+  test("handleCalls category-only with json", async () => {
+    await handleCalls(undefined, { json: true });
+  });
+  test("handleCalls pallet-only with json", async () => {
+    await handleCalls("System", { json: true });
+  });
+  test("handleCalls pallet.item with json", async () => {
+    await handleCalls("System.remark", { json: true });
+  });
+
+  // handleEvents
+  test("handleEvents category-only with json", async () => {
+    await handleEvents(undefined, { json: true });
+  });
+  test("handleEvents pallet-only with json", async () => {
+    await handleEvents("Balances", { json: true });
+  });
+  test("handleEvents pallet.item with json", async () => {
+    await handleEvents("Balances.Transfer", { json: true });
+  });
+
+  // handleErrors
+  test("handleErrors category-only with json", async () => {
+    await handleErrors(undefined, { json: true });
+  });
+  test("handleErrors pallet-only with json", async () => {
+    await handleErrors("Balances", { json: true });
+  });
+  test("handleErrors pallet.item with json", async () => {
+    await handleErrors("Balances.InsufficientBalance", { json: true });
+  });
+
+  // handleStorage
+  test("handleStorage category-only with json", async () => {
+    await handleStorage(undefined, { json: true });
+  });
+  test("handleStorage pallet-only with json", async () => {
+    await handleStorage("System", { json: true });
+  });
+  test("handleStorage pallet.item with json", async () => {
+    await handleStorage("System.Account", { json: true });
+  });
+
+  // showItemHelp with json
+  test("showItemHelp tx item with json", async () => {
+    await showItemHelp("tx", "System.remark", { json: true });
+  });
+  test("showItemHelp query item with json", async () => {
+    await showItemHelp("query", "System.Account", { json: true });
+  });
+  test("showItemHelp events item with json", async () => {
+    await showItemHelp("events", "Balances.Transfer", { json: true });
+  });
+  test("showItemHelp errors item with json", async () => {
+    await showItemHelp("errors", "Balances.InsufficientBalance", { json: true });
   });
 });
 
@@ -494,5 +567,55 @@ describe("stdout/stderr separation (pipe-safe output)", () => {
     expect(exitCode).toBe(0);
     expect(stdout).not.toContain("Fetching metadata");
     expect(stdout).not.toContain("Connecting");
+  });
+
+  // --json output tests
+  test("events --json lists pallets with event counts", async () => {
+    const { stdout, exitCode } = await runCli(["events", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(Array.isArray(parsed.pallets)).toBe(true);
+    const balances = parsed.pallets.find((p: any) => p.name === "Balances");
+    expect(balances).toBeDefined();
+    expect(balances.events).toBeGreaterThan(0);
+  });
+
+  test("events.Balances --json lists events in pallet", async () => {
+    const { stdout, exitCode } = await runCli(["events.Balances", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("Balances");
+    expect(Array.isArray(parsed.events)).toBe(true);
+    const transfer = parsed.events.find((e: any) => e.name === "Transfer");
+    expect(transfer).toBeDefined();
+    expect(transfer.fields).toBeDefined();
+    expect(transfer.docs).toBeDefined();
+  });
+
+  test("events.Balances.Transfer --json returns event detail", async () => {
+    const { stdout, exitCode } = await runCli(["events.Balances.Transfer", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("Balances");
+    expect(parsed.item).toBe("Transfer");
+    expect(parsed.category).toBe("event");
+  });
+
+  test("errors --json lists pallets with error counts", async () => {
+    const { stdout, exitCode } = await runCli(["errors", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(Array.isArray(parsed.pallets)).toBe(true);
+  });
+
+  test("errors.Balances --json lists errors in pallet", async () => {
+    const { stdout, exitCode } = await runCli(["errors.Balances", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("Balances");
+    expect(Array.isArray(parsed.errors)).toBe(true);
+    expect(parsed.errors.length).toBeGreaterThan(0);
   });
 });

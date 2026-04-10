@@ -18,6 +18,8 @@ import {
   CYAN,
   DIM,
   firstSentence,
+  formatJson,
+  isJsonOutput,
   printDocs,
   printHeading,
   printItem,
@@ -55,15 +57,25 @@ export function resolvePallet(meta: MetadataBundle, palletName: string): PalletI
 
 export async function handleCalls(
   target: string | undefined,
-  opts: { chain?: string; rpc?: string },
+  opts: { chain?: string; rpc?: string; output?: string; json?: boolean },
 ) {
   if (!target) {
-    // List all pallets with call counts
     const config = await loadConfig();
     const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
     const meta = await loadMeta(chainName, chainConfig, opts.rpc);
     const pallets = listPallets(meta);
     const withCalls = pallets.filter((p) => p.calls.length > 0);
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallets: withCalls.map((p) => ({ name: p.name, calls: p.calls.length })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`Pallets with calls on ${chainName} (${withCalls.length})`);
     for (const p of withCalls) {
       printItem(p.name, `${p.calls.length} calls`);
@@ -76,7 +88,6 @@ export async function handleCalls(
   const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
   const meta = await loadMeta(chainName, chainConfig, opts.rpc);
 
-  // Parse target as Pallet or Pallet.Item
   const dotIdx = target.indexOf(".");
   const palletName = dotIdx === -1 ? target : target.slice(0, dotIdx);
   const itemName = dotIdx === -1 ? undefined : target.slice(dotIdx + 1);
@@ -84,11 +95,30 @@ export async function handleCalls(
   const pallet = resolvePallet(meta, palletName);
 
   if (!itemName) {
-    // List calls
     if (pallet.calls.length === 0) {
-      console.log(`No calls in ${pallet.name}.`);
+      if (isJsonOutput(opts)) {
+        console.log(formatJson({ chain: chainName, pallet: pallet.name, calls: [] }));
+      } else {
+        console.log(`No calls in ${pallet.name}.`);
+      }
       return;
     }
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallet: pallet.name,
+          calls: pallet.calls.map((c) => ({
+            name: c.name,
+            args: describeCallArgs(meta, pallet.name, c.name),
+            docs: firstSentence(c.docs),
+          })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`${pallet.name} Calls`);
     for (const c of pallet.calls) {
       const args = describeCallArgs(meta, pallet.name, c.name);
@@ -102,11 +132,24 @@ export async function handleCalls(
     return;
   }
 
-  // Call detail
   const callItem = pallet.calls.find((c) => c.name.toLowerCase() === itemName.toLowerCase());
   if (!callItem) {
     const names = pallet.calls.map((c) => c.name);
     throw new Error(suggestMessage(`call in ${pallet.name}`, itemName, names));
+  }
+
+  if (isJsonOutput(opts)) {
+    console.log(
+      formatJson({
+        chain: chainName,
+        pallet: pallet.name,
+        item: callItem.name,
+        category: "call",
+        args: describeCallArgs(meta, pallet.name, callItem.name),
+        docs: callItem.docs,
+      }),
+    );
+    return;
   }
 
   printHeading(`${pallet.name}.${callItem.name} (Call)`);
@@ -121,15 +164,25 @@ export async function handleCalls(
 
 export async function handleEvents(
   target: string | undefined,
-  opts: { chain?: string; rpc?: string },
+  opts: { chain?: string; rpc?: string; output?: string; json?: boolean },
 ) {
   if (!target) {
-    // List all pallets with event counts
     const config = await loadConfig();
     const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
     const meta = await loadMeta(chainName, chainConfig, opts.rpc);
     const pallets = listPallets(meta);
     const withEvents = pallets.filter((p) => p.events.length > 0);
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallets: withEvents.map((p) => ({ name: p.name, events: p.events.length })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`Pallets with events on ${chainName} (${withEvents.length})`);
     for (const p of withEvents) {
       printItem(p.name, `${p.events.length} events`);
@@ -149,11 +202,30 @@ export async function handleEvents(
   const pallet = resolvePallet(meta, palletName);
 
   if (!itemName) {
-    // List events
     if (pallet.events.length === 0) {
-      console.log(`No events in ${pallet.name}.`);
+      if (isJsonOutput(opts)) {
+        console.log(formatJson({ chain: chainName, pallet: pallet.name, events: [] }));
+      } else {
+        console.log(`No events in ${pallet.name}.`);
+      }
       return;
     }
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallet: pallet.name,
+          events: pallet.events.map((e) => ({
+            name: e.name,
+            fields: describeEventFields(meta, pallet.name, e.name),
+            docs: firstSentence(e.docs),
+          })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`${pallet.name} Events`);
     for (const e of pallet.events) {
       const fields = describeEventFields(meta, pallet.name, e.name);
@@ -167,11 +239,24 @@ export async function handleEvents(
     return;
   }
 
-  // Event detail
   const eventItem = pallet.events.find((e) => e.name.toLowerCase() === itemName.toLowerCase());
   if (!eventItem) {
     const names = pallet.events.map((e) => e.name);
     throw new Error(suggestMessage(`event in ${pallet.name}`, itemName, names));
+  }
+
+  if (isJsonOutput(opts)) {
+    console.log(
+      formatJson({
+        chain: chainName,
+        pallet: pallet.name,
+        item: eventItem.name,
+        category: "event",
+        fields: describeEventFields(meta, pallet.name, eventItem.name),
+        docs: eventItem.docs,
+      }),
+    );
+    return;
   }
 
   printHeading(`${pallet.name}.${eventItem.name} (Event)`);
@@ -186,15 +271,25 @@ export async function handleEvents(
 
 export async function handleErrors(
   target: string | undefined,
-  opts: { chain?: string; rpc?: string },
+  opts: { chain?: string; rpc?: string; output?: string; json?: boolean },
 ) {
   if (!target) {
-    // List all pallets with error counts
     const config = await loadConfig();
     const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
     const meta = await loadMeta(chainName, chainConfig, opts.rpc);
     const pallets = listPallets(meta);
     const withErrors = pallets.filter((p) => p.errors.length > 0);
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallets: withErrors.map((p) => ({ name: p.name, errors: p.errors.length })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`Pallets with errors on ${chainName} (${withErrors.length})`);
     for (const p of withErrors) {
       printItem(p.name, `${p.errors.length} errors`);
@@ -214,11 +309,26 @@ export async function handleErrors(
   const pallet = resolvePallet(meta, palletName);
 
   if (!itemName) {
-    // List errors
     if (pallet.errors.length === 0) {
-      console.log(`No errors in ${pallet.name}.`);
+      if (isJsonOutput(opts)) {
+        console.log(formatJson({ chain: chainName, pallet: pallet.name, errors: [] }));
+      } else {
+        console.log(`No errors in ${pallet.name}.`);
+      }
       return;
     }
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallet: pallet.name,
+          errors: pallet.errors.map((e) => ({ name: e.name, docs: firstSentence(e.docs) })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`${pallet.name} Errors`);
     for (const e of pallet.errors) {
       console.log(`  ${CYAN}${e.name}${RESET}`);
@@ -231,11 +341,23 @@ export async function handleErrors(
     return;
   }
 
-  // Error detail
   const errorItem = pallet.errors.find((e) => e.name.toLowerCase() === itemName.toLowerCase());
   if (!errorItem) {
     const names = pallet.errors.map((e) => e.name);
     throw new Error(suggestMessage(`error in ${pallet.name}`, itemName, names));
+  }
+
+  if (isJsonOutput(opts)) {
+    console.log(
+      formatJson({
+        chain: chainName,
+        pallet: pallet.name,
+        item: errorItem.name,
+        category: "error",
+        docs: errorItem.docs,
+      }),
+    );
+    return;
   }
 
   printHeading(`${pallet.name}.${errorItem.name} (Error)`);
@@ -247,15 +369,25 @@ export async function handleErrors(
 
 export async function handleStorage(
   target: string | undefined,
-  opts: { chain?: string; rpc?: string },
+  opts: { chain?: string; rpc?: string; output?: string; json?: boolean },
 ) {
   if (!target) {
-    // List all pallets with storage counts
     const config = await loadConfig();
     const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
     const meta = await loadMeta(chainName, chainConfig, opts.rpc);
     const pallets = listPallets(meta);
     const withStorage = pallets.filter((p) => p.storage.length > 0);
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallets: withStorage.map((p) => ({ name: p.name, storage: p.storage.length })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`Pallets with storage on ${chainName} (${withStorage.length})`);
     for (const p of withStorage) {
       printItem(p.name, `${p.storage.length} storage`);
@@ -275,11 +407,31 @@ export async function handleStorage(
   const pallet = resolvePallet(meta, palletName);
 
   if (!itemName) {
-    // List storage items
     if (pallet.storage.length === 0) {
-      console.log(`No storage items in ${pallet.name}.`);
+      if (isJsonOutput(opts)) {
+        console.log(formatJson({ chain: chainName, pallet: pallet.name, storage: [] }));
+      } else {
+        console.log(`No storage items in ${pallet.name}.`);
+      }
       return;
     }
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallet: pallet.name,
+          storage: pallet.storage.map((s) => {
+            const valueType = describeType(meta.lookup, s.valueTypeId);
+            const keyType =
+              s.keyTypeId != null ? describeType(meta.lookup, s.keyTypeId) : undefined;
+            return { name: s.name, type: s.type, valueType, keyType, docs: firstSentence(s.docs) };
+          }),
+        }),
+      );
+      return;
+    }
+
     printHeading(`${pallet.name} Storage`);
     for (const s of pallet.storage) {
       const valueType = describeType(meta.lookup, s.valueTypeId);
@@ -300,11 +452,29 @@ export async function handleStorage(
     return;
   }
 
-  // Storage detail
   const storageItem = pallet.storage.find((s) => s.name.toLowerCase() === itemName.toLowerCase());
   if (!storageItem) {
     const names = pallet.storage.map((s) => s.name);
     throw new Error(suggestMessage(`storage item in ${pallet.name}`, itemName, names));
+  }
+
+  if (isJsonOutput(opts)) {
+    const valueType = describeType(meta.lookup, storageItem.valueTypeId);
+    const keyType =
+      storageItem.keyTypeId != null ? describeType(meta.lookup, storageItem.keyTypeId) : undefined;
+    console.log(
+      formatJson({
+        chain: chainName,
+        pallet: pallet.name,
+        item: storageItem.name,
+        category: "storage",
+        type: storageItem.type,
+        valueType,
+        keyType,
+        docs: storageItem.docs,
+      }),
+    );
+    return;
   }
 
   printHeading(`${pallet.name}.${storageItem.name} (Storage)`);
@@ -323,7 +493,7 @@ export async function handleStorage(
 export async function showItemHelp(
   category: DotCategory,
   target: string,
-  opts: { chain?: string; rpc?: string },
+  opts: { chain?: string; rpc?: string; output?: string; json?: boolean },
 ): Promise<void> {
   const config = await loadConfig();
   const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);

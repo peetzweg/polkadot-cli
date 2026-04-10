@@ -8,7 +8,7 @@ import {
   parseInputData,
   toHex,
 } from "../core/hash.ts";
-import { BOLD, CYAN, DIM, printResult, RESET } from "../core/output.ts";
+import { BOLD, CYAN, DIM, isJsonOutput, printResult, RESET } from "../core/output.ts";
 import { CliError } from "../utils/errors.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 
@@ -68,7 +68,7 @@ export function registerHashCommand(cli: CAC) {
       async (
         algorithm: string | undefined,
         data: string | undefined,
-        opts: { file?: string; stdin?: boolean; output?: string },
+        opts: { file?: string; stdin?: boolean; output?: string; json?: boolean },
       ) => {
         if (!algorithm) {
           printAlgorithmHelp();
@@ -83,8 +83,7 @@ export function registerHashCommand(cli: CAC) {
         const hash = computeHash(algorithm, input);
         const hexHash = toHex(hash);
 
-        const format = opts.output ?? "pretty";
-        if (format === "json") {
+        if (isJsonOutput(opts)) {
           printResult(
             {
               algorithm,

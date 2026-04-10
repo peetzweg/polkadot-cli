@@ -12,6 +12,8 @@ import {
   CYAN,
   DIM,
   firstSentence,
+  formatJson,
+  isJsonOutput,
   printHeading,
   printItem,
   printResult,
@@ -29,18 +31,29 @@ export async function handleQuery(
     chain?: string;
     rpc?: string;
     output?: string;
+    json?: boolean;
     dump?: boolean;
     /** Pre-parsed args from a file */
     parsedArgs?: unknown;
   },
 ) {
   if (!target) {
-    // List all pallets with storage item counts
     const config = await loadConfig();
     const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
     const meta = await loadMeta(chainName, chainConfig, opts.rpc);
     const pallets = listPallets(meta);
     const withStorage = pallets.filter((p) => p.storage.length > 0);
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallets: withStorage.map((p) => ({ name: p.name, storage: p.storage.length })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`Pallets with storage on ${chainName} (${withStorage.length})`);
     for (const p of withStorage) {
       printItem(p.name, `${p.storage.length} storage items`);
@@ -59,9 +72,30 @@ export async function handleQuery(
     const pallet = resolvePallet(meta, palletName(target));
 
     if (pallet.storage.length === 0) {
-      console.log(`No storage items in ${pallet.name}.`);
+      if (isJsonOutput(opts)) {
+        console.log(formatJson({ chain: chainName, pallet: pallet.name, storage: [] }));
+      } else {
+        console.log(`No storage items in ${pallet.name}.`);
+      }
       return;
     }
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallet: pallet.name,
+          storage: pallet.storage.map((s) => {
+            const valueType = describeType(meta.lookup, s.valueTypeId);
+            const keyType =
+              s.keyTypeId != null ? describeType(meta.lookup, s.keyTypeId) : undefined;
+            return { name: s.name, type: s.type, valueType, keyType, docs: firstSentence(s.docs) };
+          }),
+        }),
+      );
+      return;
+    }
+
     printHeading(`${pallet.name} Storage`);
     for (const s of pallet.storage) {
       const valueType = describeType(meta.lookup, s.valueTypeId);
@@ -121,7 +155,7 @@ export async function handleQuery(
                 : String(opts.parsedArgs),
             ];
     const parsedKeys = await parseStorageKeys(meta, palletInfo.name, storageItem, effectiveKeys);
-    const format = opts.output ?? "pretty";
+    const format = isJsonOutput(opts) ? "json" : (opts.output ?? "pretty");
 
     // Determine expected key count for maps
     const expectedLen =

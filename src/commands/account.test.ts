@@ -794,4 +794,59 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("watch-only");
   });
+
+  // --json output tests
+  test("list --json returns structured dev and stored accounts", async () => {
+    const { stdout, exitCode } = await runCli(["account", "list", "--json"], {
+      accounts: [STORED_ACCOUNT],
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(Array.isArray(parsed.dev)).toBe(true);
+    expect(parsed.dev.length).toBeGreaterThan(0);
+    expect(parsed.dev[0]).toHaveProperty("name");
+    expect(parsed.dev[0]).toHaveProperty("address");
+    expect(Array.isArray(parsed.stored)).toBe(true);
+    expect(parsed.stored.length).toBe(1);
+    expect(parsed.stored[0].name).toBe("my-account");
+  });
+
+  test("accounts shorthand --json returns JSON", async () => {
+    const { stdout, exitCode } = await runCli(["accounts", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(Array.isArray(parsed.dev)).toBe(true);
+  });
+
+  test("create --json returns account details as JSON", async () => {
+    const { stdout, exitCode, stderr } = await runCli(["account", "create", "test-acct", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.name).toBe("test-acct");
+    expect(parsed.address).toBeDefined();
+    expect(parsed.publicKey).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(parsed.mnemonic).toBeDefined();
+    expect(parsed.mnemonic.split(" ").length).toBeGreaterThanOrEqual(12);
+    // Warning goes to stderr
+    expect(stderr).toContain("mnemonic");
+  });
+
+  test("inspect --json with --json flag (not --output json)", async () => {
+    const { stdout, exitCode } = await runCli(["account", "inspect", "alice", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.name).toBe("Alice");
+    expect(parsed.publicKey).toMatch(/^0x/);
+    expect(parsed.ss58).toBeDefined();
+    expect(parsed.prefix).toBe(42);
+  });
+
+  test("remove --json returns removed names", async () => {
+    const { stdout, exitCode } = await runCli(["account", "remove", "my-account", "--json"], {
+      accounts: [STORED_ACCOUNT],
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.removed).toEqual(["my-account"]);
+  });
 });

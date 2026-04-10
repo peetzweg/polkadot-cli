@@ -413,4 +413,82 @@ describe("dot inspect", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain("(Storage)");
   });
+
+  // --json output tests
+  test("--json lists all pallets as JSON", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(Array.isArray(parsed.pallets)).toBe(true);
+    const system = parsed.pallets.find((p: any) => p.name === "System");
+    expect(system).toBeDefined();
+    expect(system.storage).toBeGreaterThan(0);
+    expect(system.constants).toBeGreaterThan(0);
+    expect(system.calls).toBeGreaterThan(0);
+    expect(system.events).toBeGreaterThan(0);
+    expect(system.errors).toBeGreaterThan(0);
+  });
+
+  test("--json for pallet detail returns structured data", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "System", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(parsed.pallet).toBe("System");
+    expect(Array.isArray(parsed.storage)).toBe(true);
+    expect(Array.isArray(parsed.constants)).toBe(true);
+    expect(Array.isArray(parsed.calls)).toBe(true);
+    expect(Array.isArray(parsed.events)).toBe(true);
+    expect(Array.isArray(parsed.errors)).toBe(true);
+    // Check structure of a storage item
+    const account = parsed.storage.find((s: any) => s.name === "Account");
+    expect(account).toBeDefined();
+    expect(account.type).toBeDefined();
+    expect(account.valueType).toBeDefined();
+  });
+
+  test("--json for item detail returns structured data", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "System.Account", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(parsed.pallet).toBe("System");
+    expect(parsed.item).toBe("Account");
+    expect(parsed.category).toBe("storage");
+    expect(parsed.valueType).toBeDefined();
+    expect(parsed.keyType).toBeDefined();
+    expect(Array.isArray(parsed.docs)).toBe(true);
+  });
+
+  test("--json for constant item detail", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "System.SS58Prefix", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("System");
+    expect(parsed.item).toBe("SS58Prefix");
+    expect(parsed.category).toBe("constant");
+  });
+
+  test("--json for event item detail", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "Balances.Transfer", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("Balances");
+    expect(parsed.item).toBe("Transfer");
+    expect(parsed.category).toBe("event");
+    expect(parsed.fields).toBeDefined();
+  });
+
+  test("--json for error item detail", async () => {
+    const { stdout, exitCode } = await runCli([
+      "inspect",
+      "Balances.InsufficientBalance",
+      "--json",
+    ]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("Balances");
+    expect(parsed.category).toBe("error");
+  });
 });

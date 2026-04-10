@@ -14,6 +14,8 @@ import {
   CYAN,
   DIM,
   firstSentence,
+  formatJson,
+  isJsonOutput,
   printHeading,
   printItem,
   printResult,
@@ -31,16 +33,27 @@ export async function handleApis(
     chain?: string;
     rpc?: string;
     output?: string;
+    json?: boolean;
     /** Pre-parsed args from a file */
     parsedArgs?: unknown;
   },
 ) {
   if (!target) {
-    // List all runtime APIs
     const config = await loadConfig();
     const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
     const meta = await loadMeta(chainName, chainConfig, opts.rpc);
     const apis = listRuntimeApis(meta);
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          apis: apis.map((a) => ({ name: a.name, methods: a.methods.length })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`Runtime APIs on ${chainName} (${apis.length})`);
     for (const api of apis) {
       printItem(api.name, `${api.methods.length} methods`);
@@ -71,9 +84,30 @@ export async function handleApis(
     const api = resolveRuntimeApi(meta, apiName);
 
     if (api.methods.length === 0) {
-      console.log(`No methods in ${api.name}.`);
+      if (isJsonOutput(opts)) {
+        console.log(formatJson({ chain: chainName, api: api.name, methods: [] }));
+      } else {
+        console.log(`No methods in ${api.name}.`);
+      }
       return;
     }
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          api: api.name,
+          methods: api.methods.map((m) => ({
+            name: m.name,
+            args: describeRuntimeApiMethodArgs(meta, m),
+            returns: describeType(meta.lookup, m.output),
+            docs: firstSentence(m.docs),
+          })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`${api.name} Methods`);
     for (const m of api.methods) {
       const argStr = describeRuntimeApiMethodArgs(meta, m);
@@ -119,7 +153,7 @@ export async function handleApis(
     const unsafeApi = clientHandle.client.getUnsafeApi();
     const result = await (unsafeApi as any).apis[api.name][method.name](...parsedArgs);
 
-    const format = opts.output ?? "pretty";
+    const format = isJsonOutput(opts) ? "json" : (opts.output ?? "pretty");
     printResult(result, format);
   } finally {
     clientHandle.destroy();

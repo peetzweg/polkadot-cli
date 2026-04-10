@@ -121,4 +121,27 @@ describe("dot const", { timeout: 15_000 }, () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("System");
   });
+
+  // --json output tests
+  test("const --json lists pallets with constant counts", async () => {
+    const { stdout, exitCode } = await runCli(["const", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(Array.isArray(parsed.pallets)).toBe(true);
+    const system = parsed.pallets.find((p: any) => p.name === "System");
+    expect(system).toBeDefined();
+    expect(system.constants).toBeGreaterThan(0);
+  });
+
+  test("const.System --json lists constants in pallet", async () => {
+    const { stdout, exitCode } = await runCli(["const.System", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("System");
+    expect(Array.isArray(parsed.constants)).toBe(true);
+    const ss58 = parsed.constants.find((c: any) => c.name === "SS58Prefix");
+    expect(ss58).toBeDefined();
+    expect(ss58.type).toBeDefined();
+  });
 });

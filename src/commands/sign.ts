@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { CAC } from "cac";
 import { resolveAccountKeypair } from "../core/accounts.ts";
 import { parseInputData, toHex } from "../core/hash.ts";
-import { BOLD, CYAN, DIM, printResult, RESET } from "../core/output.ts";
+import { BOLD, CYAN, DIM, isJsonOutput, printResult, RESET } from "../core/output.ts";
 import { CliError } from "../utils/errors.ts";
 
 const SUPPORTED_TYPES = ["sr25519"] as const;
@@ -77,7 +77,14 @@ export function registerSignCommand(cli: CAC) {
     .action(
       async (
         message: string | undefined,
-        opts: { from?: string; type?: string; file?: string; stdin?: boolean; output?: string },
+        opts: {
+          from?: string;
+          type?: string;
+          file?: string;
+          stdin?: boolean;
+          output?: string;
+          json?: boolean;
+        },
       ) => {
         if (!message && !opts.file && !opts.stdin) {
           printSignHelp();
@@ -110,8 +117,7 @@ export function registerSignCommand(cli: CAC) {
           enum: enumValue,
         };
 
-        const format = opts.output ?? "pretty";
-        if (format === "json") {
+        if (isJsonOutput(opts)) {
           printResult(result, "json");
         } else {
           console.log(`  ${BOLD}Type:${RESET}       ${result.type}`);

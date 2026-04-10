@@ -109,4 +109,11 @@ describe("dot parachain", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Unknown account type");
   });
+
+  test("--json flag works same as --output json", async () => {
+    const jsonFlag = await runCli(["parachain", "1000", "--json"]);
+    const outputJson = await runCli(["parachain", "1000", "--output", "json"]);
+    expect(jsonFlag.exitCode).toBe(0);
+    expect(jsonFlag.stdout).toBe(outputJson.stdout);
+  });
 });

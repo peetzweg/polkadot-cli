@@ -90,4 +90,27 @@ describe("global CLI", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Unknown command");
   });
+
+  test("--json flag produces valid JSON for inspect", async () => {
+    const { stdout, exitCode } = await runCli(["inspect", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(Array.isArray(parsed.pallets)).toBe(true);
+    expect(parsed.pallets.length).toBeGreaterThan(0);
+    expect(parsed.pallets[0]).toHaveProperty("name");
+  });
+
+  test("--json flag is equivalent to --output json", async () => {
+    const jsonFlag = await runCli(["inspect", "--json"]);
+    const outputJson = await runCli(["inspect", "--output", "json"]);
+    expect(jsonFlag.exitCode).toBe(0);
+    expect(outputJson.exitCode).toBe(0);
+    expect(jsonFlag.stdout).toBe(outputJson.stdout);
+  });
+
+  test("--json flag shows in help", async () => {
+    const { stdout } = await runCli(["--help"]);
+    expect(stdout).toContain("--json");
+  });
 });

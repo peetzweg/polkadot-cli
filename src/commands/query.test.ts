@@ -1,10 +1,47 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
+import { existsSync, linkSync, mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { DEFAULT_CONFIG } from "../config/types.ts";
 import type { StorageItemInfo } from "../core/metadata.ts";
 import { getTestMetadata } from "./__fixtures__/load-metadata.ts";
 import { runCli } from "./__fixtures__/run-cli.ts";
-import { parseStorageKeys } from "./query.ts";
+import { handleQuery, parseStorageKeys } from "./query.ts";
 
 const meta = getTestMetadata();
+
+// ---------------------------------------------------------------------------
+// Ensure metadata + config exist in real $HOME for in-process tests.
+// ---------------------------------------------------------------------------
+const FIXTURE_METADATA = join(import.meta.dir, "__fixtures__/polkadot-metadata.bin");
+const DOT_DIR = join(homedir(), ".polkadot");
+
+beforeAll(() => {
+  const metaDir = join(DOT_DIR, "chains", "polkadot");
+  const metaPath = join(metaDir, "metadata.bin");
+  if (!existsSync(metaPath)) {
+    mkdirSync(metaDir, { recursive: true });
+    linkSync(FIXTURE_METADATA, metaPath);
+  }
+  const configPath = join(DOT_DIR, "config.json");
+  if (!existsSync(configPath)) {
+    writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG));
+  }
+});
+
+// ---------------------------------------------------------------------------
+// In-process JSON output coverage for handleQuery listing paths.
+// ---------------------------------------------------------------------------
+
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("handleQuery JSON output (in-process coverage)", { timeout: 15_000 }, () => {
+  test("category-only with json", async () => {
+    await handleQuery(undefined, [], { json: true });
+  });
+  test("pallet-only with json", async () => {
+    await handleQuery("System", [], { json: true });
+  });
+});
 
 // @ts-expect-error Bun supports describe(label, options, fn) at runtime
 describe("dot query", { timeout: 15_000 }, () => {
@@ -133,6 +170,40 @@ describe("dot query", { timeout: 15_000 }, () => {
     expect(exitCode).toBe(0);
     // Should return a numeric block number
     expect(stdout).toBeTruthy();
+  }, 15_000);
+
+  // --json output tests
+  test("query --json lists pallets with storage counts", async () => {
+    const { stdout, exitCode } = await runCli(["query", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(Array.isArray(parsed.pallets)).toBe(true);
+    const system = parsed.pallets.find((p: any) => p.name === "System");
+    expect(system).toBeDefined();
+    expect(system.storage).toBeGreaterThan(0);
+  });
+
+  test("query.System --json lists storage items in pallet", async () => {
+    const { stdout, exitCode } = await runCli(["query.System", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.pallet).toBe("System");
+    expect(Array.isArray(parsed.storage)).toBe(true);
+    const account = parsed.storage.find((s: any) => s.name === "Account");
+    expect(account).toBeDefined();
+    expect(account.valueType).toBeDefined();
+    expect(account.keyType).toBeDefined();
+  });
+
+  test("--json flag works same as --output json for value queries", async () => {
+    const jsonFlag = await runCli(["query.System.Number", "--json"]);
+    const outputJson = await runCli(["query.System.Number", "--output", "json"]);
+    expect(jsonFlag.exitCode).toBe(0);
+    expect(outputJson.exitCode).toBe(0);
+    // Both should produce valid JSON (values may differ due to live chain)
+    expect(() => JSON.parse(jsonFlag.stdout)).not.toThrow();
+    expect(() => JSON.parse(outputJson.stdout)).not.toThrow();
   }, 15_000);
 });
 

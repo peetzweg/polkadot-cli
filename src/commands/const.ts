@@ -11,6 +11,8 @@ import {
   CYAN,
   DIM,
   firstSentence,
+  formatJson,
+  isJsonOutput,
   printHeading,
   printItem,
   printResult,
@@ -21,15 +23,25 @@ import { loadMeta } from "./focused-inspect.ts";
 
 export async function handleConst(
   target: string | undefined,
-  opts: { chain?: string; rpc?: string; output?: string },
+  opts: { chain?: string; rpc?: string; output?: string; json?: boolean },
 ) {
   if (!target) {
-    // List all pallets with constant counts
     const config = await loadConfig();
     const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
     const meta = await loadMeta(chainName, chainConfig, opts.rpc);
     const pallets = listPallets(meta);
     const withConsts = pallets.filter((p) => p.constants.length > 0);
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallets: withConsts.map((p) => ({ name: p.name, constants: p.constants.length })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`Pallets with constants on ${chainName} (${withConsts.length})`);
     for (const p of withConsts) {
       printItem(p.name, `${p.constants.length} constants`);
@@ -57,7 +69,26 @@ export async function handleConst(
     }
 
     if (palletInfo.constants.length === 0) {
-      console.log(`No constants in ${palletInfo.name}.`);
+      if (isJsonOutput(opts)) {
+        console.log(formatJson({ chain: chainName, pallet: palletInfo.name, constants: [] }));
+      } else {
+        console.log(`No constants in ${palletInfo.name}.`);
+      }
+      return;
+    }
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallet: palletInfo.name,
+          constants: palletInfo.constants.map((c) => ({
+            name: c.name,
+            type: describeType(meta.lookup, c.typeId),
+            docs: firstSentence(c.docs),
+          })),
+        }),
+      );
       return;
     }
 
@@ -97,7 +128,7 @@ export async function handleConst(
     const runtimeToken = await (unsafeApi as any).runtimeToken;
     const result = (unsafeApi as any).constants[palletInfo.name][constantItem.name](runtimeToken);
 
-    const format = opts.output ?? "pretty";
+    const format = isJsonOutput(opts) ? "json" : (opts.output ?? "pretty");
     printResult(result, format);
   } finally {
     clientHandle.destroy();

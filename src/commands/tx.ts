@@ -23,9 +23,12 @@ import {
   CYAN,
   DIM,
   firstSentence,
+  formatJson,
   GREEN,
+  isJsonOutput,
   printHeading,
   printItem,
+  printJsonLine,
   RED,
   RESET,
   Spinner,
@@ -112,9 +115,10 @@ export async function handleTx(
     from?: string;
     dryRun?: boolean;
     encode?: boolean;
-    yaml?: boolean;
-    json?: boolean;
+    toYaml?: boolean;
+    toJson?: boolean;
     output?: string;
+    json?: boolean;
     ext?: string;
     wait?: string;
     nonce?: string;
@@ -126,12 +130,22 @@ export async function handleTx(
   },
 ) {
   if (!target) {
-    // List all pallets with call counts
     const config = await loadConfig();
     const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
     const meta = await loadMeta(chainName, chainConfig, opts.rpc);
     const pallets = listPallets(meta);
     const withCalls = pallets.filter((p) => p.calls.length > 0);
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallets: withCalls.map((p) => ({ name: p.name, calls: p.calls.length })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`Pallets with calls on ${chainName} (${withCalls.length})`);
     for (const p of withCalls) {
       printItem(p.name, `${p.calls.length} calls`);
@@ -145,16 +159,35 @@ export async function handleTx(
 
   // Check if target is pallet-only (no dot, not hex)
   if (!isRawCall && target.indexOf(".") === -1) {
-    // Listing mode: show calls in the pallet
     const config = await loadConfig();
     const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
     const meta = await loadMeta(chainName, chainConfig, opts.rpc);
     const pallet = resolvePallet(meta, target);
 
     if (pallet.calls.length === 0) {
-      console.log(`No calls in ${pallet.name}.`);
+      if (isJsonOutput(opts)) {
+        console.log(formatJson({ chain: chainName, pallet: pallet.name, calls: [] }));
+      } else {
+        console.log(`No calls in ${pallet.name}.`);
+      }
       return;
     }
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          pallet: pallet.name,
+          calls: pallet.calls.map((c) => ({
+            name: c.name,
+            args: describeCallArgs(meta, pallet.name, c.name),
+            docs: firstSentence(c.docs),
+          })),
+        }),
+      );
+      return;
+    }
+
     printHeading(`${pallet.name} Calls`);
     for (const c of pallet.calls) {
       const callArgs = describeCallArgs(meta, pallet.name, c.name);
@@ -168,7 +201,7 @@ export async function handleTx(
     return;
   }
 
-  if (!opts.from && !opts.encode && !opts.yaml && !opts.json) {
+  if (!opts.from && !opts.encode && !opts.toYaml && !opts.toJson) {
     if (isRawCall) {
       throw new Error("--from is required (or use --encode to output hex without signing)");
     }
@@ -184,14 +217,14 @@ export async function handleTx(
     throw new Error("--encode cannot be used with raw call hex (already encoded)");
   }
 
-  if ((opts.yaml || opts.json) && opts.encode) {
-    throw new Error("--yaml/--json and --encode are mutually exclusive");
+  if ((opts.toYaml || opts.toJson) && opts.encode) {
+    throw new Error("--to-yaml/--to-json and --encode are mutually exclusive");
   }
-  if ((opts.yaml || opts.json) && opts.dryRun) {
-    throw new Error("--yaml/--json and --dry-run are mutually exclusive");
+  if ((opts.toYaml || opts.toJson) && opts.dryRun) {
+    throw new Error("--to-yaml/--to-json and --dry-run are mutually exclusive");
   }
-  if (opts.yaml && opts.json) {
-    throw new Error("--yaml and --json are mutually exclusive");
+  if (opts.toYaml && opts.toJson) {
+    throw new Error("--to-yaml and --to-json are mutually exclusive");
   }
 
   const config = await loadConfig();
@@ -208,7 +241,7 @@ export async function handleTx(
 
   const { name: chainName, chain: chainConfig } = resolveChain(config, effectiveChain);
 
-  const decodeOnly = opts.encode || opts.yaml || opts.json;
+  const decodeOnly = opts.encode || opts.toYaml || opts.toJson;
   const signer = decodeOnly ? undefined : await resolveAccountSigner(opts.from!);
 
   let clientHandle: ClientHandle | undefined;
@@ -267,9 +300,9 @@ export async function handleTx(
       }
       callHex = target;
 
-      if (opts.yaml || opts.json) {
+      if (opts.toYaml || opts.toJson) {
         const fileObj = decodeCallToFileFormat(meta, callHex, chainName);
-        outputFileFormat(fileObj, !!opts.yaml);
+        outputFileFormat(fileObj, !!opts.toYaml);
         return;
       }
 
@@ -297,17 +330,21 @@ export async function handleTx(
         opts.parsedArgs !== undefined ? fileArgsToStrings(opts.parsedArgs) : args;
       const callData = await parseCallArgs(meta, palletInfo.name, callInfo.name, effectiveArgs);
 
-      if (opts.encode || opts.yaml || opts.json) {
+      if (opts.encode || opts.toYaml || opts.toJson) {
         const { codec, location } = meta.builder.buildCall(palletInfo.name, callInfo.name);
         const encodedArgs = codec.enc(callData);
         const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
         const hex = Binary.fromBytes(fullCall).asHex();
         if (opts.encode) {
-          console.log(hex);
+          if (isJsonOutput(opts)) {
+            console.log(formatJson({ callHex: hex }));
+          } else {
+            console.log(hex);
+          }
           return;
         }
         const fileObj = decodeCallToFileFormat(meta, hex, chainName);
-        outputFileFormat(fileObj, !!opts.yaml);
+        outputFileFormat(fileObj, !!opts.toYaml);
         return;
       }
 
@@ -322,6 +359,31 @@ export async function handleTx(
 
     if (opts.dryRun) {
       const signerAddress = toSs58(signer!.publicKey);
+
+      let estimatedFees: string | undefined;
+      try {
+        estimatedFees = String(await tx.getEstimatedFees(signer?.publicKey, txOptions));
+      } catch {
+        estimatedFees = undefined;
+      }
+
+      if (isJsonOutput(opts)) {
+        const result: Record<string, unknown> = {
+          chain: chainName,
+          from: { name: opts.from, address: signerAddress },
+          callHex,
+          decoded: decodedStr,
+          estimatedFees,
+        };
+        if (nonce !== undefined) result.nonce = nonce;
+        if (tip !== undefined) result.tip = String(tip);
+        if (mortality !== undefined)
+          result.mortality = mortality.mortal ? `mortal (period ${mortality.period})` : "immortal";
+        if (at !== undefined) result.at = at;
+        console.log(formatJson(result));
+        return;
+      }
+
       console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
       console.log(`  ${BOLD}From:${RESET}   ${opts.from} (${signerAddress})`);
       console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
@@ -334,17 +396,56 @@ export async function handleTx(
         );
       if (at !== undefined) console.log(`  ${BOLD}At:${RESET}    ${at}`);
 
-      try {
-        const fees = await tx.getEstimatedFees(signer?.publicKey, txOptions);
-        console.log(`  ${BOLD}Estimated fees:${RESET} ${fees}`);
-      } catch (err: any) {
+      if (estimatedFees !== undefined) {
+        console.log(`  ${BOLD}Estimated fees:${RESET} ${estimatedFees}`);
+      } else {
         console.log(`  ${BOLD}Estimated fees:${RESET} ${YELLOW}unable to estimate${RESET}`);
-        console.log(`  ${DIM}${err.message ?? err}${RESET}`);
       }
       return;
     }
 
     const waitLevel = parseWaitLevel(opts.wait);
+
+    // JSON output: NDJSON stream
+    if (isJsonOutput(opts)) {
+      const result = await watchTransactionJson(
+        tx.signSubmitAndWatch(signer, txOptions),
+        waitLevel,
+      );
+      const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc);
+      if (result.type === "broadcasted") {
+        printJsonLine({ event: "broadcasted", txHash: result.txHash });
+        return;
+      }
+      // result is now TxFinalized | TxBestBlocksState (both have .ok, .block, .events)
+      const blockHash = result.block.hash;
+      const explorer: Record<string, string> = {};
+      if (rpcUrl) {
+        explorer.polkadotjs = pjsAppsLink(rpcUrl, blockHash);
+        explorer.papi = papiLink(rpcUrl, blockHash);
+      }
+      printJsonLine({
+        event: result.type === "finalized" ? "finalized" : "bestBlock",
+        blockNumber: result.block.number,
+        blockHash,
+        txHash: result.txHash,
+        ok: result.ok,
+        events: result.events?.map((e: any) => ({
+          pallet: e.type,
+          name: e.value?.type,
+          fields: e.value?.value,
+        })),
+        dispatchError: result.ok ? null : formatDispatchError(result.dispatchError),
+        explorer,
+      });
+      if (!result.ok) {
+        throw new CliError(
+          `Transaction dispatch error: ${formatDispatchError(result.dispatchError)}`,
+        );
+      }
+      return;
+    }
+
     const result = await watchTransaction(tx.signSubmitAndWatch(signer, txOptions), waitLevel);
 
     console.log();
@@ -1277,6 +1378,51 @@ function watchTransaction(
       error(err: unknown) {
         if (settled) return;
         spinner.stop();
+        reject(err);
+      },
+    });
+  });
+}
+
+function watchTransactionJson(
+  observable: import("rxjs").Observable<TxEvent>,
+  level: WaitLevel,
+): Promise<WatchResult> {
+  return new Promise<WatchResult>((resolve, reject) => {
+    let settled = false;
+    const subscription = observable.subscribe({
+      next(event: TxEvent) {
+        if (settled) return;
+        switch (event.type) {
+          case "signed":
+            printJsonLine({ event: "signed", txHash: event.txHash });
+            break;
+          case "broadcasted":
+            printJsonLine({ event: "broadcasted", txHash: event.txHash });
+            if (level === "broadcast") {
+              settled = true;
+              subscription.unsubscribe();
+              resolve(event);
+            }
+            break;
+          case "txBestBlocksState":
+            if (event.found) {
+              printJsonLine({ event: "bestBlock", blockNumber: event.block.number, found: true });
+              if (level === "best-block") {
+                settled = true;
+                subscription.unsubscribe();
+                resolve(event);
+              }
+            }
+            break;
+          case "finalized":
+            settled = true;
+            resolve(event);
+            break;
+        }
+      },
+      error(err: unknown) {
+        if (settled) return;
         reject(err);
       },
     });

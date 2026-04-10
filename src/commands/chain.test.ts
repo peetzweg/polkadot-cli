@@ -277,4 +277,32 @@ describe("dot chain", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain('Default chain set to "polkadot"');
   });
+
+  // --json output tests
+  test("list --json returns valid JSON with all chains", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(Array.isArray(parsed.chains)).toBe(true);
+    const polkadot = parsed.chains.find((c: any) => c.name === "polkadot");
+    expect(polkadot).toBeDefined();
+    expect(polkadot.default).toBe(true);
+    expect(Array.isArray(polkadot.rpc)).toBe(true);
+    expect(polkadot.rpc[0]).toContain("polkadot");
+  });
+
+  test("chains shorthand --json returns JSON", async () => {
+    const { stdout, exitCode } = await runCli(["chains", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(Array.isArray(parsed.chains)).toBe(true);
+  });
+
+  test("default --json returns action JSON", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "default", "polkadot", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.action).toBe("default");
+    expect(parsed.chain).toBe("polkadot");
+  });
 });
