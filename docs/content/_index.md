@@ -838,7 +838,7 @@ Override low-level transaction parameters. Useful for rapid-fire submission (cus
 | `--nonce <n>` | non-negative integer | Override the auto-detected nonce |
 | `--tip <amount>` | non-negative integer (planck) | Priority tip for the transaction pool |
 | `--mortality <spec>` | `immortal` or period (min 4) | Transaction mortality window |
-| `--at <block>` | `best`, `finalized`, or 0x-prefixed block hash | Block state to validate against |
+| `--at <block>` | 0x-prefixed block hash | Block hash to validate against (defaults to finalized) |
 
 ```
 # Fire-and-forget: submit two txs in rapid succession with manual nonces
@@ -854,8 +854,8 @@ dot tx.System.remark 0xdead --from alice --mortality immortal
 # Set a custom mortality period (rounds up to nearest power of two)
 dot tx.System.remark 0xdead --from alice --mortality 128
 
-# Validate against the best (not finalized) block
-dot tx.System.remark 0xdead --from alice --at best
+# Validate against a specific block hash
+dot tx.System.remark 0xdead --from alice --at 0x1234...abcd
 
 # Combine: rapid-fire with tip and broadcast-only
 dot tx.System.remark 0xdead --from alice --nonce 5 --tip 500000 --wait broadcast
@@ -1591,7 +1591,7 @@ The notification is automatically suppressed when:
 
 ## Environment Compatibility
 
-The CLI works in Node.js, Bun, and sandboxed runtimes (e.g. LLM tool-use / MCP environments) that lack a native `globalThis.WebSocket`. WebSocket connections use the [`ws`](https://github.com/websockets/ws) package explicitly, so no global polyfill is required.
+The CLI works in Node.js (v22+), Bun, and sandboxed runtimes (e.g. LLM tool-use / MCP environments). WebSocket connections use the native `WebSocket` implementation provided by the runtime — no external WebSocket package is required.
 
 ## Configuration
 

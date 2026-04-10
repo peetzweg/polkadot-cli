@@ -1,11 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
-import { WebSocket } from "ws";
 import type { ChainConfig } from "../config/types.ts";
 import { ConnectionError } from "../utils/errors.ts";
 
 // Capture calls to getWsProvider so we can inspect the config it receives
 const mockGetWsProvider = mock((_endpoints: any, _config?: any) => (() => {}) as any);
-const mockWithCompat = mock((p: any) => p);
 const mockCreateClient = mock(
   () =>
     ({
@@ -13,11 +11,8 @@ const mockCreateClient = mock(
     }) as any,
 );
 
-mock.module("polkadot-api/ws-provider", () => ({
+mock.module("polkadot-api/ws", () => ({
   getWsProvider: mockGetWsProvider,
-}));
-mock.module("polkadot-api/polkadot-sdk-compat", () => ({
-  withPolkadotSdkCompat: mockWithCompat,
 }));
 mock.module("polkadot-api", () => ({
   createClient: mockCreateClient,
@@ -27,7 +22,7 @@ mock.module("polkadot-api", () => ({
 const { createChainClient } = await import("./client.ts");
 
 describe("createChainClient", () => {
-  test("passes websocketClass to getWsProvider", async () => {
+  test("passes timeout config to getWsProvider", async () => {
     mockGetWsProvider.mockClear();
 
     const handle = await createChainClient(
@@ -40,8 +35,39 @@ describe("createChainClient", () => {
     const [endpoints, config] = mockGetWsProvider.mock.calls[0]!;
     expect(endpoints).toBe("wss://example.com");
     expect(config).toHaveProperty("timeout", 10_000);
-    expect(config).toHaveProperty("websocketClass");
-    expect(config!.websocketClass).toBe(WebSocket);
+
+    handle.destroy();
+  });
+
+  test("does not pass websocketClass (papi v2 auto-detects WebSocket)", async () => {
+    mockGetWsProvider.mockClear();
+
+    const handle = await createChainClient(
+      "test-chain",
+      { rpc: "wss://example.com" },
+      "wss://example.com",
+    );
+
+    const [, config] = mockGetWsProvider.mock.calls[0]!;
+    expect(config).not.toHaveProperty("websocketClass");
+
+    handle.destroy();
+  });
+
+  test("does not use withPolkadotSdkCompat wrapper (removed in papi v2)", async () => {
+    mockCreateClient.mockClear();
+
+    const handle = await createChainClient(
+      "test-chain",
+      { rpc: "wss://example.com" },
+      "wss://example.com",
+    );
+
+    // createClient should receive the raw provider, not a compat-wrapped one
+    expect(mockCreateClient).toHaveBeenCalledTimes(1);
+    const callArgs = mockCreateClient.mock.calls[0]! as unknown[];
+    // The provider should be the direct return of getWsProvider (a function)
+    expect(typeof callArgs[0]).toBe("function");
 
     handle.destroy();
   });
@@ -98,20 +124,6 @@ describe("createChainClient", () => {
     handle.destroy();
   });
 
-  test("wraps provider with withPolkadotSdkCompat", async () => {
-    mockWithCompat.mockClear();
-
-    const handle = await createChainClient(
-      "test-chain",
-      { rpc: "wss://example.com" },
-      "wss://example.com",
-    );
-
-    expect(mockWithCompat).toHaveBeenCalledTimes(1);
-
-    handle.destroy();
-  });
-
   test("destroy() calls client.destroy()", async () => {
     const destroySpy = mock(() => {});
     mockCreateClient.mockImplementationOnce(
@@ -130,19 +142,5 @@ describe("createChainClient", () => {
     expect(destroySpy).not.toHaveBeenCalled();
     handle.destroy();
     expect(destroySpy).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("WebSocket class availability", () => {
-  test("ws package exports a WebSocket class", () => {
-    expect(WebSocket).toBeDefined();
-    expect(typeof WebSocket).toBe("function");
-  });
-
-  test("ws WebSocket is constructable", () => {
-    // Verify it has the constructor shape expected by the provider
-    expect(WebSocket.prototype).toBeDefined();
-    expect(typeof WebSocket.prototype.close).toBe("function");
-    expect(typeof WebSocket.prototype.send).toBe("function");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { Binary, FixedSizeBinary } from "polkadot-api";
+import { Binary } from "polkadot-api";
 import { firstSentence, formatJson, formatPretty, isJsonOutput, Spinner } from "./output.ts";
 
 describe("formatJson", () => {
@@ -11,12 +11,14 @@ describe("formatJson", () => {
     expect(formatJson({ balance: 1000000000000n })).toBe('{\n  "balance": "1000000000000"\n}');
   });
 
-  test("converts Uint8Array to 0x-prefixed hex", () => {
-    expect(formatJson({ hash: new Uint8Array([0xde, 0xad]) })).toBe('{\n  "hash": "0xdead"\n}');
+  test("converts Uint8Array with non-readable bytes to hex", () => {
+    expect(formatJson({ hash: new Uint8Array([0x00, 0xde, 0xad]) })).toBe(
+      '{\n  "hash": "0x00dead"\n}',
+    );
   });
 
-  test("converts empty Uint8Array to 0x", () => {
-    expect(formatJson({ data: new Uint8Array([]) })).toBe('{\n  "data": "0x"\n}');
+  test("converts empty Uint8Array to empty string", () => {
+    expect(formatJson({ data: new Uint8Array([]) })).toBe('{\n  "data": ""\n}');
   });
 
   test("handles nested objects with mixed types", () => {
@@ -44,30 +46,26 @@ describe("formatJson", () => {
   });
 
   test("converts Binary with invalid UTF-8 to hex", () => {
-    expect(formatJson({ data: Binary.fromBytes(new Uint8Array([0x80, 0x81])) })).toBe(
-      '{\n  "data": "0x8081"\n}',
-    );
+    expect(formatJson({ data: new Uint8Array([0x80, 0x81]) })).toBe('{\n  "data": "0x8081"\n}');
   });
 
   test("converts empty Binary to empty string", () => {
-    expect(formatJson({ data: Binary.fromBytes(new Uint8Array([])) })).toBe('{\n  "data": ""\n}');
+    expect(formatJson({ data: new Uint8Array([]) })).toBe('{\n  "data": ""\n}');
   });
 
-  test("converts Binary with control characters to hex", () => {
+  test("converts Uint8Array with control characters to hex", () => {
     const bytes = new Uint8Array([0x48, 0x65, 0x6c, 0x00, 0x6c, 0x6f]); // "Hel\0lo"
-    expect(formatJson({ data: Binary.fromBytes(bytes) })).toBe('{\n  "data": "0x48656c006c6f"\n}');
+    expect(formatJson({ data: bytes })).toBe('{\n  "data": "0x48656c006c6f"\n}');
   });
 
-  test("converts Binary with C1 control characters to hex", () => {
+  test("converts Uint8Array with C1 control characters to hex", () => {
     // 0xc2 0x80 is U+0080 (PAD) in UTF-8 -- valid UTF-8, but not readable
     const bytes = new Uint8Array([0x41, 0xc2, 0x80, 0x42]);
-    expect(formatJson({ data: Binary.fromBytes(bytes) })).toBe('{\n  "data": "0x41c28042"\n}');
+    expect(formatJson({ data: bytes })).toBe('{\n  "data": "0x41c28042"\n}');
   });
 
-  test("converts FixedSizeBinary with invalid UTF-8 to hex", () => {
-    expect(formatJson({ hash: FixedSizeBinary.fromBytes(new Uint8Array([0xfe, 0xff])) })).toBe(
-      '{\n  "hash": "0xfeff"\n}',
-    );
+  test("converts Uint8Array with invalid UTF-8 to hex", () => {
+    expect(formatJson({ hash: new Uint8Array([0xfe, 0xff]) })).toBe('{\n  "hash": "0xfeff"\n}');
   });
 
   test("handles nested object with Binary, bigint, and primitives", () => {
@@ -89,13 +87,26 @@ describe("formatJson", () => {
   });
 
   test("handles arrays with mixed values", () => {
-    const data = [1, "hello", 99n, new Uint8Array([0xff]), true, null];
+    const data = [1, "hello", 99n, new Uint8Array([0xff, 0xfe]), true, null];
     const parsed = JSON.parse(formatJson(data));
-    expect(parsed).toEqual([1, "hello", "99", "0xff", true, null]);
+    expect(parsed).toEqual([1, "hello", "99", "0xfffe", true, null]);
   });
 
   test("returns 'null' for null input", () => {
     expect(formatJson(null)).toBe("null");
+  });
+
+  test("Uint8Array with readable text renders as text (papi v2 unified behavior)", () => {
+    // In papi v2, Binary values are Uint8Array — both go through text detection
+    const textBytes = new TextEncoder().encode("Hello");
+    expect(formatJson({ msg: textBytes })).toBe('{\n  "msg": "Hello"\n}');
+  });
+
+  test("Binary.fromText output renders as text via Uint8Array path (papi v2)", () => {
+    // Binary.fromText now returns Uint8Array, not a Binary instance
+    const value = Binary.fromText("DOT");
+    expect(value).toBeInstanceOf(Uint8Array);
+    expect(formatJson({ symbol: value })).toBe('{\n  "symbol": "DOT"\n}');
   });
 });
 

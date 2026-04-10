@@ -125,8 +125,8 @@ export async function handleConst(
     }
 
     const unsafeApi = clientHandle.client.getUnsafeApi();
-    const runtimeToken = await (unsafeApi as any).runtimeToken;
-    const result = (unsafeApi as any).constants[palletInfo.name][constantItem.name](runtimeToken);
+    const staticApis = await (unsafeApi as any).getStaticApis();
+    const result = staticApis.constants[palletInfo.name][constantItem.name];
 
     const format = isJsonOutput(opts) ? "json" : (opts.output ?? "pretty");
     printResult(result, format);
