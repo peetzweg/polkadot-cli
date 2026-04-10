@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { Binary, FixedSizeBinary } from "polkadot-api";
-import { firstSentence, formatJson, formatPretty, Spinner } from "./output.ts";
+import { firstSentence, formatJson, formatPretty, isJsonOutput, Spinner } from "./output.ts";
 
 describe("formatJson", () => {
   test("formats object with 2-space indentation", () => {
@@ -96,6 +96,28 @@ describe("formatJson", () => {
 
   test("returns 'null' for null input", () => {
     expect(formatJson(null)).toBe("null");
+  });
+});
+
+describe("isJsonOutput", () => {
+  test("returns true for json flag", () => {
+    expect(isJsonOutput({ json: true })).toBe(true);
+  });
+
+  test("returns true for output json", () => {
+    expect(isJsonOutput({ output: "json" })).toBe(true);
+  });
+
+  test("returns false for no flags", () => {
+    expect(isJsonOutput({})).toBe(false);
+  });
+
+  test("returns false for non-json output", () => {
+    expect(isJsonOutput({ output: "pretty" })).toBe(false);
+  });
+
+  test("returns false when json is false", () => {
+    expect(isJsonOutput({ json: false })).toBe(false);
   });
 });
 

@@ -1,5 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
+import { existsSync, linkSync, mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Binary } from "polkadot-api";
+import { DEFAULT_CONFIG } from "../config/types.ts";
 import { getTestMetadata } from "./__fixtures__/load-metadata.ts";
 import { runCli } from "./__fixtures__/run-cli.ts";
 import {
@@ -11,6 +15,7 @@ import {
   formatDispatchError,
   formatEventValue,
   formatRawDecoded,
+  handleTx,
   NO_DEFAULT,
   normalizeValue,
   parseAtOption,
@@ -28,6 +33,39 @@ import {
 } from "./tx.ts";
 
 const meta = getTestMetadata();
+
+// ---------------------------------------------------------------------------
+// Ensure metadata + config exist in real $HOME for in-process tests.
+// ---------------------------------------------------------------------------
+const FIXTURE_METADATA = join(import.meta.dir, "__fixtures__/polkadot-metadata.bin");
+const DOT_DIR = join(homedir(), ".polkadot");
+
+beforeAll(() => {
+  const metaDir = join(DOT_DIR, "chains", "polkadot");
+  const metaPath = join(metaDir, "metadata.bin");
+  if (!existsSync(metaPath)) {
+    mkdirSync(metaDir, { recursive: true });
+    linkSync(FIXTURE_METADATA, metaPath);
+  }
+  const configPath = join(DOT_DIR, "config.json");
+  if (!existsSync(configPath)) {
+    writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG));
+  }
+});
+
+// ---------------------------------------------------------------------------
+// In-process JSON output coverage for handleTx listing paths.
+// ---------------------------------------------------------------------------
+
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("handleTx JSON output (in-process coverage)", { timeout: 15_000 }, () => {
+  test("category-only with json", async () => {
+    await handleTx(undefined, [], { json: true });
+  });
+  test("pallet-only with json", async () => {
+    await handleTx("System", [], { json: true });
+  });
+});
 
 // ---------------------------------------------------------------------------
 // parseWaitLevel

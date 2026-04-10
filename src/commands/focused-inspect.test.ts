@@ -4,7 +4,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../config/types.ts";
 import { runCli } from "./__fixtures__/run-cli.ts";
-import { showItemHelp } from "./focused-inspect.ts";
+import {
+  handleCalls,
+  handleErrors,
+  handleEvents,
+  handleStorage,
+  showItemHelp,
+} from "./focused-inspect.ts";
 
 // ---------------------------------------------------------------------------
 // Ensure metadata + config exist in real $HOME for in-process tests.
@@ -98,6 +104,73 @@ describe("showItemHelp (in-process coverage)", { timeout: 15_000 }, () => {
 
   test("pallet-only errors delegates to listing", async () => {
     await showItemHelp("errors", "Balances", {});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// In-process JSON output coverage for handler functions.
+// Same approach as above — call handlers directly with { json: true } so
+// coverage instrumentation can see the JSON branches.
+// ---------------------------------------------------------------------------
+
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("handler JSON output (in-process coverage)", { timeout: 15_000 }, () => {
+  // handleCalls
+  test("handleCalls category-only with json", async () => {
+    await handleCalls(undefined, { json: true });
+  });
+  test("handleCalls pallet-only with json", async () => {
+    await handleCalls("System", { json: true });
+  });
+  test("handleCalls pallet.item with json", async () => {
+    await handleCalls("System.remark", { json: true });
+  });
+
+  // handleEvents
+  test("handleEvents category-only with json", async () => {
+    await handleEvents(undefined, { json: true });
+  });
+  test("handleEvents pallet-only with json", async () => {
+    await handleEvents("Balances", { json: true });
+  });
+  test("handleEvents pallet.item with json", async () => {
+    await handleEvents("Balances.Transfer", { json: true });
+  });
+
+  // handleErrors
+  test("handleErrors category-only with json", async () => {
+    await handleErrors(undefined, { json: true });
+  });
+  test("handleErrors pallet-only with json", async () => {
+    await handleErrors("Balances", { json: true });
+  });
+  test("handleErrors pallet.item with json", async () => {
+    await handleErrors("Balances.InsufficientBalance", { json: true });
+  });
+
+  // handleStorage
+  test("handleStorage category-only with json", async () => {
+    await handleStorage(undefined, { json: true });
+  });
+  test("handleStorage pallet-only with json", async () => {
+    await handleStorage("System", { json: true });
+  });
+  test("handleStorage pallet.item with json", async () => {
+    await handleStorage("System.Account", { json: true });
+  });
+
+  // showItemHelp with json
+  test("showItemHelp tx item with json", async () => {
+    await showItemHelp("tx", "System.remark", { json: true });
+  });
+  test("showItemHelp query item with json", async () => {
+    await showItemHelp("query", "System.Account", { json: true });
+  });
+  test("showItemHelp events item with json", async () => {
+    await showItemHelp("events", "Balances.Transfer", { json: true });
+  });
+  test("showItemHelp errors item with json", async () => {
+    await showItemHelp("errors", "Balances.InsufficientBalance", { json: true });
   });
 });
 
