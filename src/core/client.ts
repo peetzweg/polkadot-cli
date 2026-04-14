@@ -1,8 +1,5 @@
-import type { JsonRpcProvider } from "@polkadot-api/json-rpc-provider";
 import { createClient } from "polkadot-api";
-import { withPolkadotSdkCompat } from "polkadot-api/polkadot-sdk-compat";
-import { getWsProvider } from "polkadot-api/ws-provider";
-import { WebSocket } from "ws";
+import { getWsProvider } from "polkadot-api/ws";
 import { loadMetadata, saveMetadata } from "../config/store.ts";
 import type { ChainConfig } from "../config/types.ts";
 import { ConnectionError } from "../utils/errors.ts";
@@ -13,7 +10,7 @@ export interface ClientHandle {
 }
 
 // Suppress noisy "Unable to connect" retry logs from the WS provider.
-// The ws-provider uses console.error internally for connection failures.
+// The WS provider uses console.error internally for connection failures.
 function suppressWsNoise(): () => void {
   const orig = console.error;
   console.error = (...args: unknown[]) => {
@@ -39,12 +36,7 @@ export async function createChainClient(
       `No RPC endpoint configured for chain "${chainName}". Use --rpc or configure one with: dot chain add ${chainName} --rpc <url>`,
     );
   }
-  const provider: JsonRpcProvider = withPolkadotSdkCompat(
-    getWsProvider(rpc, {
-      timeout: 10_000,
-      websocketClass: WebSocket as unknown as typeof globalThis.WebSocket,
-    }),
-  );
+  const provider = getWsProvider(rpc, { timeout: 10_000 });
 
   const client = createClient(provider, {
     getMetadata: async () => loadMetadata(chainName),

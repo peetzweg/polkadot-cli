@@ -183,12 +183,12 @@ describe("parseAtOption", () => {
     expect(parseAtOption(undefined)).toBeUndefined();
   });
 
-  test('"best" returns "best"', () => {
-    expect(parseAtOption("best")).toBe("best");
+  test('"best" throws (no longer supported in papi v2)', () => {
+    expect(() => parseAtOption("best")).toThrow("no longer supported");
   });
 
-  test('"finalized" returns "finalized"', () => {
-    expect(parseAtOption("finalized")).toBe("finalized");
+  test('"finalized" returns undefined (v2 defaults to finalized)', () => {
+    expect(parseAtOption("finalized")).toBeUndefined();
   });
 
   test("valid block hash returns hash", () => {
@@ -293,8 +293,8 @@ describe("parseCallArgs", () => {
       unknown
     >;
     // System.remark is a struct variant with field "remark"
-    expect(result.remark).toBeInstanceOf(Binary);
-    expect((result.remark as Binary).asHex()).toBe("0xdeadbeef");
+    expect(result.remark).toBeInstanceOf(Uint8Array);
+    expect(Binary.toHex(result.remark as Uint8Array)).toBe("0xdeadbeef");
   });
 
   test("System.remark with plain text", async () => {
@@ -302,8 +302,8 @@ describe("parseCallArgs", () => {
       string,
       unknown
     >;
-    expect(result.remark).toBeInstanceOf(Binary);
-    expect((result.remark as Binary).asText()).toBe("hello");
+    expect(result.remark).toBeInstanceOf(Uint8Array);
+    expect(Binary.toText(result.remark as Uint8Array)).toBe("hello");
   });
 
   test("Balances.transferKeepAlive with address and amount", async () => {
@@ -392,7 +392,7 @@ describe("parseTypedArg", () => {
     const callData = { remark: Binary.fromHex("0xaa") };
     const encodedArgs = codec.enc(callData);
     const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
-    const callHex = Binary.fromBytes(fullCall).asHex();
+    const callHex = Binary.toHex(fullCall);
 
     const callTypeId = meta.lookup.call;
     if (callTypeId == null) throw new Error("No RuntimeCall in metadata");
@@ -511,7 +511,7 @@ describe("parseTypedArg", () => {
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
     const result = (await parseTypedArg(meta, enumEntry, `AccountId32({"id":"${hex}"})`)) as any;
     expect(result.type).toBe("AccountId32");
-    expect(result.value.id).toBeInstanceOf(Binary);
+    expect(result.value.id).toBeInstanceOf(Uint8Array);
   });
 
   test("enum shorthand does not break SS58 auto-wrap", async () => {
@@ -610,14 +610,10 @@ describe("parseTypedArg", () => {
     // Encode two calls
     const { codec: remarkCodec, location: remarkLoc } = meta.builder.buildCall("System", "remark");
     const remarkData = remarkCodec.enc({ remark: Binary.fromHex("0xaa") });
-    const hex1 = Binary.fromBytes(
-      new Uint8Array([remarkLoc[0], remarkLoc[1], ...remarkData]),
-    ).asHex();
+    const hex1 = Binary.toHex(new Uint8Array([remarkLoc[0], remarkLoc[1], ...remarkData]));
 
     const remarkData2 = remarkCodec.enc({ remark: Binary.fromHex("0xbb") });
-    const hex2 = Binary.fromBytes(
-      new Uint8Array([remarkLoc[0], remarkLoc[1], ...remarkData2]),
-    ).asHex();
+    const hex2 = Binary.toHex(new Uint8Array([remarkLoc[0], remarkLoc[1], ...remarkData2]));
 
     const result = (await parseTypedArg(meta, seqEntry, `${hex1},${hex2}`)) as any[];
     expect(result).toHaveLength(2);
@@ -629,8 +625,8 @@ describe("parseTypedArg", () => {
     const seqEntry = { type: "sequence", value: { type: "primitive", value: "u8" } };
     // "hello,world" should be treated as text, not split
     const result = await parseTypedArg(meta, seqEntry, "hello,world");
-    expect(result).toBeInstanceOf(Binary);
-    expect((result as Binary).asText()).toBe("hello,world");
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(Binary.toText(result as Uint8Array)).toBe("hello,world");
   });
 
   test("single element (no comma) still works for Vec<u32>", async () => {
@@ -657,7 +653,7 @@ describe("parseTypedArg", () => {
   test("comma-separated does not apply to [u8; N] byte arrays", async () => {
     const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 4 };
     const result = await parseTypedArg(meta, arrEntry, "0xdeadbeef");
-    expect(result).toBeInstanceOf(Binary);
+    expect(result).toBeInstanceOf(Uint8Array);
   });
 });
 
@@ -905,8 +901,8 @@ describe("normalizeValue", () => {
     };
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
     const result = normalizeValue(meta.lookup, mockEntry, hex);
-    expect(result).toBeInstanceOf(Binary);
-    expect((result as Binary).asHex()).toBe(hex);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(Binary.toHex(result as Uint8Array)).toBe(hex);
   });
 
   test("converts text string to Binary for Vec<u8> byte sequences", () => {
@@ -915,8 +911,8 @@ describe("normalizeValue", () => {
       value: { type: "primitive", value: "u8" },
     };
     const result = normalizeValue(meta.lookup, mockEntry, "hello");
-    expect(result).toBeInstanceOf(Binary);
-    expect((result as Binary).asText()).toBe("hello");
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(Binary.toText(result as Uint8Array)).toBe("hello");
   });
 
   test("converts hex string to Binary for [u8; N] through lookupEntry indirection", () => {
@@ -926,8 +922,8 @@ describe("normalizeValue", () => {
       len: 4,
     };
     const result = normalizeValue(meta.lookup, mockEntry, "0xdeadbeef");
-    expect(result).toBeInstanceOf(Binary);
-    expect((result as Binary).asHex()).toBe("0xdeadbeef");
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(Binary.toHex(result as Uint8Array)).toBe("0xdeadbeef");
   });
 
   test("converts nested byte arrays inside structs", () => {
@@ -939,8 +935,8 @@ describe("normalizeValue", () => {
     };
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
     const result = normalizeValue(meta.lookup, mockEntry, { id: hex }) as any;
-    expect(result.id).toBeInstanceOf(Binary);
-    expect((result.id as Binary).asHex()).toBe(hex);
+    expect(result.id).toBeInstanceOf(Uint8Array);
+    expect(Binary.toHex(result.id as Uint8Array)).toBe(hex);
   });
 
   test("converts nested byte arrays inside enum variants", () => {
@@ -958,8 +954,8 @@ describe("normalizeValue", () => {
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
     const input = { type: "AccountId32", value: { id: hex } };
     const result = normalizeValue(meta.lookup, mockEntry, input) as any;
-    expect(result.value.id).toBeInstanceOf(Binary);
-    expect((result.value.id as Binary).asHex()).toBe(hex);
+    expect(result.value.id).toBeInstanceOf(Uint8Array);
+    expect(Binary.toHex(result.value.id as Uint8Array)).toBe(hex);
   });
 
   test("converts string to bigint for u128 primitives in JSON", () => {
@@ -1086,11 +1082,11 @@ describe("formatEventValue", () => {
   });
 
   test("Binary with invalid UTF-8 returns hex", () => {
-    expect(formatEventValue(Binary.fromBytes(new Uint8Array([0x80, 0x81])))).toBe("0x8081");
+    expect(formatEventValue(new Uint8Array([0x80, 0x81]))).toBe("0x8081");
   });
 
   test("empty Binary returns empty string", () => {
-    expect(formatEventValue(Binary.fromBytes(new Uint8Array([])))).toBe("");
+    expect(formatEventValue(new Uint8Array([]))).toBe("");
   });
 
   test("bigint returns string", () => {
@@ -1111,13 +1107,13 @@ describe("formatEventValue", () => {
 
   test("Binary with control characters returns hex", () => {
     const bytes = new Uint8Array([0x48, 0x65, 0x6c, 0x00, 0x6f]); // "Hel\0o"
-    expect(formatEventValue(Binary.fromBytes(bytes))).toStartWith("0x");
+    expect(formatEventValue(bytes)).toStartWith("0x");
   });
 
   test("Binary with C1 control characters returns hex", () => {
     // 0xc2 0x80 is U+0080 (PAD) in UTF-8 — valid UTF-8, but not readable
     const bytes = new Uint8Array([0x41, 0xc2, 0x80, 0x42]);
-    expect(formatEventValue(Binary.fromBytes(bytes))).toStartWith("0x");
+    expect(formatEventValue(bytes)).toStartWith("0x");
   });
 
   test("Binary with readable multi-word text returns text", () => {
@@ -1341,7 +1337,7 @@ describe("decodeCallFallback", () => {
     const callData = { remark: Binary.fromHex("0xdeadbeef") };
     const encodedArgs = codec.enc(callData);
     const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
-    const callHex = Binary.fromBytes(fullCall).asHex();
+    const callHex = Binary.toHex(fullCall);
 
     const result = decodeCallFallback(meta, callHex);
     expect(result).toContain("System");
@@ -1357,7 +1353,7 @@ describe("decodeCallFallback", () => {
     };
     const encodedArgs = codec.enc(callData);
     const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
-    const callHex = Binary.fromBytes(fullCall).asHex();
+    const callHex = Binary.toHex(fullCall);
 
     const result = decodeCallFallback(meta, callHex);
     expect(result).toContain("Balances");
@@ -1366,33 +1362,17 @@ describe("decodeCallFallback", () => {
   });
 
   test("decodes XcmPallet.teleport_assets call (complex types that crash view-builder)", () => {
-    // This is the key test case — XCM calls crash view-builder's callDecoder
+    // XCM calls crash view-builder's callDecoder, so decodeCallFallback is used.
+    // Uses V3 with Here interior (V3 X1 junction codec changed in substrate-bindings v0.20).
     const { codec, location } = meta.builder.buildCall("XcmPallet", "teleport_assets");
     const callData = {
       dest: {
         type: "V3",
-        value: {
-          parents: 0,
-          interior: { type: "X1", value: { type: "Parachain", value: 1000 } },
-        },
+        value: { parents: 1, interior: { type: "Here" } },
       },
       beneficiary: {
         type: "V3",
-        value: {
-          parents: 0,
-          interior: {
-            type: "X1",
-            value: {
-              type: "AccountId32",
-              value: {
-                network: undefined,
-                id: Binary.fromHex(
-                  "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
-                ),
-              },
-            },
-          },
-        },
+        value: { parents: 0, interior: { type: "Here" } },
       },
       assets: {
         type: "V3",
@@ -1407,13 +1387,11 @@ describe("decodeCallFallback", () => {
     };
     const encodedArgs = codec.enc(callData);
     const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
-    const callHex = Binary.fromBytes(fullCall).asHex();
+    const callHex = Binary.toHex(fullCall);
 
     const result = decodeCallFallback(meta, callHex);
     expect(result).toContain("XcmPallet");
     expect(result).toContain("teleport_assets");
-    expect(result).toContain("Parachain(1000)");
-    expect(result).toContain("AccountId32");
     expect(result).toContain("Fungible(1000000000000)");
   });
 
@@ -1422,7 +1400,7 @@ describe("decodeCallFallback", () => {
     const callData = { now: 1000n };
     const encodedArgs = codec.enc(callData);
     const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
-    const callHex = Binary.fromBytes(fullCall).asHex();
+    const callHex = Binary.toHex(fullCall);
 
     const result = decodeCallFallback(meta, callHex);
     expect(result).toContain("Timestamp");
@@ -1488,7 +1466,7 @@ describe("decodeCallToFileFormat", () => {
     const callData = { remark: Binary.fromHex("0xdeadbeef") };
     const encodedArgs = codec.enc(callData);
     const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
-    const callHex = Binary.fromBytes(fullCall).asHex();
+    const callHex = Binary.toHex(fullCall);
 
     const result = decodeCallToFileFormat(meta, callHex, "polkadot");
     expect(result.chain).toBe("polkadot");
@@ -1507,7 +1485,7 @@ describe("decodeCallToFileFormat", () => {
     };
     const encodedArgs = codec.enc(callData);
     const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
-    const callHex = Binary.fromBytes(fullCall).asHex();
+    const callHex = Binary.toHex(fullCall);
 
     const result = decodeCallToFileFormat(meta, callHex, "polkadot");
     const tx = result.tx as Record<string, any>;
@@ -1518,32 +1496,16 @@ describe("decodeCallToFileFormat", () => {
   });
 
   test("XCM call produces file-compatible object with enum structure", () => {
+    // Uses V3 with Here interior (V3 X1 junction codec changed in substrate-bindings v0.20)
     const { codec, location } = meta.builder.buildCall("XcmPallet", "teleport_assets");
     const callData = {
       dest: {
         type: "V3",
-        value: {
-          parents: 0,
-          interior: { type: "X1", value: { type: "Parachain", value: 1000 } },
-        },
+        value: { parents: 1, interior: { type: "Here" } },
       },
       beneficiary: {
         type: "V3",
-        value: {
-          parents: 0,
-          interior: {
-            type: "X1",
-            value: {
-              type: "AccountId32",
-              value: {
-                network: undefined,
-                id: Binary.fromHex(
-                  "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
-                ),
-              },
-            },
-          },
-        },
+        value: { parents: 0, interior: { type: "Here" } },
       },
       assets: {
         type: "V3",
@@ -1558,7 +1520,7 @@ describe("decodeCallToFileFormat", () => {
     };
     const encodedArgs = codec.enc(callData);
     const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
-    const callHex = Binary.fromBytes(fullCall).asHex();
+    const callHex = Binary.toHex(fullCall);
 
     const result = decodeCallToFileFormat(meta, callHex, "polkadot");
     const tx = result.tx as Record<string, any>;

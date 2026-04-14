@@ -1,4 +1,4 @@
-import type { Binary } from "polkadot-api";
+import { Binary } from "polkadot-api";
 
 /**
  * Returns true if the decoded text looks like genuine human-readable text
@@ -33,7 +33,7 @@ export function isReadableText(text: string): boolean {
  * Render a Binary as human-readable text when it looks like text,
  * otherwise fall back to hex representation.
  */
-export function binaryToDisplay(value: Binary): string {
-  const text = value.asText();
-  return isReadableText(text) ? text : value.asHex();
+export function binaryToDisplay(value: Uint8Array): string {
+  const text = Binary.toText(value);
+  return isReadableText(text) ? text : Binary.toHex(value);
 }

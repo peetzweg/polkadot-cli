@@ -99,10 +99,15 @@ export function parseMortalityOption(raw: string | undefined): MortalityOption |
 
 export function parseAtOption(raw: string | undefined): string | undefined {
   if (raw === undefined) return undefined;
-  if (raw === "best" || raw === "finalized") return raw;
+  if (raw === "finalized") return undefined; // v2 defaults to finalized when omitted
+  if (raw === "best") {
+    throw new CliError(
+      '"best" is no longer supported for --at in papi v2. Omit --at for finalized, or pass a specific block hash.',
+    );
+  }
   if (/^0x[0-9a-fA-F]{64}$/.test(raw)) return raw;
   throw new CliError(
-    `Invalid --at value "${raw}". Use "best", "finalized", or a 0x-prefixed 32-byte block hash.`,
+    `Invalid --at value "${raw}". Use a 0x-prefixed 32-byte block hash, or omit for finalized.`,
   );
 }
 
@@ -334,7 +339,7 @@ export async function handleTx(
         const { codec, location } = meta.builder.buildCall(palletInfo.name, callInfo.name);
         const encodedArgs = codec.enc(callData);
         const fullCall = new Uint8Array([location[0], location[1], ...encodedArgs]);
-        const hex = Binary.fromBytes(fullCall).asHex();
+        const hex = Binary.toHex(fullCall);
         if (opts.encode) {
           if (isJsonOutput(opts)) {
             console.log(formatJson({ callHex: hex }));
@@ -351,7 +356,7 @@ export async function handleTx(
       tx = (unsafeApi as any).tx[palletInfo.name][callInfo.name](callData);
 
       const encodedCall = await tx.getEncodedData();
-      callHex = encodedCall.asHex();
+      callHex = Binary.toHex(encodedCall);
     }
 
     // Decode for display (works for both paths)
@@ -553,7 +558,7 @@ function decodeCallFallback(meta: MetadataBundle, callHex: string): string {
   const callTypeId = meta.lookup.call;
   if (callTypeId == null) throw new Error("No RuntimeCall type ID");
   const codec = meta.builder.buildDefinition(callTypeId);
-  const decoded = codec.dec(Binary.fromHex(callHex as `0x${string}`).asBytes());
+  const decoded = codec.dec(Binary.fromHex(callHex as `0x${string}`));
   // decoded is { type: "PalletName", value: { type: "call_name", value: { ...args } } }
   const palletName = decoded.type;
   const call = decoded.value;
@@ -574,7 +579,7 @@ function decodeCallToFileFormat(
   const callTypeId = meta.lookup.call;
   if (callTypeId == null) throw new Error("No RuntimeCall type ID in metadata");
   const codec = meta.builder.buildDefinition(callTypeId);
-  const decoded = codec.dec(Binary.fromHex(callHex as `0x${string}`).asBytes());
+  const decoded = codec.dec(Binary.fromHex(callHex as `0x${string}`));
   // decoded is { type: "PalletName", value: { type: "call_name", value: { ...args } } }
   const palletName: string = decoded.type;
   const call = decoded.value;
@@ -592,7 +597,7 @@ function decodeCallToFileFormat(
 
 function sanitizeForSerialization(value: unknown): unknown {
   if (value === undefined || value === null) return null;
-  if (value instanceof Binary) return value.asHex();
+  if (value instanceof Uint8Array) return Binary.toHex(value);
   if (typeof value === "bigint") {
     if (value >= Number.MIN_SAFE_INTEGER && value <= Number.MAX_SAFE_INTEGER) {
       return Number(value);
@@ -625,7 +630,7 @@ function outputFileFormat(obj: Record<string, unknown>, asYaml: boolean): void {
 
 function formatRawDecoded(value: unknown): string {
   if (value === undefined || value === null) return "null";
-  if (value instanceof Binary) return value.asHex();
+  if (value instanceof Uint8Array) return Binary.toHex(value);
   if (typeof value === "bigint") return value.toString();
   if (typeof value === "string") return value;
   if (typeof value === "number") return value.toString();
@@ -735,7 +740,7 @@ function formatEventValue(v: unknown): string {
   if (typeof v === "number") return v.toString();
   if (typeof v === "boolean") return v.toString();
   if (v === null || v === undefined) return "null";
-  if (v instanceof Binary) {
+  if (v instanceof Uint8Array) {
     return binaryToDisplay(v);
   }
   return JSON.stringify(v, (_k, val) => (typeof val === "bigint" ? val.toString() : val));
@@ -1104,7 +1109,7 @@ async function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): Pro
         entry.id === meta.lookup.call
       ) {
         const callCodec = meta.builder.buildDefinition(meta.lookup.call);
-        return callCodec.dec(Binary.fromHex(arg as `0x${string}`).asBytes());
+        return callCodec.dec(Binary.fromHex(arg as `0x${string}`));
       }
 
       // Try JSON parse for complex enums like MultiAddress

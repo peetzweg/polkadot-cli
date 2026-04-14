@@ -68,22 +68,43 @@ describe("binaryToDisplay", () => {
   });
 
   test("empty Binary returns empty string", () => {
-    expect(binaryToDisplay(Binary.fromBytes(new Uint8Array([])))).toBe("");
+    expect(binaryToDisplay(new Uint8Array([]))).toBe("");
   });
 
   test("invalid UTF-8 bytes return hex", () => {
-    expect(binaryToDisplay(Binary.fromBytes(new Uint8Array([0x80, 0x81])))).toBe("0x8081");
+    expect(binaryToDisplay(new Uint8Array([0x80, 0x81]))).toBe("0x8081");
   });
 
   test("bytes with null character return hex", () => {
     const bytes = new Uint8Array([0x41, 0x00, 0x42]); // "A\0B"
-    expect(binaryToDisplay(Binary.fromBytes(bytes))).toBe("0x410042");
+    expect(binaryToDisplay(bytes)).toBe("0x410042");
   });
 
   test("mixed text prefix + binary hash returns hex", () => {
     const prefix = new TextEncoder().encode("Col");
     const hash = new Uint8Array([0x00, 0x01, 0x9f, 0xe0, 0x00]);
     const combined = new Uint8Array([...prefix, ...hash]);
-    expect(binaryToDisplay(Binary.fromBytes(combined))).toStartWith("0x");
+    expect(binaryToDisplay(combined)).toStartWith("0x");
+  });
+
+  test("Binary.fromText returns Uint8Array in papi v2", () => {
+    const result = Binary.fromText("hello");
+    expect(result).toBeInstanceOf(Uint8Array);
+  });
+
+  test("Binary.fromHex returns Uint8Array in papi v2", () => {
+    const result = Binary.fromHex("0xdeadbeef");
+    expect(result).toBeInstanceOf(Uint8Array);
+  });
+
+  test("accepts plain Uint8Array directly (no Binary.fromBytes needed in v2)", () => {
+    expect(binaryToDisplay(new Uint8Array([0x48, 0x69]))).toBe("Hi");
+    expect(binaryToDisplay(new Uint8Array([0xff, 0xfe]))).toBe("0xfffe");
+  });
+
+  test("Binary.toHex and Binary.toText static methods work", () => {
+    const bytes = Binary.fromText("DOT");
+    expect(Binary.toText(bytes)).toBe("DOT");
+    expect(Binary.toHex(bytes)).toMatch(/^0x/);
   });
 });
