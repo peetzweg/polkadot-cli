@@ -119,11 +119,11 @@ async function chainAdd(
 
   const chainConfig: ChainConfig = { rpc: opts.rpc };
 
-  console.error(`Connecting to ${name}...`);
+  process.stderr.write(`Connecting to ${name}...\n`);
   const clientHandle = await createChainClient(name, chainConfig, opts.rpc);
 
   try {
-    console.error("Fetching metadata...");
+    process.stderr.write("Fetching metadata...\n");
     await fetchMetadataFromChain(clientHandle, name);
 
     if (opts.relay) {
@@ -139,13 +139,15 @@ async function chainAdd(
       if (parachainIdRaw != null) {
         chainConfig.parachainId = parachainIdRaw;
       } else {
-        console.error("Detecting parachain ID...");
+        process.stderr.write("Detecting parachain ID...\n");
         const detected = await getParachainId(clientHandle);
         if (detected != null) {
           chainConfig.parachainId = detected;
-          console.error(`Detected parachain ID: ${detected}`);
+          process.stderr.write(`Detected parachain ID: ${detected}\n`);
         } else {
-          console.error("Could not detect parachain ID. Use --parachain-id to set it manually.");
+          process.stderr.write(
+            "Could not detect parachain ID. Use --parachain-id to set it manually.\n",
+          );
         }
       }
     }
@@ -305,11 +307,11 @@ async function chainUpdate(
 
   const { name: chainName, chain: chainConfig } = resolveChain(config, name);
 
-  console.error(`Connecting to ${chainName}...`);
+  process.stderr.write(`Connecting to ${chainName}...\n`);
   const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
 
   try {
-    console.error("Fetching metadata...");
+    process.stderr.write("Fetching metadata...\n");
     await fetchMetadataFromChain(clientHandle, chainName);
     if (isJsonOutput(opts)) {
       console.log(formatJson({ action: "updated", chain: chainName }));
@@ -326,7 +328,7 @@ async function chainUpdateAll(config: {
 }) {
   const chainNames = Object.keys(config.chains).sort();
 
-  console.error(`Updating metadata for ${chainNames.length} chains...\n`);
+  process.stderr.write(`Updating metadata for ${chainNames.length} chains...\n\n`);
 
   const results = await Promise.allSettled(
     chainNames.map(async (chainName) => {

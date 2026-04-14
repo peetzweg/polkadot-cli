@@ -61,7 +61,7 @@ export function registerInspectCommand(cli: CAC) {
         try {
           meta = await getOrFetchMetadata(chainName);
         } catch {
-          console.error(`Fetching metadata from ${chainName}...`);
+          process.stderr.write(`Fetching metadata from ${chainName}...\n`);
           const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
           try {
             meta = await getOrFetchMetadata(chainName, clientHandle);
