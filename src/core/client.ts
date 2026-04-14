@@ -9,16 +9,24 @@ export interface ClientHandle {
   destroy: () => void;
 }
 
-// Suppress noisy "Unable to connect" retry logs from the WS provider.
-// The WS provider uses console.error internally for connection failures.
-function suppressWsNoise(): () => void {
-  const orig = console.error;
+// Suppress noisy retry/teardown logs from polkadot-api internals.
+// The WS provider logs "Unable to connect" via console.error, and the
+// observable-client logs "ChainHead … request failed" via console.warn
+// when the client is destroyed while subscriptions are still active.
+function suppressProviderNoise(): () => void {
+  const origError = console.error;
+  const origWarn = console.warn;
   console.error = (...args: unknown[]) => {
     if (typeof args[0] === "string" && args[0].includes("Unable to connect")) return;
-    orig(...args);
+    origError(...args);
+  };
+  console.warn = (...args: unknown[]) => {
+    if (typeof args[0] === "string" && args[0].includes("ChainHead")) return;
+    origWarn(...args);
   };
   return () => {
-    console.error = orig;
+    console.error = origError;
+    console.warn = origWarn;
   };
 }
 
@@ -27,7 +35,7 @@ export async function createChainClient(
   chainConfig: ChainConfig,
   rpcOverride?: string | string[],
 ): Promise<ClientHandle> {
-  const restoreConsole = suppressWsNoise();
+  const restoreConsole = suppressProviderNoise();
 
   const rpc = rpcOverride ?? chainConfig.rpc;
   if (!rpc) {
@@ -53,7 +61,9 @@ export async function createChainClient(
       } catch {
         // polkadot-api may throw DisjointError during chain head teardown
       }
-      restoreConsole();
+      // Delay restore: polkadot-api fires async console.warn during teardown
+      // (e.g. "ChainHead subfollow request failed") that must be suppressed.
+      setTimeout(restoreConsole, 500);
     },
   };
 }
