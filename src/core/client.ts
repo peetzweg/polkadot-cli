@@ -48,7 +48,11 @@ export async function createChainClient(
   return {
     client,
     destroy: () => {
-      client.destroy();
+      try {
+        client.destroy();
+      } catch {
+        // polkadot-api may throw DisjointError during chain head teardown
+      }
       restoreConsole();
     },
   };
