@@ -1,4 +1,5 @@
 import { findAccount, loadAccounts } from "../config/accounts-store.ts";
+import { findClosest } from "../utils/fuzzy-match.ts";
 import {
   DEV_NAMES,
   fromSs58,
@@ -53,7 +54,8 @@ export async function resolveAccountAddress(input: string): Promise<string> {
   // 5. Error
   const stored = accountsFile.accounts.map((a) => a.name);
   const available = [...DEV_NAMES, ...stored];
-  throw new Error(
-    `Unknown account or address "${input}".\n  Available accounts: ${available.join(", ")}`,
-  );
+  const suggestions = findClosest(input, available);
+  const hint = suggestions.length > 0 ? `\n  Did you mean: ${suggestions.join(", ")}?` : "";
+  const list = available.map((a) => `\n    - ${a}`).join("");
+  throw new Error(`Unknown account or address "${input}".${hint}\n  Available accounts:${list}`);
 }

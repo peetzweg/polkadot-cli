@@ -163,7 +163,18 @@ dot query System.Account treasury
 dot tx Balances.transferKeepAlive bob 1000000000000 --from alice
 ```
 
-Resolution order: dev account name > stored account name > SS58 address > hex public key. If the input doesn't match any, the CLI shows an error listing available account names.
+Resolution order: dev account name > stored account name > SS58 address > hex public key. If the input doesn't match any, the CLI shows an error listing all available account names one per line. When the input is close to an existing name, a "Did you mean?" suggestion is included:
+
+```
+Error: Unknown account or address "people-sudo-signer".
+  Did you mean: people-paseo-sudo?
+  Available accounts:
+    - alice
+    - bob
+    - charlie
+    - people-paseo-sudo
+    - ...
+```
 
 #### Inspect accounts
 

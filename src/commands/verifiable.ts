@@ -10,6 +10,7 @@ import {
 } from "../core/accounts.ts";
 import { deriveBandersnatchMember } from "../core/bandersnatch.ts";
 import { BOLD, formatJson, isJsonOutput, printHeading, RESET } from "../core/output.ts";
+import { findClosest } from "../utils/fuzzy-match.ts";
 
 const DEV_PHRASE = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
@@ -102,7 +103,10 @@ async function resolveMnemonic(account: string): Promise<string> {
   const stored = findAccount(accountsFile, account);
   if (!stored) {
     const available = [...DEV_NAMES, ...accountsFile.accounts.map((a) => a.name)];
-    throw new Error(`Unknown account "${account}". Available accounts: ${available.join(", ")}`);
+    const suggestions = findClosest(account, available);
+    const hint = suggestions.length > 0 ? `\n  Did you mean: ${suggestions.join(", ")}?` : "";
+    const list = available.map((a) => `\n    - ${a}`).join("");
+    throw new Error(`Unknown account "${account}".${hint}\n  Available accounts:${list}`);
   }
 
   if (isWatchOnly(stored)) {

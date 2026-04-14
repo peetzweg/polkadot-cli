@@ -12,6 +12,7 @@ import type { PolkadotSigner } from "polkadot-api/signer";
 import { getPolkadotSigner } from "polkadot-api/signer";
 import { findAccount, loadAccounts } from "../config/accounts-store.ts";
 import { type EnvSecret, isEnvSecret } from "../config/accounts-types.ts";
+import { findClosest } from "../utils/fuzzy-match.ts";
 
 export const DEV_NAMES = ["alice", "bob", "charlie", "dave", "eve", "ferdie"] as const;
 
@@ -151,7 +152,10 @@ export async function resolveAccountKeypair(
   const account = findAccount(accountsFile, name);
   if (!account) {
     const available = [...DEV_NAMES, ...accountsFile.accounts.map((a) => a.name)];
-    throw new Error(`Unknown account "${name}". Available accounts: ${available.join(", ")}`);
+    const suggestions = findClosest(name, available);
+    const hint = suggestions.length > 0 ? `\n  Did you mean: ${suggestions.join(", ")}?` : "";
+    const list = available.map((a) => `\n    - ${a}`).join("");
+    throw new Error(`Unknown account "${name}".${hint}\n  Available accounts:${list}`);
   }
 
   if (account.secret === undefined) {

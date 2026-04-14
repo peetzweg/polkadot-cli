@@ -245,7 +245,20 @@ Resolution order:
 2. **Stored account name** — resolves to the account's SS58 address (works for both keyed and watch-only accounts)
 3. **SS58 address** — passed through as-is
 4. **Hex public key** (`0x` + 64 hex chars) — passed through as-is
-5. **Error** — shows available account names
+5. **Error** — shows a "Did you mean?" suggestion (if a close match exists) and lists all available account names one per line:
+
+    ```
+    Error: Unknown account or address "people-sudo-signer".
+      Did you mean: people-paseo-sudo?
+      Available accounts:
+        - alice
+        - bob
+        - charlie
+        - people-paseo-sudo
+        - ...
+    ```
+
+    The fuzzy matching uses Levenshtein distance — the same algorithm used for pallet and call name suggestions.
 
 This means you can save commonly-used addresses once and reference them by name everywhere, avoiding copy-paste of long SS58 strings.
 
