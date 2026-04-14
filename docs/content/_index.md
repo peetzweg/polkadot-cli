@@ -68,6 +68,26 @@ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
 ```
 
+#### Adding parachains
+
+Use `--relay` to declare a chain's parent relay chain. The CLI auto-detects the parachain ID from on-chain `ParachainInfo` storage. Use `--parachain-id` to set it explicitly:
+
+```
+# Add a relay chain (e.g. local zombienet)
+dot chain add local-relay --rpc ws://localhost:9944
+
+# Add a parachain under it (auto-detects parachain ID)
+dot chain add local-asset-hub --rpc ws://localhost:9945 --relay local-relay
+
+# Explicit parachain ID
+dot chain add my-para --rpc wss://rpc.example.com --relay polkadot --parachain-id 2000
+```
+
+Validation rules:
+- `--relay` must reference an existing chain in the config
+- `--parachain-id` without `--relay` is an error
+- If `--relay` is given without `--parachain-id`, the CLI queries `ParachainInfo.ParachainId` on-chain and falls back gracefully if the pallet is absent
+
 ### List chains
 
 Show all configured chains and which one is the default:
@@ -78,6 +98,29 @@ dot chain list
 ```
 
 Both forms are equivalent. `dot chains` is a shorthand that skips the `list` subcommand. Running `dot chain` with no action shows help with all available actions.
+
+#### Chain topology
+
+`dot chain list` displays chains as a tree, grouping parachains under their parent relay chain. Parachain IDs are shown in brackets:
+
+```
+Configured Chains
+
+  polkadot (default)  wss://polkadot.ibp.network
+  ├─ polkadot-asset-hub [1000]  wss://...
+  ├─ polkadot-bridge-hub [1002]  wss://...
+  ├─ polkadot-collectives [1001]  wss://...
+  ├─ polkadot-coretime [1005]  wss://...
+  └─ polkadot-people [1004]  wss://...
+
+  paseo  wss://paseo.ibp.network
+  ├─ paseo-asset-hub [1000]  wss://...
+  └─ paseo-people [1004]  wss://...
+
+  my-solo-chain  wss://...
+```
+
+Standalone chains (no `relay` field, not referenced as a relay by other chains) are listed at the bottom. `dot chain list --json` includes `relay` and `parachainId` fields for parachain entries.
 
 ### Update metadata
 
@@ -102,6 +145,8 @@ dot chain default kusama
 ```
 dot chain remove westend
 ```
+
+Removing a chain that other chains reference as their `relay` prints a warning listing orphaned parachains. The removal still proceeds — orphaned chains keep their `relay` field but render as standalone until the relay is re-added.
 
 ## Accounts
 

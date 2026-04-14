@@ -136,6 +136,20 @@ describe("option value completion", () => {
     expect(l).toContain("broadcast");
     expect(l).toContain("finalized");
   });
+
+  test("--relay completes chain names", async () => {
+    const { stdout } = await runCli(["__complete", "--", "", "--relay"]);
+    const l = lines(stdout);
+    expect(l).toContain("polkadot");
+    expect(l).toContain("paseo");
+  });
+
+  test("--relay with prefix filters", async () => {
+    const { stdout } = await runCli(["__complete", "--", "pol", "--relay"]);
+    const l = lines(stdout);
+    expect(l).toContain("polkadot");
+    expect(l).not.toContain("paseo");
+  });
 });
 
 describe("option name completion", () => {
@@ -197,6 +211,14 @@ describe("named subcommand completion", () => {
     const l = lines(stdout);
     expect(l).toContain("add");
     expect(l).not.toContain("remove");
+  });
+
+  test("chain add shows --relay and --parachain-id in flag completions", async () => {
+    const { stdout } = await runCli(["__complete", "--", "--", "chain", "add", "mychain"]);
+    const l = lines(stdout);
+    expect(l).toContain("--relay");
+    expect(l).toContain("--parachain-id");
+    expect(l).toContain("--rpc");
   });
 
   test("account subcommands", async () => {

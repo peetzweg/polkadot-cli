@@ -305,4 +305,226 @@ describe("dot chain", () => {
     expect(parsed.action).toBe("default");
     expect(parsed.chain).toBe("polkadot");
   });
+
+  // Topology tests
+  test("list groups parachains under relay chains with tree structure", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("├─");
+    expect(stdout).toContain("└─");
+  });
+
+  test("list shows parachain IDs in brackets", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("[1000]");
+    expect(stdout).toContain("[1002]");
+    expect(stdout).toContain("[1001]");
+    expect(stdout).toContain("[1004]");
+    expect(stdout).toContain("[1005]");
+  });
+
+  test("list shows standalone chains separately", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"], {
+      config: {
+        chains: {
+          "my-solo": { rpc: "wss://solo.example" },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("my-solo");
+    expect(stdout).toContain("solo.example");
+  });
+
+  test("list --json includes relay and parachainId for parachains", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    const assetHub = parsed.chains.find((c: any) => c.name === "polkadot-asset-hub");
+    expect(assetHub).toBeDefined();
+    expect(assetHub.relay).toBe("polkadot");
+    expect(assetHub.parachainId).toBe(1000);
+  });
+
+  test("list --json does not include relay for relay chains", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    const polkadot = parsed.chains.find((c: any) => c.name === "polkadot");
+    expect(polkadot).toBeDefined();
+    expect(polkadot.relay).toBeUndefined();
+    expect(polkadot.parachainId).toBeUndefined();
+  });
+
+  test("add with --parachain-id but no --relay errors", async () => {
+    const { stderr, exitCode } = await runCli([
+      "chain",
+      "add",
+      "mychain",
+      "--rpc",
+      "wss://example.com",
+      "--parachain-id",
+      "1000",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Cannot set --parachain-id without --relay");
+  });
+
+  test("help text shows --relay example", async () => {
+    const { stdout, exitCode } = await runCli(["chain"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("--relay");
+    expect(stdout).toContain("--parachain-id");
+  });
+
+  test("remove relay chain warns about orphaned parachains", async () => {
+    const { stderr, stdout, exitCode } = await runCli(["chain", "remove", "local-relay"], {
+      config: {
+        chains: {
+          "local-relay": { rpc: "wss://local-relay.example" },
+          "local-para": {
+            rpc: "wss://local-para.example",
+            relay: "local-relay",
+            parachainId: 1000,
+          },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain("Warning");
+    expect(stderr).toContain("local-para");
+    expect(stdout).toContain("removed");
+  });
+
+  test("list with custom relay and parachain shows tree", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"], {
+      config: {
+        chains: {
+          "local-relay": { rpc: "wss://local-relay.example" },
+          "local-para": {
+            rpc: "wss://local-para.example",
+            relay: "local-relay",
+            parachainId: 2000,
+          },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("local-relay");
+    expect(stdout).toContain("local-para");
+    expect(stdout).toContain("[2000]");
+    expect(stdout).toContain("└─");
+  });
+
+  test("list with multiple parachains under custom relay uses ├─ and └─", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"], {
+      config: {
+        chains: {
+          "local-relay": { rpc: "wss://local-relay.example" },
+          "local-para-a": {
+            rpc: "wss://local-para-a.example",
+            relay: "local-relay",
+            parachainId: 1000,
+          },
+          "local-para-b": {
+            rpc: "wss://local-para-b.example",
+            relay: "local-relay",
+            parachainId: 2000,
+          },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("├─");
+    expect(stdout).toContain("└─");
+    expect(stdout).toContain("[1000]");
+    expect(stdout).toContain("[2000]");
+  });
+
+  test("list --json includes relay and parachainId for custom chains", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list", "--json"], {
+      config: {
+        chains: {
+          "local-relay": { rpc: "wss://local-relay.example" },
+          "local-para": {
+            rpc: "wss://local-para.example",
+            relay: "local-relay",
+            parachainId: 2000,
+          },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    const para = parsed.chains.find((c: any) => c.name === "local-para");
+    expect(para).toBeDefined();
+    expect(para.relay).toBe("local-relay");
+    expect(para.parachainId).toBe(2000);
+    const relay = parsed.chains.find((c: any) => c.name === "local-relay");
+    expect(relay).toBeDefined();
+    expect(relay.relay).toBeUndefined();
+  });
+
+  test("list parachain without parachainId omits bracket suffix", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"], {
+      config: {
+        chains: {
+          "local-relay": { rpc: "wss://local-relay.example" },
+          "no-id-para": {
+            rpc: "wss://no-id-para.example",
+            relay: "local-relay",
+          },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("no-id-para");
+    expect(stdout).not.toContain("[undefined]");
+  });
+
+  test("remove non-relay chain does not warn about orphans", async () => {
+    const { stderr, stdout, exitCode } = await runCli(["chain", "remove", "standalone"], {
+      config: {
+        chains: {
+          standalone: { rpc: "wss://standalone.example" },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stderr).not.toContain("Warning");
+    expect(stdout).toContain("removed");
+  });
+
+  test("list all built-in parachains have topology", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    const parachains = [
+      "polkadot-asset-hub",
+      "polkadot-bridge-hub",
+      "polkadot-collectives",
+      "polkadot-coretime",
+      "polkadot-people",
+      "paseo-asset-hub",
+      "paseo-bridge-hub",
+      "paseo-collectives",
+      "paseo-coretime",
+      "paseo-people",
+    ];
+    for (const name of parachains) {
+      const chain = parsed.chains.find((c: any) => c.name === name);
+      expect(chain).toBeDefined();
+      expect(chain.relay).toBeDefined();
+      expect(chain.parachainId).toBeGreaterThan(0);
+    }
+  });
+
+  test("chains shorthand shows tree structure", async () => {
+    const { stdout, exitCode } = await runCli(["chains"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("├─");
+    expect(stdout).toContain("└─");
+    expect(stdout).toContain("[1000]");
+  });
 });

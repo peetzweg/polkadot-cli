@@ -20,6 +20,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
 - ✅ Named address resolution across all commands
 - ✅ Runtime API calls — `dot apis.Core.version`
+- ✅ Chain topology — relay/parachain hierarchy with tree display and auto-detection
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 - ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
@@ -68,7 +69,13 @@ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 # Add a chain with fallback RPCs (repeat --rpc for each endpoint)
 dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
 
-# List configured chains
+# Add a parachain under a relay (auto-detects parachain ID)
+dot chain add local-asset-hub --rpc ws://localhost:9945 --relay local-relay
+
+# Add a parachain with explicit parachain ID
+dot chain add my-para --rpc wss://rpc.example.com --relay polkadot --parachain-id 2000
+
+# List configured chains (shows relay/parachain hierarchy)
 dot chain list
 
 # Re-fetch metadata after a runtime upgrade
@@ -82,6 +89,31 @@ dot chain default kusama
 # Remove a chain
 dot chain remove westend
 ```
+
+#### Chain topology
+
+`dot chain list` displays chains as a tree, grouping parachains under their parent relay:
+
+```
+Configured Chains
+
+  polkadot (default)  wss://polkadot.ibp.network
+  ├─ polkadot-asset-hub [1000]  wss://...
+  ├─ polkadot-bridge-hub [1002]  wss://...
+  ├─ polkadot-collectives [1001]  wss://...
+  ├─ polkadot-coretime [1005]  wss://...
+  └─ polkadot-people [1004]  wss://...
+
+  paseo  wss://paseo.ibp.network
+  ├─ paseo-asset-hub [1000]  wss://...
+  └─ paseo-people [1004]  wss://...
+
+  my-solo-chain  wss://...
+```
+
+All built-in system parachains are preconfigured with their relay chain and parachain ID. When adding a custom parachain with `--relay`, the CLI auto-detects the parachain ID from on-chain `ParachainInfo` storage. Use `--parachain-id` to set it explicitly if auto-detection is not available.
+
+Removing a relay chain that has parachains prints a warning listing the orphaned chains. The parachains remain in the config and can be re-associated later.
 
 ### Manage accounts
 

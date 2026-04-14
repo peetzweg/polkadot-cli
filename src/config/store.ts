@@ -41,10 +41,18 @@ export async function loadConfig(): Promise<Config> {
   await ensureDir(DOT_DIR);
   if (await fileExists(CONFIG_PATH)) {
     const saved = JSON.parse(await readFile(CONFIG_PATH, "utf-8")) as Config;
-    return {
-      ...saved,
-      chains: { ...DEFAULT_CONFIG.chains, ...saved.chains },
-    };
+    const chains: Record<string, ChainConfig> = {};
+    for (const [name, defaultConfig] of Object.entries(DEFAULT_CONFIG.chains)) {
+      chains[name] = saved.chains[name]
+        ? { ...defaultConfig, ...saved.chains[name] }
+        : defaultConfig;
+    }
+    for (const [name, config] of Object.entries(saved.chains)) {
+      if (!(name in DEFAULT_CONFIG.chains)) {
+        chains[name] = config;
+      }
+    }
+    return { ...saved, chains };
   }
   await saveConfig(DEFAULT_CONFIG);
   return DEFAULT_CONFIG;

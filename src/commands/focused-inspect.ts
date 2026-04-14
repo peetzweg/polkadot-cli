@@ -36,7 +36,7 @@ export async function loadMeta(
   try {
     return await getOrFetchMetadata(chainName);
   } catch {
-    console.error(`Fetching metadata from ${chainName}...`);
+    process.stderr.write(`Fetching metadata from ${chainName}...\n`);
     const clientHandle = await createChainClient(chainName, chainConfig, rpcOverride);
     try {
       return await getOrFetchMetadata(chainName, clientHandle);
