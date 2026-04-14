@@ -10,6 +10,7 @@ import {
   isDevAccount,
   isHexPublicKey,
   publicKeyToHex,
+  resolveAccountKeypair,
   resolveAccountSigner,
   resolveSecret,
   toSs58,
@@ -231,8 +232,40 @@ describe("resolveAccountSigner", () => {
   test("unknown account throws with available accounts list", async () => {
     // This will read from real accounts file but "nonexistent" should never exist
     await expect(resolveAccountSigner("nonexistent_account_xyz_42")).rejects.toThrow(
-      /Unknown account.*Available accounts/,
+      /Unknown account[\s\S]*Available accounts/,
     );
+  });
+
+  test("unknown account lists accounts one per line", async () => {
+    try {
+      await resolveAccountKeypair("nonexistent_account_xyz_42");
+    } catch (e: any) {
+      expect(e.message).toContain("Available accounts:\n");
+      expect(e.message).toContain("\n    - alice");
+      return;
+    }
+    throw new Error("expected to throw");
+  });
+
+  test("unknown account suggests close match", async () => {
+    try {
+      await resolveAccountKeypair("alic");
+    } catch (e: any) {
+      expect(e.message).toContain("Did you mean: alice");
+      return;
+    }
+    throw new Error("expected to throw");
+  });
+
+  test("unknown account omits suggestion when no close match", async () => {
+    try {
+      await resolveAccountKeypair("zzzzzzzzzzzzz");
+    } catch (e: any) {
+      expect(e.message).not.toContain("Did you mean");
+      expect(e.message).toContain("Available accounts:");
+      return;
+    }
+    throw new Error("expected to throw");
   });
 });
 

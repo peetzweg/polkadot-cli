@@ -33,4 +33,78 @@ describe("resolveAccountAddress", () => {
       /Unknown account or address/,
     );
   });
+
+  test("lists available accounts one per line", async () => {
+    try {
+      await resolveAccountAddress("nonexistent_xyz_42");
+    } catch (e: any) {
+      expect(e.message).toContain("Available accounts:\n");
+      expect(e.message).toContain("\n    - alice");
+      expect(e.message).toContain("\n    - bob");
+      return;
+    }
+    throw new Error("expected to throw");
+  });
+
+  test("lists all dev accounts in error", async () => {
+    try {
+      await resolveAccountAddress("nonexistent_xyz_42");
+    } catch (e: any) {
+      for (const name of ["alice", "bob", "charlie", "dave", "eve", "ferdie"]) {
+        expect(e.message).toContain(`\n    - ${name}`);
+      }
+      return;
+    }
+    throw new Error("expected to throw");
+  });
+
+  test("lists accounts in alphabetical order", async () => {
+    try {
+      await resolveAccountAddress("nonexistent_xyz_42");
+    } catch (e: any) {
+      const lines = e.message.split("\n").filter((l: string) => l.trim().startsWith("- "));
+      const names = lines.map((l: string) => l.trim().replace("- ", ""));
+      const sorted = [...names].sort((a: string, b: string) => a.localeCompare(b));
+      expect(names).toEqual(sorted);
+      return;
+    }
+    throw new Error("expected to throw");
+  });
+
+  test("suggests close match for typo", async () => {
+    try {
+      await resolveAccountAddress("alic");
+    } catch (e: any) {
+      expect(e.message).toContain("Did you mean: alice");
+      expect(e.message).toContain("Available accounts:");
+      return;
+    }
+    throw new Error("expected to throw");
+  });
+
+  test("no suggestion for completely unrelated input", async () => {
+    try {
+      await resolveAccountAddress("zzzzzzzzzzzzz");
+    } catch (e: any) {
+      expect(e.message).not.toContain("Did you mean");
+      expect(e.message).toContain("Available accounts:");
+      return;
+    }
+    throw new Error("expected to throw");
+  });
+
+  test("error includes both suggestion and full list", async () => {
+    try {
+      await resolveAccountAddress("bbo");
+    } catch (e: any) {
+      // Should suggest "bob"
+      expect(e.message).toContain("Did you mean:");
+      expect(e.message).toContain("bob");
+      // Should still include the full account list
+      expect(e.message).toContain("Available accounts:\n");
+      expect(e.message).toContain("\n    - alice");
+      return;
+    }
+    throw new Error("expected to throw");
+  });
 });
