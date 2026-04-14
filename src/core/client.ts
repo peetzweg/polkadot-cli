@@ -53,3 +53,13 @@ export async function createChainClient(
     },
   };
 }
+
+export async function getParachainId(clientHandle: ClientHandle): Promise<number | null> {
+  try {
+    const unsafeApi = clientHandle.client.getUnsafeApi();
+    const parachainId = await (unsafeApi as any).query.ParachainInfo.ParachainId.getValue();
+    return typeof parachainId === "number" ? parachainId : null;
+  } catch {
+    return null;
+  }
+}

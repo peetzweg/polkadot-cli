@@ -1,5 +1,7 @@
 export interface ChainConfig {
   rpc: string | string[];
+  relay?: string;
+  parachainId?: number;
 }
 
 export interface Config {
@@ -43,6 +45,8 @@ export const DEFAULT_CONFIG: Config = {
         "wss://statemint.public.curie.radiumblock.co/ws",
         "wss://asset-hub-polkadot.rpc.permanence.io",
       ],
+      relay: "polkadot",
+      parachainId: 1000,
     },
     "polkadot-bridge-hub": {
       rpc: [
@@ -55,6 +59,8 @@ export const DEFAULT_CONFIG: Config = {
         "wss://polkadot-bridge-hub-rpc-tn.dwellir.com",
         "wss://bridgehub-polkadot.public.curie.radiumblock.co/ws",
       ],
+      relay: "polkadot",
+      parachainId: 1002,
     },
     "polkadot-collectives": {
       rpc: [
@@ -67,6 +73,8 @@ export const DEFAULT_CONFIG: Config = {
         "wss://polkadot-collectives-rpc-tn.dwellir.com",
         "wss://collectives.public.curie.radiumblock.co/ws",
       ],
+      relay: "polkadot",
+      parachainId: 1001,
     },
     "polkadot-coretime": {
       rpc: [
@@ -77,6 +85,8 @@ export const DEFAULT_CONFIG: Config = {
         "wss://rpc-coretime-polkadot.luckyfriday.io",
         "wss://coretime-polkadot.api.onfinality.io/public-ws",
       ],
+      relay: "polkadot",
+      parachainId: 1005,
     },
     "polkadot-people": {
       rpc: [
@@ -87,6 +97,8 @@ export const DEFAULT_CONFIG: Config = {
         "wss://rpc-people-polkadot.luckyfriday.io",
         "wss://people-polkadot.api.onfinality.io/public-ws",
       ],
+      relay: "polkadot",
+      parachainId: 1004,
     },
     paseo: {
       rpc: [
@@ -103,15 +115,23 @@ export const DEFAULT_CONFIG: Config = {
         "wss://asset-hub-paseo-rpc.n.dwellir.com",
         "wss://sys.turboflakes.io/asset-hub-paseo",
       ],
+      relay: "paseo",
+      parachainId: 1000,
     },
     "paseo-bridge-hub": {
       rpc: ["wss://bridge-hub-paseo.ibp.network", "wss://bridge-hub-paseo.dotters.network"],
+      relay: "paseo",
+      parachainId: 1002,
     },
     "paseo-collectives": {
       rpc: ["wss://collectives-paseo.ibp.network", "wss://collectives-paseo.dotters.network"],
+      relay: "paseo",
+      parachainId: 1001,
     },
     "paseo-coretime": {
       rpc: ["wss://coretime-paseo.ibp.network", "wss://coretime-paseo.dotters.network"],
+      relay: "paseo",
+      parachainId: 1005,
     },
     "paseo-people": {
       rpc: [
@@ -119,6 +139,8 @@ export const DEFAULT_CONFIG: Config = {
         "wss://people-paseo.dotters.network",
         "wss://people-paseo.rpc.amforc.com",
       ],
+      relay: "paseo",
+      parachainId: 1004,
     },
   },
 };

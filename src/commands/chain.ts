@@ -6,8 +6,8 @@ import {
   resolveChain,
   saveConfig,
 } from "../config/store.ts";
-import { BUILTIN_CHAIN_NAMES } from "../config/types.ts";
-import { createChainClient } from "../core/client.ts";
+import { BUILTIN_CHAIN_NAMES, type ChainConfig } from "../config/types.ts";
+import { createChainClient, getParachainId } from "../core/client.ts";
 import { fetchMetadataFromChain } from "../core/metadata.ts";
 import {
   BOLD,
@@ -34,6 +34,8 @@ ${BOLD}Usage:${RESET}
 ${BOLD}Examples:${RESET}
   $ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
   $ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
+  $ dot chain add my-para --rpc wss://rpc.example.com --relay polkadot
+  $ dot chain add my-para --rpc wss://rpc.example.com --relay polkadot --parachain-id 2000
   $ dot chain default kusama
   $ dot chain list
   $ dot chain update
@@ -47,11 +49,20 @@ export function registerChainCommands(cli: CAC) {
     .command("chain [action] [name]", "Manage chains (add, remove, update, list, default)")
     .alias("chains")
     .option("--all", "Update all configured chains")
+    .option("--relay <name>", "Parent relay chain for this parachain")
+    .option("--parachain-id <id>", "Parachain ID (auto-detected if omitted with --relay)")
     .action(
       async (
         action: string | undefined,
         name: string | undefined,
-        opts: { rpc?: string | string[]; all?: boolean; output?: string; json?: boolean },
+        opts: {
+          rpc?: string | string[];
+          all?: boolean;
+          relay?: string;
+          parachainId?: string;
+          output?: string;
+          json?: boolean;
+        },
       ) => {
         if (!action) {
           if (process.argv[2] === "chains") return chainList(opts);
@@ -80,7 +91,13 @@ export function registerChainCommands(cli: CAC) {
 
 async function chainAdd(
   name: string | undefined,
-  opts: { rpc?: string | string[]; output?: string; json?: boolean },
+  opts: {
+    rpc?: string | string[];
+    relay?: string;
+    parachainId?: string;
+    output?: string;
+    json?: boolean;
+  },
 ) {
   if (!name) {
     console.error("Chain name is required.\n");
@@ -93,9 +110,14 @@ async function chainAdd(
     process.exit(1);
   }
 
-  const chainConfig = {
-    rpc: opts.rpc,
-  };
+  const parachainIdRaw = opts.parachainId != null ? Number(opts.parachainId) : undefined;
+  if (parachainIdRaw != null && !opts.relay) {
+    console.error("Cannot set --parachain-id without --relay.\n");
+    console.error("Usage: dot chain add <name> --rpc <url> --relay <relay> --parachain-id <id>");
+    process.exit(1);
+  }
+
+  const chainConfig: ChainConfig = { rpc: opts.rpc };
 
   console.error(`Connecting to ${name}...`);
   const clientHandle = await createChainClient(name, chainConfig, opts.rpc);
@@ -104,13 +126,41 @@ async function chainAdd(
     console.error("Fetching metadata...");
     await fetchMetadataFromChain(clientHandle, name);
 
+    if (opts.relay) {
+      const config = await loadConfig();
+      const relayResolved = findChainName(config, opts.relay);
+      if (!relayResolved) {
+        throw new Error(
+          `Relay chain "${opts.relay}" not found. Add it first with: dot chain add ${opts.relay} --rpc <url>`,
+        );
+      }
+      chainConfig.relay = relayResolved;
+
+      if (parachainIdRaw != null) {
+        chainConfig.parachainId = parachainIdRaw;
+      } else {
+        console.error("Detecting parachain ID...");
+        const detected = await getParachainId(clientHandle);
+        if (detected != null) {
+          chainConfig.parachainId = detected;
+          console.error(`Detected parachain ID: ${detected}`);
+        } else {
+          console.error("Could not detect parachain ID. Use --parachain-id to set it manually.");
+        }
+      }
+    }
+
     // Only save config after successful connection + metadata fetch
     const config = await loadConfig();
     config.chains[name] = chainConfig;
     await saveConfig(config);
 
+    const result: Record<string, unknown> = { action: "added", chain: name };
+    if (chainConfig.relay) result.relay = chainConfig.relay;
+    if (chainConfig.parachainId != null) result.parachainId = chainConfig.parachainId;
+
     if (isJsonOutput(opts)) {
-      console.log(formatJson({ action: "added", chain: name }));
+      console.log(formatJson(result));
     } else {
       console.log(`Chain "${name}" added successfully.`);
     }
@@ -139,6 +189,15 @@ async function chainRemove(
     throw new Error(`Cannot remove the built-in "${resolved}" chain.`);
   }
 
+  const orphans = Object.entries(config.chains)
+    .filter(([, c]) => c.relay === resolved)
+    .map(([n]) => n);
+  if (orphans.length > 0) {
+    console.error(
+      `Warning: ${orphans.length} chain(s) reference "${resolved}" as their relay: ${orphans.join(", ")}`,
+    );
+  }
+
   delete config.chains[resolved];
 
   if (config.defaultChain === resolved) {
@@ -164,6 +223,8 @@ async function chainList(opts: { output?: string; json?: boolean } = {}) {
       name,
       default: name === config.defaultChain,
       rpc: Array.isArray(chainConfig.rpc) ? chainConfig.rpc : [chainConfig.rpc],
+      ...(chainConfig.relay && { relay: chainConfig.relay }),
+      ...(chainConfig.parachainId != null && { parachainId: chainConfig.parachainId }),
     }));
     console.log(formatJson({ chains }));
     return;
@@ -171,16 +232,64 @@ async function chainList(opts: { output?: string; json?: boolean } = {}) {
 
   printHeading("Configured Chains");
 
+  const parachainsByRelay = new Map<string, [string, ChainConfig][]>();
+  const standalone: [string, ChainConfig][] = [];
+
   for (const [name, chainConfig] of Object.entries(config.chains)) {
-    const isDefault = name === config.defaultChain;
-    const marker = isDefault ? ` ${BOLD}(default)${RESET}` : "";
-    const rpcs = Array.isArray(chainConfig.rpc) ? chainConfig.rpc : [chainConfig.rpc];
-    console.log(`  ${CYAN}${name}${RESET}${marker}  ${DIM}${rpcs[0]}${RESET}`);
-    for (let i = 1; i < rpcs.length; i++) {
-      console.log(`    ${DIM}${rpcs[i]}${RESET}`);
+    if (chainConfig.relay) {
+      const paras = parachainsByRelay.get(chainConfig.relay) ?? [];
+      paras.push([name, chainConfig]);
+      parachainsByRelay.set(chainConfig.relay, paras);
     }
   }
-  console.log();
+
+  const relayNames = new Set(parachainsByRelay.keys());
+
+  for (const [name, chainConfig] of Object.entries(config.chains)) {
+    if (relayNames.has(name)) continue;
+    if (chainConfig.relay) continue;
+    standalone.push([name, chainConfig]);
+  }
+
+  for (const relayName of relayNames) {
+    const relayConfig = config.chains[relayName];
+    if (relayConfig) {
+      printChainLine("  ", relayName, relayConfig, config.defaultChain);
+    }
+
+    const paras = parachainsByRelay.get(relayName) ?? [];
+    for (let i = 0; i < paras.length; i++) {
+      const [name, chainConfig] = paras[i]!;
+      const isLast = i === paras.length - 1;
+      const prefix = isLast ? "  └─ " : "  ├─ ";
+      const idSuffix =
+        chainConfig.parachainId != null ? ` ${DIM}[${chainConfig.parachainId}]${RESET}` : "";
+      printChainLine(prefix, name, chainConfig, config.defaultChain, idSuffix);
+    }
+    console.log();
+  }
+
+  for (const [name, chainConfig] of standalone) {
+    printChainLine("  ", name, chainConfig, config.defaultChain);
+  }
+  if (standalone.length > 0) console.log();
+}
+
+function printChainLine(
+  prefix: string,
+  name: string,
+  chainConfig: ChainConfig,
+  defaultChain: string,
+  suffix = "",
+) {
+  const isDefault = name === defaultChain;
+  const marker = isDefault ? ` ${BOLD}(default)${RESET}` : "";
+  const rpcs = Array.isArray(chainConfig.rpc) ? chainConfig.rpc : [chainConfig.rpc];
+  console.log(`${prefix}${CYAN}${name}${RESET}${suffix}${marker}  ${DIM}${rpcs[0]}${RESET}`);
+  const indent = prefix.replace(/[^\s]/g, " ");
+  for (let i = 1; i < rpcs.length; i++) {
+    console.log(`${indent}  ${DIM}${rpcs[i]}${RESET}`);
+  }
 }
 
 async function chainUpdate(

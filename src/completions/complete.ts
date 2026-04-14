@@ -148,6 +148,9 @@ export async function generateCompletions(
   if (prevWord === "--wait" || prevWord === "-w") {
     return filterPrefix(["broadcast", "best-block", "best", "finalized"], currentWord);
   }
+  if (prevWord === "--relay") {
+    return filterPrefix(knownChains, currentWord);
+  }
 
   // 2. Option name completion
   if (currentWord.startsWith("--")) {
@@ -156,12 +159,23 @@ export async function generateCompletions(
     const options = [...GLOBAL_OPTIONS];
     if (activeCategory === "tx") options.push(...TX_OPTIONS);
     if (activeCategory === "query") options.push(...QUERY_OPTIONS);
+
+    const chainIdx = precedingWords.indexOf("chain");
+    if (chainIdx >= 0 && precedingWords[chainIdx + 1] === "add") {
+      options.push("--relay", "--parachain-id");
+    }
+
     return filterPrefix(options, currentWord);
   }
 
   // 3. Named subcommand completion
   const firstArg = precedingWords.find((w) => !w.startsWith("-"));
   if (firstArg === "chain") {
+    const chainSubIdx = precedingWords.indexOf("chain");
+    const subcommand = precedingWords[chainSubIdx + 1];
+    if (subcommand === "add" && currentWord.startsWith("--")) {
+      return filterPrefix(["--rpc", "--relay", "--parachain-id", ...GLOBAL_OPTIONS], currentWord);
+    }
     return filterPrefix(CHAIN_SUBCOMMANDS, currentWord);
   }
   if (firstArg === "account") {

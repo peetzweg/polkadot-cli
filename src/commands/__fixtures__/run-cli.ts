@@ -20,16 +20,23 @@ export interface RunCliOptions {
 }
 
 function deepMergeConfig(base: Config, override: Partial<Config>): Config {
-  const merged: Config = {
-    defaultChain: override.defaultChain ?? base.defaultChain,
-    chains: { ...base.chains },
-  };
+  const chains: Record<string, import("../../config/types.ts").ChainConfig> = {};
+  for (const [name, defaultConfig] of Object.entries(base.chains)) {
+    chains[name] = override.chains?.[name]
+      ? { ...defaultConfig, ...override.chains[name] }
+      : defaultConfig;
+  }
   if (override.chains) {
     for (const [name, chainConfig] of Object.entries(override.chains)) {
-      merged.chains[name] = chainConfig;
+      if (!(name in base.chains)) {
+        chains[name] = chainConfig;
+      }
     }
   }
-  return merged;
+  return {
+    defaultChain: override.defaultChain ?? base.defaultChain,
+    chains,
+  };
 }
 
 export async function runCli(
