@@ -58,6 +58,19 @@ describe("resolveAccountAddress", () => {
     throw new Error("expected to throw");
   });
 
+  test("lists accounts in alphabetical order", async () => {
+    try {
+      await resolveAccountAddress("nonexistent_xyz_42");
+    } catch (e: any) {
+      const lines = e.message.split("\n").filter((l: string) => l.trim().startsWith("- "));
+      const names = lines.map((l: string) => l.trim().replace("- ", ""));
+      const sorted = [...names].sort((a: string, b: string) => a.localeCompare(b));
+      expect(names).toEqual(sorted);
+      return;
+    }
+    throw new Error("expected to throw");
+  });
+
   test("suggests close match for typo", async () => {
     try {
       await resolveAccountAddress("alic");

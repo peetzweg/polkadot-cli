@@ -102,7 +102,9 @@ async function resolveMnemonic(account: string): Promise<string> {
   const accountsFile = await loadAccounts();
   const stored = findAccount(accountsFile, account);
   if (!stored) {
-    const available = [...DEV_NAMES, ...accountsFile.accounts.map((a) => a.name)];
+    const available = [...DEV_NAMES, ...accountsFile.accounts.map((a) => a.name)].sort((a, b) =>
+      a.localeCompare(b),
+    );
     const suggestions = findClosest(account, available);
     const hint = suggestions.length > 0 ? `\n  Did you mean: ${suggestions.join(", ")}?` : "";
     const list = available.map((a) => `\n    - ${a}`).join("");

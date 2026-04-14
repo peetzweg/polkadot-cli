@@ -53,7 +53,7 @@ export async function resolveAccountAddress(input: string): Promise<string> {
 
   // 5. Error
   const stored = accountsFile.accounts.map((a) => a.name);
-  const available = [...DEV_NAMES, ...stored];
+  const available = [...DEV_NAMES, ...stored].sort((a, b) => a.localeCompare(b));
   const suggestions = findClosest(input, available);
   const hint = suggestions.length > 0 ? `\n  Did you mean: ${suggestions.join(", ")}?` : "";
   const list = available.map((a) => `\n    - ${a}`).join("");

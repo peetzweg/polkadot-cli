@@ -151,7 +151,9 @@ export async function resolveAccountKeypair(
   const accountsFile = await loadAccounts();
   const account = findAccount(accountsFile, name);
   if (!account) {
-    const available = [...DEV_NAMES, ...accountsFile.accounts.map((a) => a.name)];
+    const available = [...DEV_NAMES, ...accountsFile.accounts.map((a) => a.name)].sort((a, b) =>
+      a.localeCompare(b),
+    );
     const suggestions = findClosest(name, available);
     const hint = suggestions.length > 0 ? `\n  Did you mean: ${suggestions.join(", ")}?` : "";
     const list = available.map((a) => `\n    - ${a}`).join("");
