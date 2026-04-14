@@ -28,4 +28,4 @@ Error: Unknown account or address "people-sudo-signer".
     - ...
 ```
 
-When the input is close to an existing account name, a "Did you mean?" hint is shown using Levenshtein distance matching (same fuzzy matching already used for pallets and calls). Available accounts are always listed one per line for easy scanning.
+When the input is close to an existing account name, a "Did you mean?" hint is shown using Levenshtein distance matching (same fuzzy matching already used for pallets and calls). Available accounts are sorted alphabetically and listed one per line for easy scanning.

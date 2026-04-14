@@ -245,7 +245,7 @@ Resolution order:
 2. **Stored account name** — resolves to the account's SS58 address (works for both keyed and watch-only accounts)
 3. **SS58 address** — passed through as-is
 4. **Hex public key** (`0x` + 64 hex chars) — passed through as-is
-5. **Error** — shows a "Did you mean?" suggestion (if a close match exists) and lists all available account names one per line:
+5. **Error** — shows a "Did you mean?" suggestion (if a close match exists) and lists all available account names alphabetically, one per line:
 
     ```
     Error: Unknown account or address "people-sudo-signer".
