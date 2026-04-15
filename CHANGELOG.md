@@ -1,5 +1,168 @@
 # polkadot-cli
 
+## 1.13.0
+
+### Minor Changes
+
+- e89cede: Add chain topology management with relay/parachain hierarchy awareness.
+
+  **New: `relay` and `parachainId` fields in chain config**
+
+  Chains now understand their position in the relay/parachain hierarchy. All built-in system parachains are preconfigured with their relay chain and parachain ID.
+
+  **New: `--relay` and `--parachain-id` flags for `dot chain add`**
+
+  When adding a custom chain, specify its parent relay chain. The parachain ID is auto-detected from on-chain `ParachainInfo.ParachainId` storage when omitted:
+
+  ```bash
+  # Add a relay chain
+  dot chain add local-relay --rpc ws://localhost:9944
+
+  # Add a parachain (auto-detects parachain ID)
+  dot chain add local-asset-hub --rpc ws://localhost:9945 --relay local-relay
+
+  # Explicit parachain ID
+  dot chain add my-para --rpc wss://rpc.example.com --relay polkadot --parachain-id 2000
+  ```
+
+  **New: hierarchical `dot chain list` display**
+
+  `dot chain list` now renders chains as a tree, grouping parachains under their relay:
+
+  ```
+  Configured Chains
+
+    polkadot (default)  wss://polkadot.ibp.network
+    ├─ polkadot-asset-hub [1000]  wss://...
+    ├─ polkadot-bridge-hub [1002]  wss://...
+    ├─ polkadot-collectives [1001]  wss://...
+    ├─ polkadot-coretime [1005]  wss://...
+    └─ polkadot-people [1004]  wss://...
+
+    paseo  wss://paseo.ibp.network
+    ├─ paseo-asset-hub [1000]  wss://...
+    └─ paseo-people [1004]  wss://...
+
+    my-solo-chain  wss://...
+  ```
+
+  **JSON output updated**
+
+  `dot chain list --json` now includes `relay` and `parachainId` fields for parachain entries.
+
+  **Orphan warning on relay removal**
+
+  Removing a chain that other chains reference as their relay prints a warning listing orphaned parachains.
+
+  **Config backward compatible**
+
+  Existing saved configs are automatically migrated — built-in chains gain topology fields from defaults while preserving user RPC overrides.
+
+- 135bd75: Remove Smoldot light client support. The `--light-client` global flag, `dot chain add <name> --light-client` command, and all underlying light client connection logic have been removed. Chains now always connect via WebSocket RPC. Existing user configs with `lightClient: true` are gracefully ignored and fall through to the configured RPC endpoints. Light client support will be reintroduced properly in a future release (see #142).
+- a7e56dd: Add global `--json` flag for structured JSON output on every command. This is the single highest-impact change for agent and scripting usability.
+
+  **New: `--json` flag**
+
+  Every command now supports `--json` to output machine-readable JSON instead of colored human-readable text. This works as a shorthand for `--output json` (which continues to work).
+
+  ```bash
+  dot inspect --json                          # List pallets as JSON
+  dot inspect Balances --json                 # Pallet detail as JSON
+  dot chain list --json                       # Configured chains as JSON
+  dot account list --json                     # All accounts as JSON
+  dot account create my-key --json            # New account details as JSON
+  dot tx.System.remark 0xdead --encode --json # Encoded call as JSON
+  dot query.System --json                     # Storage items as JSON
+  dot events.Balances --json                  # Events listing as JSON
+  dot errors.Balances --json                  # Errors listing as JSON
+  dot const.System --json                     # Constants listing as JSON
+  ```
+
+  For transaction submission, `--json` emits NDJSON (one JSON object per lifecycle event):
+
+  ```bash
+  dot tx.System.remark 0xdead --from alice --json
+  # {"event":"signed","txHash":"0x..."}
+  # {"event":"broadcasted","txHash":"0x..."}
+  # {"event":"finalized","blockNumber":123,...}
+  ```
+
+  **Breaking: renamed tx decode flags**
+
+  The `--json` and `--yaml` flags on the `tx` command (used to decode a raw call hex into a re-importable file format) have been renamed to `--to-json` and `--to-yaml` to avoid conflict with the new global `--json` flag.
+
+  ```bash
+  # Before
+  dot tx 0x1f00... --yaml
+  dot tx.System.remark 0xdead --json
+
+  # After
+  dot tx 0x1f00... --to-yaml
+  dot tx.System.remark 0xdead --to-json
+  ```
+
+- 0cc6ede: Upgrade to polkadot-api (PAPI) v2. This brings performance improvements, a simplified provider stack, and aligns with the latest Polkadot ecosystem tooling.
+
+  **Dependency changes**
+
+  - `polkadot-api` upgraded from v1 to v2
+  - `@polkadot-api/metadata-builders`, `@polkadot-api/substrate-bindings`, and `@polkadot-api/view-builder` upgraded to v2-compatible versions
+  - Removed `ws` dependency — PAPI v2 auto-detects the native WebSocket implementation (Node 22+, Bun)
+  - Removed `withPolkadotSdkCompat` wrapper — no longer needed in v2
+
+  **Breaking: `--at best` removed**
+
+  The `--at best` transaction option is no longer supported. PAPI v2 only accepts specific block hashes for the `--at` flag. Use `--at <0x...block-hash>` or omit `--at` entirely (defaults to the finalized block).
+
+  ```bash
+  # Before
+  dot tx System.remark 0xdead --from alice --at best
+
+  # After — omit --at for finalized (default), or pass a specific block hash
+  dot tx System.remark 0xdead --from alice
+  dot tx System.remark 0xdead --from alice --at 0xabc...
+  ```
+
+  `--at finalized` is still accepted for clarity but is equivalent to omitting the flag.
+
+  **Internal changes**
+
+  - Binary values from the runtime are now `Uint8Array` (previously `Binary` class instances). Display behavior is unchanged — text-like bytes render as text, others as hex.
+  - Constants are now accessed via `getStaticApis()` instead of the removed `runtimeToken`.
+  - WebSocket provider imported from `polkadot-api/ws` (previously `polkadot-api/ws-provider`).
+
+### Patch Changes
+
+- 489069e: Improve unknown account error messages with readable multi-line listing and fuzzy match suggestions.
+
+  **Before:**
+
+  ```
+  Error: Unknown account or address "people-sudo-signer".
+    Available accounts: alice, bob, charlie, dave, eve, ferdie, people-paseo-sudo, pusd-faucet, ...
+  ```
+
+  **After:**
+
+  ```
+  Error: Unknown account or address "people-sudo-signer".
+    Did you mean: people-paseo-sudo?
+    Available accounts:
+      - alice
+      - bob
+      - charlie
+      - dave
+      - eve
+      - ferdie
+      - people-paseo-sudo
+      - pusd-faucet
+      - ...
+  ```
+
+  When the input is close to an existing account name, a "Did you mean?" hint is shown using Levenshtein distance matching (same fuzzy matching already used for pallets and calls). Available accounts are sorted alphabetically and listed one per line for easy scanning.
+
+- 9334ab8: Bump polkadot-api to 2.0.1 and all related dependencies to their latest patch versions.
+
 ## 1.12.0
 
 ### Minor Changes
