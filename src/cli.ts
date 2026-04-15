@@ -85,6 +85,7 @@ if (process.argv[2] === "__complete") {
     .option("--tip <amount>", "Tip to prioritize transaction (for tx)")
     .option("--mortality <spec>", '"immortal" or period number (for tx)')
     .option("--at <block>", 'Block hash, "best", or "finalized" to validate against (for tx)')
+    .option("--unsigned", "Submit as unsigned/bare transaction (no signer required, for tx)")
     .action(
       async (
         dotpath: string | undefined,
@@ -105,6 +106,7 @@ if (process.argv[2] === "__complete") {
           tip?: string;
           mortality?: string;
           at?: string;
+          unsigned?: boolean;
           dump?: boolean;
           var?: string | string[];
         },
@@ -135,6 +137,7 @@ if (process.argv[2] === "__complete") {
               await handleTx(target, args, {
                 ...handlerOpts,
                 from: opts.from,
+                unsigned: opts.unsigned ?? cmd.unsigned,
                 dryRun: opts.dryRun,
                 encode: opts.encode,
                 toYaml: opts.toYaml,
@@ -227,6 +230,7 @@ if (process.argv[2] === "__complete") {
             const txOpts = {
               ...handlerOpts,
               from: opts.from,
+              unsigned: opts.unsigned,
               dryRun: opts.dryRun,
               encode: opts.encode,
               toYaml: opts.toYaml,
@@ -298,6 +302,7 @@ if (process.argv[2] === "__complete") {
     console.log("  dot query.System.Account <addr>         Query a storage item");
     console.log("  dot query.System                        List storage items in System");
     console.log("  dot tx.System.remark 0xdead --from alice");
+    console.log("  dot tx.System.remark 0xdead --unsigned    Submit unsigned/bare tx");
     console.log("  dot const.Balances.ExistentialDeposit");
     console.log("  dot events.Balances                     List events in Balances");
     console.log("  dot apis.Core.version                    Call a runtime API");

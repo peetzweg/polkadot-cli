@@ -25,6 +25,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 - ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
 - ✅ Message signing — sign arbitrary bytes with account keypairs for use as `MultiSignature` arguments
+- ✅ Unsigned/authorized transactions — submit governance-authorized calls without a signer (`--unsigned`)
 - ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
 
 ### Preconfigured chains
@@ -691,6 +692,39 @@ dot tx System.remark 0xdead --from alice --nonce 5 --tip 500000 --wait broadcast
 ```
 
 When set, nonce / tip / mortality / at are shown in both `--dry-run` and submission output. These flags are silently ignored with `--encode`, `--to-yaml`, and `--to-json` (which return before signing).
+
+#### Unsigned/authorized transactions
+
+Submit transactions without a signer using `--unsigned`. This is for calls authorized by on-chain mechanisms (e.g. the `AuthorizeCall` extension) rather than cryptographic signatures — typically governance-authorized calls on chains like the People chain.
+
+```bash
+# Submit an authorized call on the People chain
+dot tx People.create_people_collection --unsigned --chain people
+
+# Dry-run to inspect before submitting
+dot tx People.create_people_collection --unsigned --chain people --dry-run
+
+# Encode the full general transaction bytes
+dot tx People.create_people_collection --unsigned --chain people --encode
+
+# With raw hex call data
+dot tx 0x3306 --unsigned --chain people
+
+# JSON output for scripting
+dot tx People.create_people_collection --unsigned --chain people --json
+```
+
+The CLI constructs a v5 general transaction with all extension values auto-defaulted (`VerifySignature::Disabled`, `Era::Immortal`, nonce `0`, tip `0`, etc.). Override individual extensions with `--ext` if needed.
+
+`--unsigned` is mutually exclusive with `--from`, `--nonce`, `--tip`, and `--mortality`. File-based input supports `unsigned: true`:
+
+```yaml
+chain: people
+unsigned: true
+tx:
+  People:
+    create_people_collection: null
+```
 
 ### File-based commands
 

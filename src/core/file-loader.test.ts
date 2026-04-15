@@ -515,4 +515,49 @@ tx:
     );
     await expect(loadCommandFile(path, {})).rejects.toThrow("exactly one item");
   });
+
+  // --- unsigned field ---
+
+  test("parses unsigned: true from JSON", async () => {
+    const path = await writeTemp(
+      "unsigned.json",
+      JSON.stringify({
+        chain: "people",
+        unsigned: true,
+        tx: { People: { create_people_collection: null } },
+      }),
+    );
+    const result = await loadCommandFile(path, {});
+    expect(result.unsigned).toBe(true);
+    expect(result.chain).toBe("people");
+    expect(result.pallet).toBe("People");
+    expect(result.item).toBe("create_people_collection");
+  });
+
+  test("parses unsigned: true from YAML", async () => {
+    const path = await writeTemp(
+      "unsigned.yaml",
+      "chain: people\nunsigned: true\ntx:\n  People:\n    create_people_collection: null\n",
+    );
+    const result = await loadCommandFile(path, {});
+    expect(result.unsigned).toBe(true);
+  });
+
+  test("unsigned defaults to undefined when not set", async () => {
+    const path = await writeTemp(
+      "no-unsigned.json",
+      JSON.stringify({ tx: { System: { remark: null } } }),
+    );
+    const result = await loadCommandFile(path, {});
+    expect(result.unsigned).toBeUndefined();
+  });
+
+  test("unsigned: false is treated as undefined", async () => {
+    const path = await writeTemp(
+      "unsigned-false.json",
+      JSON.stringify({ unsigned: false, tx: { System: { remark: null } } }),
+    );
+    const result = await loadCommandFile(path, {});
+    expect(result.unsigned).toBeUndefined();
+  });
 });

@@ -11,6 +11,7 @@ export interface ParsedFileCommand {
   pallet: string;
   item: string;
   args: unknown; // object | array | scalar | undefined
+  unsigned?: boolean;
 }
 
 /** File extensions recognized as command files */
@@ -177,6 +178,7 @@ export async function loadCommandFile(
 
   // Extract metadata
   const chain = doc.chain != null ? String(doc.chain) : undefined;
+  const unsigned = doc.unsigned === true ? true : undefined;
 
   // Find the category key
   const foundCategories = CATEGORIES.filter((c) => c in doc);
@@ -236,5 +238,6 @@ export async function loadCommandFile(
     pallet,
     item,
     args: args ?? undefined,
+    unsigned,
   };
 }

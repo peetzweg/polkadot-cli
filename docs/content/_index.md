@@ -18,6 +18,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 - ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
+- ✅ Unsigned/authorized transactions — submit governance-authorized calls without a signer (`--unsigned`)
 - ✅ Message signing — sign arbitrary bytes with account keypairs for use as `MultiSignature` arguments
 - ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
 
@@ -920,6 +921,64 @@ dot tx.System.remark 0xdead --from alice --nonce 5 --tip 500000 --wait broadcast
 ```
 
 When set, nonce / tip / mortality / at are shown in both `--dry-run` and submission output. These flags are silently ignored with `--encode`, `--to-yaml`, and `--to-json` (which return before signing).
+
+### Unsigned/authorized transactions
+
+Submit transactions without a signer using `--unsigned`. This is for calls authorized by on-chain mechanisms (e.g. the `AuthorizeCall` signed extension) rather than cryptographic signatures. Typically used for governance-authorized calls on chains like the People chain.
+
+```
+# Submit an authorized call on the People chain
+dot tx People.create_people_collection --unsigned --chain people
+
+# Dry-run to inspect before submitting
+dot tx People.create_people_collection --unsigned --chain people --dry-run
+
+# Encode the full general transaction bytes
+dot tx People.create_people_collection --unsigned --chain people --encode
+
+# With raw hex call data
+dot tx 0x3306 --unsigned --chain people
+
+# JSON output for scripting
+dot tx People.create_people_collection --unsigned --chain people --json
+```
+
+The CLI constructs a v5 general transaction (`0x45` format) with all signed extension "extra" values auto-defaulted:
+
+- `VerifySignature` → `Disabled` (no cryptographic signature)
+- `Option<T>` extensions (e.g. `AsPerson`) → `None`
+- `void` extensions (e.g. `AuthorizeCall`) → empty
+- `CheckMortality` → `Immortal`
+- `CheckNonce` → `0`
+- `ChargeAssetTxPayment` → zero tip, no asset
+- `bool` extensions (e.g. `RestrictOrigins`) → `false`
+
+Override individual extensions with `--ext` if needed:
+
+```
+dot tx People.create_people_collection --unsigned --chain people \
+  --ext '{"RestrictOrigins":{"value":true}}'
+```
+
+`--unsigned` is mutually exclusive with `--from`, `--nonce`, `--tip`, and `--mortality`.
+
+#### File-based unsigned transactions
+
+YAML/JSON command files support an `unsigned: true` field. The CLI `--unsigned` flag overrides the file value:
+
+```yaml
+# create-people-collection.yaml
+chain: people
+unsigned: true
+tx:
+  People:
+    create_people_collection: null
+```
+
+```
+dot ./create-people-collection.yaml
+dot ./create-people-collection.yaml --dry-run
+```
 
 ## File-Based Commands
 
