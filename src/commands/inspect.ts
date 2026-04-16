@@ -6,10 +6,12 @@ import {
   describeCallArgs,
   describeEventFields,
   describeType,
+  fetchMetadataFromChain,
   findPallet,
   getOrFetchMetadata,
   getPalletNames,
   listPallets,
+  parseMetadata,
 } from "../core/metadata.ts";
 import {
   BOLD,
@@ -56,17 +58,27 @@ export function registerInspectCommand(cli: CAC) {
 
         const { name: chainName, chain: chainConfig } = resolveChain(config, effectiveChain);
 
-        // Try loading cached metadata first; if unavailable, connect and fetch
         let meta: MetadataBundle;
-        try {
-          meta = await getOrFetchMetadata(chainName);
-        } catch {
+        if (opts.rpc) {
           process.stderr.write(`Fetching metadata from ${chainName}...\n`);
           const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
           try {
-            meta = await getOrFetchMetadata(chainName, clientHandle);
+            const raw = await fetchMetadataFromChain(clientHandle, chainName);
+            meta = parseMetadata(raw);
           } finally {
             clientHandle.destroy();
+          }
+        } else {
+          try {
+            meta = await getOrFetchMetadata(chainName);
+          } catch {
+            process.stderr.write(`Fetching metadata from ${chainName}...\n`);
+            const clientHandle = await createChainClient(chainName, chainConfig);
+            try {
+              meta = await getOrFetchMetadata(chainName, clientHandle);
+            } finally {
+              clientHandle.destroy();
+            }
           }
         }
 

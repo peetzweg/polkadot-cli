@@ -1021,7 +1021,7 @@ dot tx.System.remark 0xdead               # shows call help (no error)
 |------|-------------|
 | `--help` | Show help (global or command-specific) |
 | `--chain <name>` | Target chain (default from config) |
-| `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback) |
+| `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback). Always fetches fresh metadata, bypassing the cache |
 
 | `--json` | Structured JSON output (shorthand for `--output json`) |
 | `--output json` | Structured JSON output |
