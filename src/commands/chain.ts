@@ -1,3 +1,4 @@
+import { readFile, writeFile } from "node:fs/promises";
 import type { CAC } from "cac";
 import {
   findChainName,
@@ -6,7 +7,12 @@ import {
   resolveChain,
   saveConfig,
 } from "../config/store.ts";
-import { BUILTIN_CHAIN_NAMES, type ChainConfig } from "../config/types.ts";
+import {
+  BUILTIN_CHAIN_NAMES,
+  type ChainConfig,
+  type Config,
+  DEFAULT_CONFIG,
+} from "../config/types.ts";
 import { createChainClient, getParachainId } from "../core/client.ts";
 import { fetchMetadataFromChain } from "../core/metadata.ts";
 import {
@@ -20,6 +26,7 @@ import {
   printHeading,
   RED,
   RESET,
+  YELLOW,
 } from "../core/output.ts";
 
 const CHAIN_HELP = `
@@ -30,6 +37,8 @@ ${BOLD}Usage:${RESET}
   $ dot chain update --all              Re-fetch metadata for all configured chains
   $ dot chain list                      List configured chains
   $ dot chain default <name>            Set the default chain
+  $ dot chain export [names...]         Export chain configuration to stdout
+  $ dot chain import <file>             Import chain configuration from a file
 
 ${BOLD}Examples:${RESET}
   $ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
@@ -42,24 +51,39 @@ ${BOLD}Examples:${RESET}
   $ dot chain update kusama
   $ dot chain update --all
   $ dot chain remove kusama
+  $ dot chain export
+  $ dot chain export my-relay my-para --file my-chains.json
+  $ dot chain export --all
+  $ dot chain import my-chains.json
+  $ dot chain import my-chains.json --dry-run
+  $ dot chain import my-chains.json --overwrite
 `.trimStart();
 
 export function registerChainCommands(cli: CAC) {
   cli
-    .command("chain [action] [name]", "Manage chains (add, remove, update, list, default)")
+    .command(
+      "chain [action] [...names]",
+      "Manage chains (add, remove, update, list, default, export, import)",
+    )
     .alias("chains")
-    .option("--all", "Update all configured chains")
+    .option("--all", "Update/export all configured chains")
     .option("--relay <name>", "Parent relay chain for this parachain")
     .option("--parachain-id <id>", "Parachain ID (auto-detected if omitted with --relay)")
+    .option("--file <path>", "Output/input file for export/import")
+    .option("--overwrite", "Overwrite existing chains on import")
+    .option("--dry-run", "Preview import without applying changes")
     .action(
       async (
         action: string | undefined,
-        name: string | undefined,
+        names: string[],
         opts: {
           rpc?: string | string[];
           all?: boolean;
           relay?: string;
           parachainId?: string;
+          file?: string;
+          overwrite?: boolean;
+          dryRun?: boolean;
           output?: string;
           json?: boolean;
         },
@@ -71,15 +95,19 @@ export function registerChainCommands(cli: CAC) {
         }
         switch (action) {
           case "add":
-            return chainAdd(name, opts);
+            return chainAdd(names[0], opts);
           case "remove":
-            return chainRemove(name, opts);
+            return chainRemove(names[0], opts);
           case "list":
             return chainList(opts);
           case "update":
-            return chainUpdate(name, opts);
+            return chainUpdate(names[0], opts);
           case "default":
-            return chainDefault(name, opts);
+            return chainDefault(names[0], opts);
+          case "export":
+            return chainExport(names, opts);
+          case "import":
+            return chainImport(names[0], opts);
           default:
             console.error(`Unknown action "${action}".\n`);
             console.log(CHAIN_HELP);
@@ -385,5 +413,194 @@ async function chainDefault(
     console.log(formatJson({ action: "default", chain: resolved }));
   } else {
     console.log(`Default chain set to "${resolved}".`);
+  }
+}
+
+function isBuiltinModified(name: string, config: Config): boolean {
+  const defaultRpc = DEFAULT_CONFIG.chains[name]?.rpc;
+  const currentRpc = config.chains[name]?.rpc;
+  if (!defaultRpc || !currentRpc) return false;
+  return JSON.stringify(currentRpc) !== JSON.stringify(defaultRpc);
+}
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf-8");
+}
+
+interface ChainExportData {
+  defaultChain: string;
+  chains: Record<string, ChainConfig>;
+}
+
+async function chainExport(
+  names: string[],
+  opts: {
+    all?: boolean;
+    file?: string;
+    output?: string;
+    json?: boolean;
+  },
+) {
+  const config = await loadConfig();
+  const exportChains: Record<string, ChainConfig> = {};
+
+  if (names.length > 0) {
+    for (const input of names) {
+      const resolved = findChainName(config, input);
+      if (!resolved) {
+        throw new Error(`Chain "${input}" not found.`);
+      }
+      exportChains[resolved] = config.chains[resolved]!;
+    }
+  } else if (opts.all) {
+    Object.assign(exportChains, config.chains);
+  } else {
+    // Export user-added chains + built-ins with modified RPC
+    for (const [name, chainConfig] of Object.entries(config.chains)) {
+      if (!BUILTIN_CHAIN_NAMES.has(name) || isBuiltinModified(name, config)) {
+        exportChains[name] = chainConfig;
+      }
+    }
+  }
+
+  const exportData: ChainExportData = {
+    defaultChain: config.defaultChain,
+    chains: exportChains,
+  };
+
+  const json = `${JSON.stringify(exportData, null, 2)}\n`;
+
+  if (opts.file) {
+    await writeFile(opts.file, json);
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          action: "exported",
+          file: opts.file,
+          count: Object.keys(exportChains).length,
+        }),
+      );
+    } else {
+      console.log(`Exported ${Object.keys(exportChains).length} chain(s) to ${opts.file}`);
+    }
+  } else {
+    process.stdout.write(json);
+  }
+}
+
+async function chainImport(
+  filePath: string | undefined,
+  opts: {
+    file?: string;
+    overwrite?: boolean;
+    dryRun?: boolean;
+    output?: string;
+    json?: boolean;
+  },
+) {
+  // Resolve input: positional arg, --file flag, or stdin
+  const inputPath = filePath ?? opts.file;
+  let raw: string;
+  if (inputPath && inputPath !== "-") {
+    raw = await readFile(inputPath, "utf-8");
+  } else {
+    raw = await readStdin();
+  }
+
+  let importData: ChainExportData;
+  try {
+    importData = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid JSON input.");
+  }
+
+  if (!importData.chains || typeof importData.chains !== "object") {
+    throw new Error('Invalid import format: missing "chains" object.');
+  }
+
+  const config = await loadConfig();
+  const added: string[] = [];
+  const skipped: string[] = [];
+  const overwritten: string[] = [];
+  const warnings: string[] = [];
+
+  for (const [name, chainConfig] of Object.entries(importData.chains)) {
+    const existing = findChainName(config, name);
+
+    if (existing && !opts.overwrite) {
+      skipped.push(existing);
+      process.stderr.write(
+        `${YELLOW}Skipped "${existing}": already exists (use --overwrite to replace)${RESET}\n`,
+      );
+      continue;
+    }
+
+    // Validate relay reference
+    if (chainConfig.relay) {
+      const relayInImport = Object.keys(importData.chains).some(
+        (n) => n.toLowerCase() === chainConfig.relay!.toLowerCase(),
+      );
+      const relayInConfig = findChainName(config, chainConfig.relay);
+      if (!relayInImport && !relayInConfig) {
+        warnings.push(
+          `Chain "${name}" references relay "${chainConfig.relay}" which does not exist.`,
+        );
+        process.stderr.write(
+          `${YELLOW}Warning: "${name}" references relay "${chainConfig.relay}" which does not exist.${RESET}\n`,
+        );
+      }
+    }
+
+    if (existing) {
+      overwritten.push(existing);
+      config.chains[existing] = chainConfig;
+    } else {
+      added.push(name);
+      config.chains[name] = chainConfig;
+    }
+  }
+
+  // Update defaultChain if present in import and overwrite is set
+  let defaultChanged = false;
+  if (importData.defaultChain && opts.overwrite) {
+    const resolvedDefault = findChainName(config, importData.defaultChain);
+    if (resolvedDefault) {
+      config.defaultChain = resolvedDefault;
+      defaultChanged = true;
+    }
+  }
+
+  if (!opts.dryRun) {
+    await saveConfig(config);
+  }
+
+  if (isJsonOutput(opts)) {
+    console.log(
+      formatJson({
+        action: opts.dryRun ? "dry-run" : "imported",
+        added,
+        overwritten,
+        skipped,
+        warnings,
+        defaultChanged: defaultChanged ? config.defaultChain : undefined,
+      }),
+    );
+    return;
+  }
+
+  const prefix = opts.dryRun ? "(dry run) " : "";
+  if (added.length > 0) console.log(`${prefix}Added: ${added.join(", ")}`);
+  if (overwritten.length > 0) console.log(`${prefix}Overwritten: ${overwritten.join(", ")}`);
+  if (skipped.length > 0) console.log(`${prefix}Skipped: ${skipped.join(", ")}`);
+  if (defaultChanged) console.log(`${prefix}Default chain set to "${config.defaultChain}".`);
+
+  if (added.length === 0 && overwritten.length === 0) {
+    console.log(`${prefix}No chains imported.`);
+  } else if (!opts.dryRun) {
+    console.error(`\nRun "dot chain update --all" to fetch metadata for imported chains.`);
   }
 }

@@ -849,4 +849,339 @@ describe("dot account", { timeout: 15_000 }, () => {
     const parsed = JSON.parse(stdout);
     expect(parsed.removed).toEqual(["my-account"]);
   });
+
+  // ---------------------------------------------------------------------------
+  // export / batch-import tests
+  // ---------------------------------------------------------------------------
+
+  test("export with no stored accounts produces empty array", async () => {
+    const { stdout, exitCode } = await runCli(["account", "export"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.accounts).toEqual([]);
+  });
+
+  test("export redacts secrets by default", async () => {
+    const { stdout, exitCode } = await runCli(["account", "export"], {
+      accounts: [STORED_ACCOUNT],
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.accounts.length).toBe(1);
+    expect(parsed.accounts[0].name).toBe("my-account");
+    expect(parsed.accounts[0].publicKey).toBe(STORED_ACCOUNT.publicKey);
+    expect(parsed.accounts[0].secret).toBe("<redacted>");
+    // Mnemonic must NOT appear in output
+    expect(stdout).not.toContain(TEST_MNEMONIC);
+  });
+
+  test("export --include-secrets includes mnemonic", async () => {
+    const { stdout, stderr, exitCode } = await runCli(["account", "export", "--include-secrets"], {
+      accounts: [STORED_ACCOUNT],
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.accounts[0].secret).toBe(TEST_MNEMONIC);
+    expect(stderr).toContain("Warning");
+  });
+
+  test("export watch-only account has no secret field", async () => {
+    const { stdout, exitCode } = await runCli(["account", "export"], {
+      accounts: [WATCH_ONLY],
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.accounts[0].name).toBe("treasury");
+    expect(parsed.accounts[0].secret).toBeUndefined();
+  });
+
+  test("export env-backed account includes env reference", async () => {
+    const envAccount: StoredAccount = {
+      name: "ci-signer",
+      secret: { env: "MY_SECRET" },
+      publicKey: "",
+      derivationPath: "//ci",
+    };
+    const { stdout, exitCode } = await runCli(["account", "export"], {
+      accounts: [envAccount],
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.accounts[0].secret).toEqual({ env: "MY_SECRET" });
+    // Env var VALUE must not appear
+    expect(stdout).not.toContain(TEST_MNEMONIC);
+  });
+
+  test("export --watch-only filters to watch-only accounts", async () => {
+    const { stdout, exitCode } = await runCli(["account", "export", "--watch-only"], {
+      accounts: [STORED_ACCOUNT, WATCH_ONLY],
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.accounts.length).toBe(1);
+    expect(parsed.accounts[0].name).toBe("treasury");
+  });
+
+  test("export specific accounts by name", async () => {
+    const { stdout, exitCode } = await runCli(["account", "export", "my-account"], {
+      accounts: [STORED_ACCOUNT, WATCH_ONLY],
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.accounts.length).toBe(1);
+    expect(parsed.accounts[0].name).toBe("my-account");
+  });
+
+  test("export nonexistent account errors", async () => {
+    const { stderr, exitCode } = await runCli(["account", "export", "nonexistent"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("not found");
+  });
+
+  test("export to --file writes to disk", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "export", "--file", "{{HOME}}/accounts.json"],
+      { accounts: [STORED_ACCOUNT] },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Exported");
+    expect(stdout).toContain("1 account(s)");
+  });
+
+  test("export preserves bandersnatch keys", async () => {
+    const acct: StoredAccount = {
+      ...STORED_ACCOUNT,
+      bandersnatch: { "": "0xaabb", candidate: "0xccdd" },
+    };
+    const { stdout, exitCode } = await runCli(["account", "export", "--include-secrets"], {
+      accounts: [acct],
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.accounts[0].bandersnatch).toEqual({ "": "0xaabb", candidate: "0xccdd" });
+  });
+
+  test("batch import adds new accounts", async () => {
+    const importData = JSON.stringify({
+      accounts: [
+        {
+          name: "imported-watch",
+          publicKey: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          derivationPath: "",
+        },
+      ],
+    });
+    const { stdout, exitCode } = await runCli(
+      ["account", "import", "--file", "{{HOME}}/import.json"],
+      { files: { "import.json": importData } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Added: imported-watch");
+  });
+
+  test("batch import skips existing accounts without --overwrite", async () => {
+    const importData = JSON.stringify({
+      accounts: [
+        {
+          name: "my-account",
+          publicKey: "0xaabbccdd",
+          derivationPath: "",
+        },
+      ],
+    });
+    const { stdout, stderr, exitCode } = await runCli(
+      ["account", "import", "--file", "{{HOME}}/import.json"],
+      { accounts: [STORED_ACCOUNT], files: { "import.json": importData } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain("Skipped");
+    expect(stdout).toContain("Skipped: my-account");
+  });
+
+  test("batch import --overwrite replaces existing accounts", async () => {
+    const importData = JSON.stringify({
+      accounts: [
+        {
+          name: "my-account",
+          publicKey: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          derivationPath: "",
+        },
+      ],
+    });
+    const { stdout, exitCode } = await runCli(
+      ["account", "import", "--file", "{{HOME}}/import.json", "--overwrite"],
+      { accounts: [STORED_ACCOUNT], files: { "import.json": importData } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Overwritten: my-account");
+  });
+
+  test("batch import --dry-run does not persist", async () => {
+    const importData = JSON.stringify({
+      accounts: [
+        {
+          name: "dry-run-acct",
+          publicKey: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          derivationPath: "",
+        },
+      ],
+    });
+    const { stdout, exitCode } = await runCli(
+      ["account", "import", "--file", "{{HOME}}/import.json", "--dry-run"],
+      { files: { "import.json": importData } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(dry run)");
+    expect(stdout).toContain("Added: dry-run-acct");
+  });
+
+  test("batch import redacted account becomes watch-only", async () => {
+    const importData = JSON.stringify({
+      accounts: [
+        {
+          name: "redacted-acct",
+          publicKey: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          derivationPath: "",
+          secret: "<redacted>",
+        },
+      ],
+    });
+    const { stdout, exitCode } = await runCli(
+      ["account", "import", "--file", "{{HOME}}/import.json", "--json"],
+      { files: { "import.json": importData } },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.added).toContain("redacted-acct");
+  });
+
+  test("batch import env-backed account preserves env reference", async () => {
+    const importData = JSON.stringify({
+      accounts: [
+        {
+          name: "env-import",
+          publicKey: "",
+          derivationPath: "//ci",
+          secret: { env: "CI_SECRET" },
+        },
+      ],
+    });
+    const { stdout, exitCode } = await runCli(
+      ["account", "import", "--file", "{{HOME}}/import.json", "--json"],
+      { files: { "import.json": importData } },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.added).toContain("env-import");
+  });
+
+  test("batch import with mnemonic secret validates and derives public key", async () => {
+    const importData = JSON.stringify({
+      accounts: [
+        {
+          name: "full-import",
+          publicKey: "",
+          derivationPath: "",
+          secret: TEST_MNEMONIC,
+        },
+      ],
+    });
+    const { stdout, exitCode } = await runCli(
+      ["account", "import", "--file", "{{HOME}}/import.json", "--json"],
+      { files: { "import.json": importData } },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.added).toContain("full-import");
+  });
+
+  test("batch import skips dev accounts", async () => {
+    const importData = JSON.stringify({
+      accounts: [{ name: "alice", publicKey: "0xaabb", derivationPath: "" }],
+    });
+    const { stderr, exitCode } = await runCli(
+      ["account", "import", "--file", "{{HOME}}/import.json"],
+      { files: { "import.json": importData } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain("Skipped");
+    expect(stderr).toContain("dev account");
+  });
+
+  test("batch import invalid JSON errors", async () => {
+    const { stderr, exitCode } = await runCli(
+      ["account", "import", "--file", "{{HOME}}/bad.json"],
+      { files: { "bad.json": "not valid json" } },
+    );
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Invalid JSON");
+  });
+
+  test("batch import from stdin via /dev/stdin", async () => {
+    const importData = JSON.stringify({
+      accounts: [
+        {
+          name: "stdin-acct",
+          publicKey: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          derivationPath: "",
+        },
+      ],
+    });
+    const { stdout, exitCode } = await runCli(["account", "import", "--file", "/dev/stdin"], {
+      stdin: importData,
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Added: stdin-acct");
+  });
+
+  test("batch import --json returns structured output", async () => {
+    const importData = JSON.stringify({
+      accounts: [
+        {
+          name: "json-acct",
+          publicKey: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          derivationPath: "",
+        },
+      ],
+    });
+    const { stdout, exitCode } = await runCli(
+      ["account", "import", "--file", "{{HOME}}/import.json", "--json"],
+      { files: { "import.json": importData } },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.action).toBe("imported");
+    expect(parsed.added).toContain("json-acct");
+  });
+
+  test("export/import round-trip preserves accounts (redacted as watch-only)", async () => {
+    // Export
+    const exported = await runCli(["account", "export"], {
+      accounts: [STORED_ACCOUNT, WATCH_ONLY],
+    });
+    expect(exported.exitCode).toBe(0);
+
+    // Import into clean environment via /dev/stdin
+    const imported = await runCli(["account", "import", "--file", "/dev/stdin", "--json"], {
+      stdin: exported.stdout,
+    });
+    expect(imported.exitCode).toBe(0);
+    const result = JSON.parse(imported.stdout);
+    expect(result.added).toContain("my-account");
+    expect(result.added).toContain("treasury");
+  });
+
+  test("existing single import still works alongside batch import", async () => {
+    // Existing single-account import should still work
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "import",
+      "test-single",
+      "--secret",
+      TEST_MNEMONIC,
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Imported");
+    expect(stdout).toContain("test-single");
+  });
 });

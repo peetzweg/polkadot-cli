@@ -21,6 +21,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Unsigned/authorized transactions — submit governance-authorized calls without a signer (`--unsigned`)
 - ✅ Message signing — sign arbitrary bytes with account keypairs for use as `MultiSignature` arguments
 - ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
+- ✅ Export/import — portable chain and account configuration for backup, sharing, and CI bootstrapping
 
 ## Install
 
@@ -148,6 +149,64 @@ dot chain remove westend
 ```
 
 Removing a chain that other chains reference as their `relay` prints a warning listing orphaned parachains. The removal still proceeds — orphaned chains keep their `relay` field but render as standalone until the relay is re-added.
+
+### Export chain configuration
+
+Export chain configurations to a JSON file or stdout for backup, sharing, or transfer to another machine. By default, only user-added chains and built-ins with modified RPCs are exported. Metadata is not included — re-fetch with `dot chain update --all` after importing.
+
+```
+# Export custom chains to stdout (pipe-friendly)
+dot chain export
+
+# Export all chains including built-ins
+dot chain export --all
+
+# Export specific chains
+dot chain export my-relay my-para
+
+# Export to a file
+dot chain export --file my-chains.json
+
+# Export all to a file
+dot chain export --all --file my-chains.json
+```
+
+The export format is JSON with `defaultChain` and `chains` fields:
+
+```json
+{
+  "defaultChain": "my-local-relay",
+  "chains": {
+    "my-local-relay": { "rpc": ["ws://localhost:9944"] },
+    "my-para": { "rpc": ["ws://localhost:9945"], "relay": "my-local-relay", "parachainId": 2000 }
+  }
+}
+```
+
+### Import chain configuration
+
+Import chain configurations from a JSON file or stdin:
+
+```
+# Import from a file
+dot chain import my-chains.json
+
+# Preview without applying changes
+dot chain import my-chains.json --dry-run
+
+# Overwrite existing chains
+dot chain import my-chains.json --overwrite
+
+# Import from stdin (pipe from another machine)
+ssh remote-dev "dot chain export" | dot chain import -
+```
+
+Import behavior:
+
+- **Existing chains** are skipped with a warning unless `--overwrite` is passed
+- **Relay references** are validated — a warning is printed if a chain references a relay that doesn't exist in the import file or current config
+- **Default chain** is updated only when `--overwrite` is used
+- After import, run `dot chain update --all` to fetch metadata for the new chains
 
 ## Accounts
 
@@ -318,6 +377,94 @@ dot account delete my-validator stale-key
 ```
 
 `delete` is an alias for `remove`.
+
+### Export accounts
+
+Export accounts to a JSON file or stdout for backup, sharing, or transfer to another machine. Secrets are **redacted by default** — the export is safe to share or commit.
+
+```
+# Export all accounts (secrets redacted)
+dot account export
+
+# Export specific accounts
+dot account export treasury my-validator
+
+# Include secrets (explicit opt-in, warning printed to stderr)
+dot account export --include-secrets
+
+# Export only watch-only accounts (always safe)
+dot account export --watch-only
+
+# Export to a file
+dot account export --file team-accounts.json
+```
+
+The export format is JSON:
+
+```json
+{
+  "accounts": [
+    {
+      "name": "treasury",
+      "publicKey": "0xd435...a27d",
+      "derivationPath": "",
+      "secret": "<redacted>"
+    },
+    {
+      "name": "ci-signer",
+      "publicKey": "",
+      "derivationPath": "//ci",
+      "secret": { "env": "MY_SECRET" }
+    },
+    {
+      "name": "council-member",
+      "publicKey": "0x8eaf...6a48",
+      "derivationPath": ""
+    }
+  ]
+}
+```
+
+Security considerations:
+
+- **Default export redacts secrets**: mnemonic/seed fields are replaced with `"<redacted>"`. Public keys, derivation paths, bandersnatch keys, and env var references are included.
+- **`--include-secrets`** is required to export actual secrets. A warning is printed to stderr when used.
+- **Env-backed accounts**: the env var *name* is exported (e.g. `{"env": "MY_SECRET"}`), never the env var *value*. This is always safe.
+- **Watch-only accounts**: always safe to export (no secret exists).
+
+### Batch-import accounts
+
+Import accounts from a previously exported JSON file. This is distinct from the existing `dot account import <name> --secret "..."` (single account from mnemonic) — batch import uses `--file`:
+
+```
+# Import from a file
+dot account import --file team-accounts.json
+
+# Preview without applying changes
+dot account import --file accounts.json --dry-run
+
+# Overwrite existing accounts
+dot account import --file accounts.json --overwrite
+
+# Import from stdin
+ssh remote-dev "dot account export --watch-only" | dot account import --file /dev/stdin
+```
+
+Import behavior:
+
+- **Existing accounts** are skipped with a warning unless `--overwrite` is passed
+- **Redacted accounts** (secret is `"<redacted>"` or missing) are imported as watch-only — public key is preserved, no signing capability
+- **Env-backed accounts** are imported with the env reference preserved — secret resolution happens at signing time as usual
+- **Accounts with secrets** (mnemonic/seed) are validated and the public key is re-derived
+- **Bandersnatch keys** are preserved if present in the export
+- **Dev account names** (alice, bob, etc.) are skipped
+
+The existing single-account import is unchanged:
+
+```
+dot account import treasury --secret "word1 word2 ..."     # single account (unchanged)
+dot account import --file accounts.json                     # batch import (new)
+```
 
 ### Inspect accounts
 

@@ -1,6 +1,12 @@
+import { readFile, writeFile } from "node:fs/promises";
 import type { CAC } from "cac";
 import { findAccount, loadAccounts, saveAccounts } from "../config/accounts-store.ts";
-import { isEnvSecret, isWatchOnly } from "../config/accounts-types.ts";
+import {
+  type EnvSecret,
+  isEnvSecret,
+  isWatchOnly,
+  type StoredAccount,
+} from "../config/accounts-types.ts";
 import {
   createNewAccount,
   DEV_NAMES,
@@ -31,6 +37,8 @@ ${BOLD}Usage:${RESET}
   $ dot account create|new <name> [--path <derivation>]              Create a new account
   $ dot account import <name> --secret <s> [--path <derivation>]     Import from BIP39 mnemonic
   $ dot account import <name> --env <VAR> [--path <derivation>]      Import account backed by env variable
+  $ dot account import --file <path>                                 Batch-import accounts from a file
+  $ dot account export [names...]                                    Export accounts to stdout
   $ dot account derive <source> <new-name> --path <derivation>       Derive a child account
   $ dot account inspect <input> [--prefix <N>]                       Inspect an account/address/key
   $ dot account list                                                 List all accounts
@@ -43,6 +51,13 @@ ${BOLD}Examples:${RESET}
   $ dot account create multi --path //polkadot//0/wallet
   $ dot account import treasury --secret "word1 word2 ... word12"
   $ dot account import ci-signer --env MY_SECRET --path //ci
+  $ dot account import --file team-accounts.json
+  $ dot account import --file accounts.json --dry-run
+  $ dot account import --file accounts.json --overwrite
+  $ dot account export
+  $ dot account export treasury my-validator
+  $ dot account export --include-secrets --file backup.json
+  $ dot account export --watch-only
   $ dot account derive treasury treasury-staking --path //staking
   $ dot account inspect alice
   $ dot account inspect 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
@@ -57,12 +72,20 @@ ${YELLOW}Note: Secrets are stored unencrypted in ~/.polkadot/accounts.json.
 
 export function registerAccountCommands(cli: CAC) {
   cli
-    .command("account [action] [...names]", "Manage local accounts (create, import, list, remove)")
+    .command(
+      "account [action] [...names]",
+      "Manage local accounts (create, import, list, remove, export)",
+    )
     .alias("accounts")
     .option("--secret <value>", "Secret key (mnemonic or hex seed) for import")
     .option("--env <varName>", "Environment variable name holding the secret")
     .option("--path <derivation>", "Derivation path (e.g. //staking, //polkadot//0/wallet)")
     .option("--prefix <number>", "SS58 prefix for address encoding (default: 42)")
+    .option("--file <path>", "Input/output file for batch import/export")
+    .option("--overwrite", "Overwrite existing accounts on batch import")
+    .option("--dry-run", "Preview batch import without applying changes")
+    .option("--include-secrets", "Include secrets in export (redacted by default)")
+    .option("--watch-only", "Export only watch-only accounts")
     .action(
       async (
         action: string | undefined,
@@ -72,6 +95,11 @@ export function registerAccountCommands(cli: CAC) {
           env?: string;
           path?: string;
           prefix?: string;
+          file?: string;
+          overwrite?: boolean;
+          dryRun?: boolean;
+          includeSecrets?: boolean;
+          watchOnly?: boolean;
           output?: string;
           json?: boolean;
         },
@@ -89,7 +117,10 @@ export function registerAccountCommands(cli: CAC) {
             if (opts.secret || opts.env) return accountImport(names[0], opts);
             return accountAddWatchOnly(names[0], names[1], opts);
           case "import":
+            if (opts.file) return accountBatchImport(opts);
             return accountImport(names[0], opts);
+          case "export":
+            return accountExport(names, opts);
           case "derive":
             return accountDerive(names[0], names[1], opts);
           case "list":
@@ -650,5 +681,225 @@ async function accountInspect(
     }
     console.log(`  ${BOLD}Prefix:${RESET}      ${prefix}`);
     console.log();
+  }
+}
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf-8");
+}
+
+const REDACTED = "<redacted>";
+
+interface ExportedAccount {
+  name: string;
+  publicKey: string;
+  derivationPath: string;
+  secret?: string | EnvSecret;
+  bandersnatch?: Record<string, string>;
+}
+
+interface AccountExportData {
+  accounts: ExportedAccount[];
+}
+
+async function accountExport(
+  names: string[],
+  opts: {
+    file?: string;
+    includeSecrets?: boolean;
+    watchOnly?: boolean;
+    output?: string;
+    json?: boolean;
+  },
+) {
+  const accountsFile = await loadAccounts();
+
+  if (opts.includeSecrets) {
+    process.stderr.write(`${YELLOW}Warning: secrets are included in the export.${RESET}\n`);
+  }
+
+  let accounts = accountsFile.accounts;
+
+  if (names.length > 0) {
+    const filtered: StoredAccount[] = [];
+    for (const input of names) {
+      const account = findAccount(accountsFile, input);
+      if (!account) {
+        throw new Error(`Account "${input}" not found.`);
+      }
+      filtered.push(account);
+    }
+    accounts = filtered;
+  }
+
+  if (opts.watchOnly) {
+    accounts = accounts.filter((a) => isWatchOnly(a));
+  }
+
+  const exported: ExportedAccount[] = accounts.map((account) => {
+    const entry: ExportedAccount = {
+      name: account.name,
+      publicKey: account.publicKey,
+      derivationPath: account.derivationPath,
+    };
+
+    if (isWatchOnly(account)) {
+      // No secret field for watch-only
+    } else if (account.secret !== undefined && isEnvSecret(account.secret)) {
+      // Env var name is always safe to export
+      entry.secret = account.secret;
+    } else if (opts.includeSecrets) {
+      entry.secret = account.secret;
+    } else {
+      entry.secret = REDACTED;
+    }
+
+    if (account.bandersnatch && Object.keys(account.bandersnatch).length > 0) {
+      entry.bandersnatch = account.bandersnatch;
+    }
+
+    return entry;
+  });
+
+  const exportData: AccountExportData = { accounts: exported };
+  const json = `${JSON.stringify(exportData, null, 2)}\n`;
+
+  if (opts.file) {
+    await writeFile(opts.file, json);
+    if (isJsonOutput(opts)) {
+      console.log(formatJson({ action: "exported", file: opts.file, count: exported.length }));
+    } else {
+      console.log(`Exported ${exported.length} account(s) to ${opts.file}`);
+    }
+  } else {
+    process.stdout.write(json);
+  }
+}
+
+async function accountBatchImport(opts: {
+  file?: string;
+  overwrite?: boolean;
+  dryRun?: boolean;
+  output?: string;
+  json?: boolean;
+}) {
+  let raw: string;
+  if (!opts.file || opts.file === "-") {
+    raw = await readStdin();
+  } else {
+    raw = await readFile(opts.file, "utf-8");
+  }
+
+  let importData: AccountExportData;
+  try {
+    importData = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid JSON input.");
+  }
+
+  if (!Array.isArray(importData.accounts)) {
+    throw new Error('Invalid import format: missing "accounts" array.');
+  }
+
+  const accountsFile = await loadAccounts();
+  const added: string[] = [];
+  const skipped: string[] = [];
+  const overwritten: string[] = [];
+
+  for (const entry of importData.accounts) {
+    if (!entry.name) {
+      process.stderr.write(`${YELLOW}Skipped entry with missing name.${RESET}\n`);
+      continue;
+    }
+
+    if (isDevAccount(entry.name)) {
+      process.stderr.write(`${YELLOW}Skipped "${entry.name}": built-in dev account.${RESET}\n`);
+      skipped.push(entry.name);
+      continue;
+    }
+
+    const existing = findAccount(accountsFile, entry.name);
+
+    if (existing && !opts.overwrite) {
+      skipped.push(entry.name);
+      process.stderr.write(
+        `${YELLOW}Skipped "${entry.name}": already exists (use --overwrite to replace)${RESET}\n`,
+      );
+      continue;
+    }
+
+    // Build the StoredAccount from the imported entry
+    const stored: StoredAccount = {
+      name: entry.name,
+      publicKey: entry.publicKey || "",
+      derivationPath: entry.derivationPath || "",
+    };
+
+    if (entry.secret === undefined || entry.secret === REDACTED) {
+      // Watch-only: no secret, preserve publicKey
+    } else if (typeof entry.secret === "object" && "env" in entry.secret) {
+      // Env-backed account
+      stored.secret = entry.secret;
+      if (!stored.publicKey) {
+        stored.publicKey = tryDerivePublicKey(entry.secret.env, stored.derivationPath) ?? "";
+      }
+    } else if (typeof entry.secret === "string") {
+      // Mnemonic or hex seed — validate and derive publicKey
+      stored.secret = entry.secret;
+      try {
+        const { publicKey } = importAccount(entry.secret, stored.derivationPath);
+        stored.publicKey = publicKeyToHex(publicKey);
+      } catch {
+        process.stderr.write(
+          `${YELLOW}Warning: "${entry.name}" has an invalid secret, importing as watch-only.${RESET}\n`,
+        );
+        delete stored.secret;
+      }
+    }
+
+    if (entry.bandersnatch && Object.keys(entry.bandersnatch).length > 0) {
+      stored.bandersnatch = entry.bandersnatch;
+    }
+
+    if (existing) {
+      // Replace in-place
+      const idx = accountsFile.accounts.findIndex(
+        (a) => a.name.toLowerCase() === entry.name.toLowerCase(),
+      );
+      accountsFile.accounts[idx] = stored;
+      overwritten.push(entry.name);
+    } else {
+      accountsFile.accounts.push(stored);
+      added.push(entry.name);
+    }
+  }
+
+  if (!opts.dryRun) {
+    await saveAccounts(accountsFile);
+  }
+
+  if (isJsonOutput(opts)) {
+    console.log(
+      formatJson({
+        action: opts.dryRun ? "dry-run" : "imported",
+        added,
+        overwritten,
+        skipped,
+      }),
+    );
+    return;
+  }
+
+  const prefix = opts.dryRun ? "(dry run) " : "";
+  if (added.length > 0) console.log(`${prefix}Added: ${added.join(", ")}`);
+  if (overwritten.length > 0) console.log(`${prefix}Overwritten: ${overwritten.join(", ")}`);
+  if (skipped.length > 0) console.log(`${prefix}Skipped: ${skipped.join(", ")}`);
+
+  if (added.length === 0 && overwritten.length === 0) {
+    console.log(`${prefix}No accounts imported.`);
   }
 }
