@@ -6,12 +6,14 @@ import {
   describeEventFields,
   describeRuntimeApiMethodArgs,
   describeType,
+  fetchMetadataFromChain,
   findPallet,
   findRuntimeApi,
   getOrFetchMetadata,
   getPalletNames,
   getRuntimeApiNames,
   listPallets,
+  parseMetadata,
 } from "../core/metadata.ts";
 import {
   BOLD,
@@ -33,11 +35,21 @@ export async function loadMeta(
   chainConfig: any,
   rpcOverride?: string,
 ): Promise<MetadataBundle> {
+  if (rpcOverride) {
+    process.stderr.write(`Fetching metadata from ${chainName}...\n`);
+    const clientHandle = await createChainClient(chainName, chainConfig, rpcOverride);
+    try {
+      const raw = await fetchMetadataFromChain(clientHandle, chainName);
+      return parseMetadata(raw);
+    } finally {
+      clientHandle.destroy();
+    }
+  }
   try {
     return await getOrFetchMetadata(chainName);
   } catch {
     process.stderr.write(`Fetching metadata from ${chainName}...\n`);
-    const clientHandle = await createChainClient(chainName, chainConfig, rpcOverride);
+    const clientHandle = await createChainClient(chainName, chainConfig);
     try {
       return await getOrFetchMetadata(chainName, clientHandle);
     } finally {
