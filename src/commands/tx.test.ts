@@ -9,6 +9,7 @@ import { runCli } from "./__fixtures__/run-cli.ts";
 import {
   autoDefaultForType,
   buildCustomSignedExtensions,
+  buildGeneralTx,
   decodeCallFallback,
   decodeCallToFileFormat,
   fileArgsToStrings,
@@ -30,6 +31,7 @@ import {
   parseWaitLevel,
   sanitizeForSerialization,
   typeHint,
+  unsignedDefaultForType,
 } from "./tx.ts";
 
 const meta = getTestMetadata();
@@ -1945,5 +1947,216 @@ describe("dot tx CLI integration", () => {
     const { stdout, exitCode } = await runCli(["tx.System.remark", "0xdeadbeef", "--encode"]);
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/^0x[0-9a-f]+$/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// --unsigned flag validation
+// ---------------------------------------------------------------------------
+
+describe("--unsigned flag validation", () => {
+  test("--unsigned and --from are mutually exclusive", async () => {
+    const { stderr, exitCode } = await runCli([
+      "tx.System.remark",
+      "0xaa",
+      "--unsigned",
+      "--from",
+      "alice",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("mutually exclusive");
+  });
+
+  test("--unsigned does not support --nonce", async () => {
+    const { stderr, exitCode } = await runCli([
+      "tx.System.remark",
+      "0xaa",
+      "--unsigned",
+      "--nonce",
+      "5",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("--unsigned does not support --nonce");
+  });
+
+  test("--unsigned does not support --tip", async () => {
+    const { stderr, exitCode } = await runCli([
+      "tx.System.remark",
+      "0xaa",
+      "--unsigned",
+      "--tip",
+      "1000",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("--unsigned does not support --tip");
+  });
+
+  test("--unsigned does not support --mortality", async () => {
+    const { stderr, exitCode } = await runCli([
+      "tx.System.remark",
+      "0xaa",
+      "--unsigned",
+      "--mortality",
+      "immortal",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("--unsigned does not support --mortality");
+  });
+
+  test("--unsigned alone (without --from) passes gate check for raw hex", async () => {
+    // Raw hex + --unsigned should not error about missing --from
+    // It will error during submission (no chain connection in test) but should
+    // get past the gate check
+    const { stderr } = await runCli(["tx.0x0001", "--unsigned"]);
+    expect(stderr).not.toContain("--from is required");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// unsignedDefaultForType
+// ---------------------------------------------------------------------------
+
+describe("unsignedDefaultForType", () => {
+  test("void returns empty Uint8Array", () => {
+    const result = unsignedDefaultForType("SomeExt", { type: "void" });
+    expect(result).toEqual(new Uint8Array([]));
+  });
+
+  test("option returns undefined (None)", () => {
+    const result = unsignedDefaultForType("AsPerson", { type: "option", value: {} });
+    expect(result).toBeUndefined();
+  });
+
+  test("enum with Disabled returns Disabled variant", () => {
+    const result = unsignedDefaultForType("VerifyMultiSignature", {
+      type: "enum",
+      value: { Signed: {}, Disabled: { type: "void" } },
+    });
+    expect(result).toEqual({ type: "Disabled", value: undefined });
+  });
+
+  test("enum with Immortal returns Immortal variant", () => {
+    const result = unsignedDefaultForType("SomeEra", {
+      type: "enum",
+      value: { Immortal: { type: "void" }, Mortal1: {} },
+    });
+    expect(result).toEqual({ type: "Immortal" });
+  });
+
+  test("CheckMortality returns Immortal regardless of entry", () => {
+    const result = unsignedDefaultForType("CheckMortality", { type: "enum", value: {} });
+    expect(result).toEqual({ type: "Immortal" });
+  });
+
+  test("CheckNonce returns 0", () => {
+    const result = unsignedDefaultForType("CheckNonce", { type: "compact" });
+    expect(result).toBe(0);
+  });
+
+  test("ChargeTransactionPayment returns 0n", () => {
+    const result = unsignedDefaultForType("ChargeTransactionPayment", { type: "compact" });
+    expect(result).toBe(0n);
+  });
+
+  test("ChargeAssetTxPayment returns zero tip and no asset", () => {
+    const result = unsignedDefaultForType("ChargeAssetTxPayment", { type: "struct" });
+    expect(result).toEqual({ tip: 0n, asset_id: undefined });
+  });
+
+  test("primitive bool returns false", () => {
+    const result = unsignedDefaultForType("RestrictOrigins", {
+      type: "primitive",
+      value: "bool",
+    });
+    expect(result).toBe(false);
+  });
+
+  test("primitive u32 returns 0", () => {
+    const result = unsignedDefaultForType("SomeExt", { type: "primitive", value: "u32" });
+    expect(result).toBe(0);
+  });
+
+  test("primitive u128 returns 0n", () => {
+    const result = unsignedDefaultForType("SomeExt", { type: "primitive", value: "u128" });
+    expect(result).toBe(0n);
+  });
+
+  test("compact returns 0", () => {
+    const result = unsignedDefaultForType("SomeExt", { type: "compact" });
+    expect(result).toBe(0);
+  });
+
+  test("unknown type returns NO_DEFAULT", () => {
+    const result = unsignedDefaultForType("SomeExt", { type: "struct", value: {} });
+    expect(result).toBe(NO_DEFAULT);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildGeneralTx
+// ---------------------------------------------------------------------------
+
+describe("buildGeneralTx", () => {
+  test("produces bytes starting with compact length, 0x45, 0x00", () => {
+    const callData = new Uint8Array([0x00, 0x01]); // minimal call data
+    const result = buildGeneralTx(meta, callData, {});
+    // First byte(s) are compact length, then 0x45 (general v5), then 0x00 (ext version)
+    // Find where 0x45 appears (after compact prefix)
+    let idx = 0;
+    // Skip compact prefix (1-4 bytes depending on value)
+    while (idx < result.length && (result[idx]! & 0b11) !== 0) idx++;
+    if (idx === 0) idx = 1; // single-byte compact
+    expect(result[idx]).toBe(0x45);
+    expect(result[idx + 1]).toBe(0x00);
+  });
+
+  test("call data appears at end of general tx", () => {
+    const callData = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+    const result = buildGeneralTx(meta, callData, {});
+    const tail = result.slice(-4);
+    expect(tail).toEqual(callData);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// --unsigned help text and gate logic
+// ---------------------------------------------------------------------------
+
+describe("--unsigned help and gate", () => {
+  test("missing --from and --unsigned shows call help with --unsigned hint", async () => {
+    const { stdout, exitCode } = await runCli(["tx.System.remark", "0xaa"]);
+    expect(exitCode).toBe(0);
+    // Should show help, not error about missing flags
+    expect(stdout).toContain("(Call)");
+    expect(stdout).toContain("Usage:");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// --unsigned file-based input
+// ---------------------------------------------------------------------------
+
+describe("--unsigned with file-based input", () => {
+  test("YAML file with unsigned: true and --dry-run works", async () => {
+    const yaml = [
+      "chain: polkadot",
+      "unsigned: true",
+      "tx:",
+      "  System:",
+      '    remark: "0xdeadbeef"',
+    ].join("\n");
+    const { stdout, exitCode, stderr } = await runCli(
+      ["{{HOME}}/unsigned-remark.yaml", "--dry-run"],
+      { files: { "unsigned-remark.yaml": yaml } },
+    );
+    // This will fail to connect (no live chain in tests), but the flag parsing
+    // should work. Check that it doesn't error about missing --from
+    if (exitCode === 0) {
+      expect(stdout).toContain("unsigned");
+      expect(stdout).toContain("N/A");
+    } else {
+      // Connection error is fine, but --from error is not
+      expect(stderr).not.toContain("--from is required");
+    }
   });
 });
