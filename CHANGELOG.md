@@ -1,5 +1,190 @@
 # polkadot-cli
 
+## 1.14.0
+
+### Minor Changes
+
+- f57e12c: Add `--asset <json>` flag for paying transaction fees in a non-native asset.
+
+  **New: `--asset` flag on `dot tx`**
+
+  Accepts an XCM location (JSON) and routes it through the `ChargeAssetTxPayment`
+  signed extension so the transaction is paid in the specified asset instead of the
+  chain's native token. Typically used on asset-hub-style chains (Polkadot, Paseo,
+  etc.) where an asset-conversion pool swaps the native fee into the chosen asset at
+  dispatch time.
+
+  ```bash
+  # Pay fees in USDT (asset id 1337) on Polkadot Asset Hub
+  dot tx Balances.transfer_keep_alive 5FHneW46... 1000000000000 \
+    --from alice --chain polkadot-asset-hub \
+    --asset '{"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"1337"}]}}'
+
+  # Dry-run to estimate fees before submitting
+  dot tx Balances.transfer_keep_alive 5FHneW46... 1000000000000 \
+    --from alice --chain polkadot-asset-hub --dry-run \
+    --asset '{…location…}'
+  ```
+
+  **How it works**
+
+  When `--asset` is supplied, the CLI takes over `ChargeAssetTxPayment` handling
+  from polkadot-api: it removes the extension from papi's builtin set, injects a
+  user override of `{ tip, asset_id }`, and lets the existing custom-signed-extension
+  pipeline SCALE-encode the value via metadata. This bypasses papi's
+  `isAssetCompat` check, which otherwise rejects XCM Location payloads on the
+  unsafe API path.
+
+  **Requirements**
+
+  - The target chain must expose the `ChargeAssetTxPayment` signed extension
+    (asset-hub-style chains); on chains without it, `--asset` is silently ignored.
+  - The estimated fee shown in `--dry-run` output is native-denominated; the
+    on-chain asset-conversion pool determines the actual asset amount charged.
+
+  **Not combinable with `--unsigned`** — unsigned/general transactions already
+  default `ChargeAssetTxPayment` to zero tip / no asset.
+
+- c82f94f: Add export/import commands for chain configurations and accounts, enabling portable backup, restore, and team sharing of setups.
+
+  **Chain export/import (`dot chain export` / `dot chain import`)**
+
+  Export chain configurations to JSON and import them on another machine or share with teammates. Metadata is excluded from exports (re-fetch with `dot chain update --all` after importing).
+
+  ```bash
+  # Export custom chains to stdout
+  dot chain export
+
+  # Export all chains (including built-ins) to a file
+  dot chain export --all --file my-chains.json
+
+  # Export specific chains
+  dot chain export my-relay my-para
+
+  # Import from a file
+  dot chain import my-chains.json
+
+  # Preview without applying
+  dot chain import my-chains.json --dry-run
+
+  # Overwrite existing chains
+  dot chain import my-chains.json --overwrite
+
+  # Pipe between machines
+  ssh remote "dot chain export" | dot chain import -
+  ```
+
+  **Account export/import (`dot account export` / `dot account import --file`)**
+
+  Export accounts with secrets redacted by default. Redacted accounts import as watch-only, preserving public keys for address resolution without exposing secrets.
+
+  ```bash
+  # Export accounts (secrets redacted by default)
+  dot account export
+
+  # Include secrets (explicit opt-in, warning printed)
+  dot account export --include-secrets --file backup.json
+
+  # Export only watch-only accounts (always safe)
+  dot account export --watch-only
+
+  # Batch import from a file
+  dot account import --file team-accounts.json
+
+  # Preview without applying
+  dot account import --file accounts.json --dry-run
+
+  # Overwrite existing accounts
+  dot account import --file accounts.json --overwrite
+  ```
+
+  **Security**: Secrets are redacted (`<redacted>`) by default in exports. `--include-secrets` is required to include actual mnemonics/seeds. Env-backed accounts export the variable _name_ (e.g. `{"env": "MY_SECRET"}`), never the value. The existing single-account `import` command (`--secret`/`--env`) is unchanged.
+
+- efd2e56: Remove the default chain feature. Every command that targets a chain must now specify one explicitly — either via the `--chain <name>` flag or a dotpath chain prefix (e.g. `dot polkadot.query.System.Number`). When neither is provided, the CLI fails with a clear error listing the available chains instead of silently falling back to a saved default.
+
+  **Why:** the implicit fallback made commands non-transparent — especially in scripts or when switching contexts, users could not tell which chain was actually being hit (see #158).
+
+  **Breaking changes:**
+
+  - `dot chain default <name>` subcommand removed.
+  - `dot chain update` now requires a chain name or `--all`; it no longer implicitly targets a default chain.
+  - `dot chain list` no longer prints a `(default)` marker, and `dot chain list --json` no longer includes a `default` field per chain.
+  - The `--chain` global-option help text changed from "Target chain (default from config)" to "Target chain (required)".
+
+  **Config migration:** any pre-existing `defaultChain` field in `~/.polkadot/config.json` is silently ignored on read and dropped on the next save — no manual migration needed.
+
+  **Before:**
+
+  ```bash
+  dot chain default kusama
+  dot query.System.Number     # implicitly targeted kusama
+  ```
+
+  **After:**
+
+  ```bash
+  dot query.System.Number --chain kusama
+  # or, equivalently:
+  dot kusama.query.System.Number
+  ```
+
+- 4007947: Add `--unsigned` flag for submitting unsigned/authorized transactions (v5 general transactions).
+
+  **New: `--unsigned` flag on `dot tx`**
+
+  Submit transactions without a signer. Used for governance-authorized calls like `People.create_people_collection` on the People chain, where authorization comes from on-chain mechanisms (e.g. `AuthorizeCall` extension) rather than cryptographic signatures.
+
+  ```bash
+  # Submit an authorized transaction on the People chain
+  dot tx People.create_people_collection --unsigned --chain people
+
+  # Dry-run to inspect before submitting
+  dot tx People.create_people_collection --unsigned --chain people --dry-run
+
+  # Encode the full general transaction bytes
+  dot tx People.create_people_collection --unsigned --chain people --encode
+
+  # JSON output for scripting
+  dot tx People.create_people_collection --unsigned --chain people --json
+  ```
+
+  **How it works**
+
+  The CLI constructs a v5 general transaction (`0x45` format) with all signed extension "extra" values auto-defaulted:
+
+  - `VerifySignature` → `Disabled`
+  - `Option<T>` extensions → `None`
+  - `void` extensions → empty
+  - `CheckMortality` → `Immortal`
+  - `CheckNonce` → `0`
+  - `ChargeAssetTxPayment` → zero tip, no asset
+
+  User overrides via `--ext` are supported for chains with non-standard extension requirements.
+
+  **File-based input**
+
+  YAML/JSON files now support an `unsigned: true` field:
+
+  ```yaml
+  chain: people
+  unsigned: true
+  tx:
+    People:
+      create_people_collection: null
+  ```
+
+  **Mutually exclusive flags**
+
+  `--unsigned` cannot be combined with `--from`, `--nonce`, `--tip`, or `--mortality`.
+
+### Patch Changes
+
+- 6b67f55: Fix `--rpc` override being silently ignored when cached metadata exists for a chain.
+
+  Previously, when using `--rpc <url>` to connect to a different endpoint, the CLI would return metadata from a previously cached chain instead of fetching fresh metadata from the specified endpoint. The metadata cache was keyed only by chain name, so `--rpc` pointing to a different chain (e.g. an asset hub parachain cached under the relay chain name) would silently return wrong metadata.
+
+  Now, when `--rpc` is explicitly provided, the CLI always fetches fresh metadata from the specified endpoint, bypassing the name-based cache. The freshly fetched metadata is still saved to the cache so subsequent runs without `--rpc` use the updated data.
+
 ## 1.13.0
 
 ### Minor Changes
