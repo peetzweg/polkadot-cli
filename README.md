@@ -26,6 +26,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
 - ✅ Message signing — sign arbitrary bytes with account keypairs for use as `MultiSignature` arguments
 - ✅ Unsigned/authorized transactions — submit governance-authorized calls without a signer (`--unsigned`)
+- ✅ Non-native fee payment — pay tx fees in any asset the chain accepts via `--asset` (asset-hub-style chains)
 - ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
 - ✅ Export/import — portable chain and account configuration for backup, sharing, and CI bootstrapping
 
@@ -767,6 +768,31 @@ dot tx System.remark 0xdead --from alice --nonce 5 --tip 500000 --wait broadcast
 ```
 
 When set, nonce / tip / mortality / at are shown in both `--dry-run` and submission output. These flags are silently ignored with `--encode`, `--to-yaml`, and `--to-json` (which return before signing).
+
+#### Pay fees in an alternative asset
+
+On asset-hub-style chains (Polkadot Asset Hub, Paseo Asset Hub, etc.) the `ChargeAssetTxPayment` signed extension lets a transaction pay its fees in a non-native asset. Use `--asset <json>` to select the asset — the value is an XCM location (JSON) identifying the asset, which the runtime's asset-conversion pool swaps for native tokens at dispatch time.
+
+```bash
+# Pay fees in USDT (asset id 1337, PalletInstance 50) on Polkadot Asset Hub
+dot tx Balances.transfer_keep_alive 5FHneW46... 1000000000000 \
+  --from alice --chain polkadot-asset-hub \
+  --asset '{"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"1337"}]}}'
+
+# Dry-run to see the native-denominated fee estimate
+dot tx Balances.transfer_keep_alive 5FHneW46... 1000000000000 \
+  --from alice --chain polkadot-asset-hub --dry-run \
+  --asset '{"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"1337"}]}}'
+```
+
+The `--asset` echo is included in dry-run and submission output (and `--json`). A few things to know:
+
+- The target chain must expose `ChargeAssetTxPayment` in its signed extensions — asset-hub-style chains do; plain relay chains don't, and `--asset` is silently ignored on those.
+- The estimated fee shown is **native-denominated**. The on-chain asset-conversion pool determines the actual asset amount charged at execution time.
+- `--asset` is unnecessary (and not compatible) with `--unsigned`: unsigned transactions default `ChargeAssetTxPayment` to zero tip / no asset.
+- Combine freely with `--tip`, `--nonce`, `--mortality`, and `--at`. `--tip` is encoded inside the asset-payment extension alongside the asset id.
+
+Under the hood, the CLI routes the asset through its custom signed-extension pipeline rather than polkadot-api's native `asset` option — this works around a papi compatibility check that rejects XCM Location JSON on the unsafe API path. See [`papi-issue.md`](./papi-issue.md) for the upstream write-up.
 
 #### Unsigned/authorized transactions
 

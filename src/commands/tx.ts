@@ -316,8 +316,12 @@ export async function handleTx(
       const userExtOverrides = parseExtOption(opts.ext);
 
       // When --asset is specified, handle ChargeAssetTxPayment as a custom extension
-      // instead of letting PAPI handle it (PAPI's built-in handler rejects assets
-      // from the unsafe API due to compatibility checks).
+      // instead of letting PAPI handle it. PAPI's built-in path runs
+      // `isAssetCompat(asset)` (packages/client/src/tx/tx.ts) against a typedef
+      // derived from metadata; for XCM Location JSON on the unsafe API this
+      // check rejects with "Incompatible runtime asset" even with fresh metadata.
+      // Bypassing it lets us SCALE-encode the asset directly via the metadata
+      // builder.
       const skipBuiltins =
         asset !== undefined
           ? new Set([...PAPI_BUILTIN_EXTENSIONS].filter((e) => e !== "ChargeAssetTxPayment"))

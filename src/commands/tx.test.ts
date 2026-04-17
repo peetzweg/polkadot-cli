@@ -19,6 +19,7 @@ import {
   handleTx,
   NO_DEFAULT,
   normalizeValue,
+  parseAssetOption,
   parseAtOption,
   parseCallArgs,
   parseEnumShorthand,
@@ -1188,6 +1189,47 @@ describe("parseExtOption", () => {
 });
 
 // ---------------------------------------------------------------------------
+// parseAssetOption
+// ---------------------------------------------------------------------------
+
+describe("parseAssetOption", () => {
+  test("undefined returns undefined", () => {
+    expect(parseAssetOption(undefined)).toBeUndefined();
+  });
+
+  test("valid XCM Location JSON is returned as-is", () => {
+    const loc = {
+      parents: 0,
+      interior: {
+        type: "X2",
+        value: [
+          { type: "PalletInstance", value: 50 },
+          { type: "GeneralIndex", value: "3" },
+        ],
+      },
+    };
+    expect(parseAssetOption(JSON.stringify(loc))).toEqual(loc);
+  });
+
+  test("JSON array throws", () => {
+    expect(() => parseAssetOption("[1,2]")).toThrow("Invalid --asset");
+  });
+
+  test("non-object JSON (string) throws", () => {
+    expect(() => parseAssetOption('"hello"')).toThrow("Invalid --asset");
+  });
+
+  test("JSON null throws", () => {
+    expect(() => parseAssetOption("null")).toThrow("Invalid --asset");
+  });
+
+  test("invalid JSON throws with example hint", () => {
+    expect(() => parseAssetOption("{bad}")).toThrow(/Invalid --asset/);
+    expect(() => parseAssetOption("{bad}")).toThrow(/Expected an XCM location/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // autoDefaultForType
 // ---------------------------------------------------------------------------
 
@@ -1584,6 +1626,62 @@ describe("dot tx CLI integration", () => {
     const { stderr, exitCode } = await runCli(["tx.Systm.remark", "0xaa", "--encode"]);
     expect(exitCode).toBe(1);
     expect(stderr).toMatch(/System/i);
+  });
+
+  test("--asset rejects invalid JSON with helpful message", async () => {
+    const { stderr, exitCode } = await runCli([
+      "tx.System.remark",
+      "0xaa",
+      "--encode",
+      "--asset",
+      "{not-json",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Invalid --asset");
+    expect(stderr).toMatch(/Expected an XCM location/);
+  });
+
+  test("--asset rejects non-object JSON", async () => {
+    const { stderr, exitCode } = await runCli([
+      "tx.System.remark",
+      "0xaa",
+      "--encode",
+      "--asset",
+      "[1,2]",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Invalid --asset");
+  });
+
+  test("--asset with valid Location is accepted (does not affect --encode output)", async () => {
+    // Polkadot relay fixture has no ChargeAssetTxPayment extension, so --asset
+    // is a no-op here — but the CLI must still accept the flag and produce the
+    // same encoded call hex as without it.
+    const loc = JSON.stringify({
+      parents: 0,
+      interior: {
+        type: "X2",
+        value: [
+          { type: "PalletInstance", value: 50 },
+          { type: "GeneralIndex", value: "3" },
+        ],
+      },
+    });
+    const { stdout: withAsset, exitCode: codeA } = await runCli([
+      "tx.System.remark",
+      "0xdeadbeef",
+      "--encode",
+      "--asset",
+      loc,
+    ]);
+    const { stdout: withoutAsset, exitCode: codeB } = await runCli([
+      "tx.System.remark",
+      "0xdeadbeef",
+      "--encode",
+    ]);
+    expect(codeA).toBe(0);
+    expect(codeB).toBe(0);
+    expect(withAsset).toBe(withoutAsset);
   });
 
   test("unknown call gives suggestion", async () => {
