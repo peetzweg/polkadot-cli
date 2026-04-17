@@ -63,10 +63,10 @@ beforeAll(() => {
 // @ts-expect-error Bun supports describe(label, options, fn) at runtime
 describe("handleTx JSON output (in-process coverage)", { timeout: 15_000 }, () => {
   test("category-only with json", async () => {
-    await handleTx(undefined, [], { json: true });
+    await handleTx(undefined, [], { json: true, chain: "polkadot" });
   });
   test("pallet-only with json", async () => {
-    await handleTx("System", [], { json: true });
+    await handleTx("System", [], { json: true, chain: "polkadot" });
   });
 });
 

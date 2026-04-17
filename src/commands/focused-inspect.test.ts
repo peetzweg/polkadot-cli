@@ -43,67 +43,73 @@ beforeAll(() => {
 // @ts-expect-error Bun supports describe(label, options, fn) at runtime
 describe("showItemHelp (in-process coverage)", { timeout: 15_000 }, () => {
   test("tx item completes without error", async () => {
-    await showItemHelp("tx", "System.remark", {});
+    await showItemHelp("tx", "System.remark", { chain: "polkadot" });
   });
 
   test("query map item completes without error", async () => {
-    await showItemHelp("query", "System.Account", {});
+    await showItemHelp("query", "System.Account", { chain: "polkadot" });
   });
 
   test("query plain item completes without error", async () => {
-    await showItemHelp("query", "System.Number", {});
+    await showItemHelp("query", "System.Number", { chain: "polkadot" });
   });
 
   test("const item completes without error", async () => {
-    await showItemHelp("const", "Balances.ExistentialDeposit", {});
+    await showItemHelp("const", "Balances.ExistentialDeposit", { chain: "polkadot" });
   });
 
   test("events item completes without error", async () => {
-    await showItemHelp("events", "Balances.Transfer", {});
+    await showItemHelp("events", "Balances.Transfer", { chain: "polkadot" });
   });
 
   test("errors item completes without error", async () => {
-    await showItemHelp("errors", "Balances.InsufficientBalance", {});
+    await showItemHelp("errors", "Balances.InsufficientBalance", { chain: "polkadot" });
   });
 
   test("unknown tx item throws with suggestion", async () => {
-    await expect(showItemHelp("tx", "System.remrk", {})).rejects.toThrow(/remark/);
+    await expect(showItemHelp("tx", "System.remrk", { chain: "polkadot" })).rejects.toThrow(
+      /remark/,
+    );
   });
 
   test("unknown query item throws with suggestion", async () => {
-    await expect(showItemHelp("query", "System.Acccount", {})).rejects.toThrow(/Account/);
+    await expect(showItemHelp("query", "System.Acccount", { chain: "polkadot" })).rejects.toThrow(
+      /Account/,
+    );
   });
 
   test("unknown const item throws with suggestion", async () => {
-    await expect(showItemHelp("const", "Balances.ExistentialDepoist", {})).rejects.toThrow(
-      /ExistentialDeposit/,
-    );
+    await expect(
+      showItemHelp("const", "Balances.ExistentialDepoist", { chain: "polkadot" }),
+    ).rejects.toThrow(/ExistentialDeposit/);
   });
 
   test("unknown event item throws with suggestion", async () => {
-    await expect(showItemHelp("events", "Balances.Transferr", {})).rejects.toThrow(/Transfer/);
+    await expect(
+      showItemHelp("events", "Balances.Transferr", { chain: "polkadot" }),
+    ).rejects.toThrow(/Transfer/);
   });
 
   test("unknown error item throws with suggestion", async () => {
-    await expect(showItemHelp("errors", "Balances.InsufficientBalanc", {})).rejects.toThrow(
-      /InsufficientBalance/,
-    );
+    await expect(
+      showItemHelp("errors", "Balances.InsufficientBalanc", { chain: "polkadot" }),
+    ).rejects.toThrow(/InsufficientBalance/);
   });
 
   test("pallet-only tx delegates to listing", async () => {
-    await showItemHelp("tx", "System", {});
+    await showItemHelp("tx", "System", { chain: "polkadot" });
   });
 
   test("pallet-only query delegates to listing", async () => {
-    await showItemHelp("query", "System", {});
+    await showItemHelp("query", "System", { chain: "polkadot" });
   });
 
   test("pallet-only events delegates to listing", async () => {
-    await showItemHelp("events", "Balances", {});
+    await showItemHelp("events", "Balances", { chain: "polkadot" });
   });
 
   test("pallet-only errors delegates to listing", async () => {
-    await showItemHelp("errors", "Balances", {});
+    await showItemHelp("errors", "Balances", { chain: "polkadot" });
   });
 });
 
@@ -117,60 +123,60 @@ describe("showItemHelp (in-process coverage)", { timeout: 15_000 }, () => {
 describe("handler JSON output (in-process coverage)", { timeout: 15_000 }, () => {
   // handleCalls
   test("handleCalls category-only with json", async () => {
-    await handleCalls(undefined, { json: true });
+    await handleCalls(undefined, { json: true, chain: "polkadot" });
   });
   test("handleCalls pallet-only with json", async () => {
-    await handleCalls("System", { json: true });
+    await handleCalls("System", { json: true, chain: "polkadot" });
   });
   test("handleCalls pallet.item with json", async () => {
-    await handleCalls("System.remark", { json: true });
+    await handleCalls("System.remark", { json: true, chain: "polkadot" });
   });
 
   // handleEvents
   test("handleEvents category-only with json", async () => {
-    await handleEvents(undefined, { json: true });
+    await handleEvents(undefined, { json: true, chain: "polkadot" });
   });
   test("handleEvents pallet-only with json", async () => {
-    await handleEvents("Balances", { json: true });
+    await handleEvents("Balances", { json: true, chain: "polkadot" });
   });
   test("handleEvents pallet.item with json", async () => {
-    await handleEvents("Balances.Transfer", { json: true });
+    await handleEvents("Balances.Transfer", { json: true, chain: "polkadot" });
   });
 
   // handleErrors
   test("handleErrors category-only with json", async () => {
-    await handleErrors(undefined, { json: true });
+    await handleErrors(undefined, { json: true, chain: "polkadot" });
   });
   test("handleErrors pallet-only with json", async () => {
-    await handleErrors("Balances", { json: true });
+    await handleErrors("Balances", { json: true, chain: "polkadot" });
   });
   test("handleErrors pallet.item with json", async () => {
-    await handleErrors("Balances.InsufficientBalance", { json: true });
+    await handleErrors("Balances.InsufficientBalance", { json: true, chain: "polkadot" });
   });
 
   // handleStorage
   test("handleStorage category-only with json", async () => {
-    await handleStorage(undefined, { json: true });
+    await handleStorage(undefined, { json: true, chain: "polkadot" });
   });
   test("handleStorage pallet-only with json", async () => {
-    await handleStorage("System", { json: true });
+    await handleStorage("System", { json: true, chain: "polkadot" });
   });
   test("handleStorage pallet.item with json", async () => {
-    await handleStorage("System.Account", { json: true });
+    await handleStorage("System.Account", { json: true, chain: "polkadot" });
   });
 
   // showItemHelp with json
   test("showItemHelp tx item with json", async () => {
-    await showItemHelp("tx", "System.remark", { json: true });
+    await showItemHelp("tx", "System.remark", { json: true, chain: "polkadot" });
   });
   test("showItemHelp query item with json", async () => {
-    await showItemHelp("query", "System.Account", { json: true });
+    await showItemHelp("query", "System.Account", { json: true, chain: "polkadot" });
   });
   test("showItemHelp events item with json", async () => {
-    await showItemHelp("events", "Balances.Transfer", { json: true });
+    await showItemHelp("events", "Balances.Transfer", { json: true, chain: "polkadot" });
   });
   test("showItemHelp errors item with json", async () => {
-    await showItemHelp("errors", "Balances.InsufficientBalance", { json: true });
+    await showItemHelp("errors", "Balances.InsufficientBalance", { json: true, chain: "polkadot" });
   });
 });
 

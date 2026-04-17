@@ -5,7 +5,6 @@ export interface ChainConfig {
 }
 
 export interface Config {
-  defaultChain: string;
   chains: Record<string, ChainConfig>;
 }
 
@@ -15,7 +14,6 @@ export function primaryRpc(rpc: string | string[]): string {
 }
 
 export const DEFAULT_CONFIG: Config = {
-  defaultChain: "polkadot",
   chains: {
     polkadot: {
       rpc: [

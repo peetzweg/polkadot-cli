@@ -24,7 +24,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
 
 const NAMED_COMMANDS = ["chain", "account", "inspect", "hash", "sign", "parachain", "completions"];
 
-const CHAIN_SUBCOMMANDS = ["add", "remove", "update", "list", "default"];
+const CHAIN_SUBCOMMANDS = ["add", "remove", "update", "list"];
 const ACCOUNT_SUBCOMMANDS = [
   "add",
   "create",
@@ -258,7 +258,8 @@ async function completeDotpath(
 
     if (numComplete === 1 && endsWithDot) {
       // "category." → pallet names
-      const chainName = chainFromFlag ?? config.defaultChain;
+      const chainName = chainFromFlag;
+      if (!chainName) return [];
       const pallets = await loadPallets(config, chainName);
       if (!pallets) return [];
       const filtered = filterPallets(pallets, category);
@@ -268,7 +269,8 @@ async function completeDotpath(
 
     if (numComplete === 1 && !endsWithDot) {
       // "category.partial" → filter pallet names
-      const chainName = chainFromFlag ?? config.defaultChain;
+      const chainName = chainFromFlag;
+      if (!chainName) return [];
       const pallets = await loadPallets(config, chainName);
       if (!pallets) return [];
       const filtered = filterPallets(pallets, category);
@@ -279,7 +281,8 @@ async function completeDotpath(
     if (numComplete === 2) {
       // "category.Pallet." or "category.Pallet.partial" → item names
       const palletName = completeSegments[1]!;
-      const chainName = chainFromFlag ?? config.defaultChain;
+      const chainName = chainFromFlag;
+      if (!chainName) return [];
       const pallets = await loadPallets(config, chainName);
       if (!pallets) return [];
       const pallet = pallets.find((p) => p.name.toLowerCase() === palletName.toLowerCase());
@@ -381,7 +384,8 @@ async function completeApisCategory(
   config: Config,
   chainNameOverride?: string,
 ): Promise<string[]> {
-  const chainName = chainNameOverride ?? config.defaultChain;
+  const chainName = chainNameOverride;
+  if (!chainName) return [];
   const apis = await loadRuntimeApiNames(config, chainName);
   if (!apis) return [];
 

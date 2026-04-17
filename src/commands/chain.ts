@@ -33,10 +33,9 @@ const CHAIN_HELP = `
 ${BOLD}Usage:${RESET}
   $ dot chain add <name> --rpc <url>    Add a chain via WebSocket RPC
   $ dot chain remove <name>             Remove a chain
-  $ dot chain update [name]             Re-fetch metadata (default chain if omitted)
+  $ dot chain update <name>             Re-fetch metadata for a chain
   $ dot chain update --all              Re-fetch metadata for all configured chains
   $ dot chain list                      List configured chains
-  $ dot chain default <name>            Set the default chain
   $ dot chain export [names...]         Export chain configuration to stdout
   $ dot chain import <file>             Import chain configuration from a file
 
@@ -45,9 +44,7 @@ ${BOLD}Examples:${RESET}
   $ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
   $ dot chain add my-para --rpc wss://rpc.example.com --relay polkadot
   $ dot chain add my-para --rpc wss://rpc.example.com --relay polkadot --parachain-id 2000
-  $ dot chain default kusama
   $ dot chain list
-  $ dot chain update
   $ dot chain update kusama
   $ dot chain update --all
   $ dot chain remove kusama
@@ -63,7 +60,7 @@ export function registerChainCommands(cli: CAC) {
   cli
     .command(
       "chain [action] [...names]",
-      "Manage chains (add, remove, update, list, default, export, import)",
+      "Manage chains (add, remove, update, list, export, import)",
     )
     .alias("chains")
     .option("--all", "Update/export all configured chains")
@@ -102,8 +99,6 @@ export function registerChainCommands(cli: CAC) {
             return chainList(opts);
           case "update":
             return chainUpdate(names[0], opts);
-          case "default":
-            return chainDefault(names[0], opts);
           case "export":
             return chainExport(names, opts);
           case "import":
@@ -230,11 +225,6 @@ async function chainRemove(
 
   delete config.chains[resolved];
 
-  if (config.defaultChain === resolved) {
-    config.defaultChain = "polkadot";
-    if (!isJsonOutput(opts)) console.log(`Default chain reset to "polkadot".`);
-  }
-
   await saveConfig(config);
   await removeChainData(resolved);
 
@@ -251,7 +241,6 @@ async function chainList(opts: { output?: string; json?: boolean } = {}) {
   if (isJsonOutput(opts)) {
     const chains = Object.entries(config.chains).map(([name, chainConfig]) => ({
       name,
-      default: name === config.defaultChain,
       rpc: Array.isArray(chainConfig.rpc) ? chainConfig.rpc : [chainConfig.rpc],
       ...(chainConfig.relay && { relay: chainConfig.relay }),
       ...(chainConfig.parachainId != null && { parachainId: chainConfig.parachainId }),
@@ -284,7 +273,7 @@ async function chainList(opts: { output?: string; json?: boolean } = {}) {
   for (const relayName of relayNames) {
     const relayConfig = config.chains[relayName];
     if (relayConfig) {
-      printChainLine("  ", relayName, relayConfig, config.defaultChain);
+      printChainLine("  ", relayName, relayConfig);
     }
 
     const paras = parachainsByRelay.get(relayName) ?? [];
@@ -294,28 +283,20 @@ async function chainList(opts: { output?: string; json?: boolean } = {}) {
       const prefix = isLast ? "  └─ " : "  ├─ ";
       const idSuffix =
         chainConfig.parachainId != null ? ` ${DIM}[${chainConfig.parachainId}]${RESET}` : "";
-      printChainLine(prefix, name, chainConfig, config.defaultChain, idSuffix);
+      printChainLine(prefix, name, chainConfig, idSuffix);
     }
     console.log();
   }
 
   for (const [name, chainConfig] of standalone) {
-    printChainLine("  ", name, chainConfig, config.defaultChain);
+    printChainLine("  ", name, chainConfig);
   }
   if (standalone.length > 0) console.log();
 }
 
-function printChainLine(
-  prefix: string,
-  name: string,
-  chainConfig: ChainConfig,
-  defaultChain: string,
-  suffix = "",
-) {
-  const isDefault = name === defaultChain;
-  const marker = isDefault ? ` ${BOLD}(default)${RESET}` : "";
+function printChainLine(prefix: string, name: string, chainConfig: ChainConfig, suffix = "") {
   const rpcs = Array.isArray(chainConfig.rpc) ? chainConfig.rpc : [chainConfig.rpc];
-  console.log(`${prefix}${CYAN}${name}${RESET}${suffix}${marker}  ${DIM}${rpcs[0]}${RESET}`);
+  console.log(`${prefix}${CYAN}${name}${RESET}${suffix}  ${DIM}${rpcs[0]}${RESET}`);
   const indent = prefix.replace(/[^\s]/g, " ");
   for (let i = 1; i < rpcs.length; i++) {
     console.log(`${indent}  ${DIM}${rpcs[i]}${RESET}`);
@@ -331,6 +312,11 @@ async function chainUpdate(
   if (opts.all) {
     await chainUpdateAll(config);
     return;
+  }
+
+  if (!name) {
+    console.error("Usage: dot chain update <name> | --all");
+    process.exit(1);
   }
 
   const { name: chainName, chain: chainConfig } = resolveChain(config, name);
@@ -389,33 +375,6 @@ async function chainUpdateAll(config: {
   }
 }
 
-async function chainDefault(
-  name: string | undefined,
-  opts: { output?: string; json?: boolean } = {},
-) {
-  if (!name) {
-    console.error("Usage: dot chain default <name>");
-    process.exit(1);
-  }
-
-  const config = await loadConfig();
-
-  const resolved = findChainName(config, name);
-  if (!resolved) {
-    const available = Object.keys(config.chains).join(", ");
-    throw new Error(`Chain "${name}" not found. Available: ${available}`);
-  }
-
-  config.defaultChain = resolved;
-  await saveConfig(config);
-
-  if (isJsonOutput(opts)) {
-    console.log(formatJson({ action: "default", chain: resolved }));
-  } else {
-    console.log(`Default chain set to "${resolved}".`);
-  }
-}
-
 function isBuiltinModified(name: string, config: Config): boolean {
   const defaultRpc = DEFAULT_CONFIG.chains[name]?.rpc;
   const currentRpc = config.chains[name]?.rpc;
@@ -432,7 +391,6 @@ async function readStdin(): Promise<string> {
 }
 
 interface ChainExportData {
-  defaultChain: string;
   chains: Record<string, ChainConfig>;
 }
 
@@ -468,7 +426,6 @@ async function chainExport(
   }
 
   const exportData: ChainExportData = {
-    defaultChain: config.defaultChain,
     chains: exportChains,
   };
 
@@ -564,16 +521,6 @@ async function chainImport(
     }
   }
 
-  // Update defaultChain if present in import and overwrite is set
-  let defaultChanged = false;
-  if (importData.defaultChain && opts.overwrite) {
-    const resolvedDefault = findChainName(config, importData.defaultChain);
-    if (resolvedDefault) {
-      config.defaultChain = resolvedDefault;
-      defaultChanged = true;
-    }
-  }
-
   if (!opts.dryRun) {
     await saveConfig(config);
   }
@@ -586,7 +533,6 @@ async function chainImport(
         overwritten,
         skipped,
         warnings,
-        defaultChanged: defaultChanged ? config.defaultChain : undefined,
       }),
     );
     return;
@@ -596,7 +542,6 @@ async function chainImport(
   if (added.length > 0) console.log(`${prefix}Added: ${added.join(", ")}`);
   if (overwritten.length > 0) console.log(`${prefix}Overwritten: ${overwritten.join(", ")}`);
   if (skipped.length > 0) console.log(`${prefix}Skipped: ${skipped.join(", ")}`);
-  if (defaultChanged) console.log(`${prefix}Default chain set to "${config.defaultChain}".`);
 
   if (added.length === 0 && overwritten.length === 0) {
     console.log(`${prefix}No chains imported.`);

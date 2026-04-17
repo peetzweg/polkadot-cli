@@ -17,6 +17,8 @@ export interface RunCliOptions {
   files?: Record<string, string | Uint8Array>;
   stdin?: string | Uint8Array;
   env?: Record<string, string>;
+  /** Opt out of the default `--chain polkadot` auto-injection used by test fixtures. */
+  noDefaultChain?: boolean;
 }
 
 function deepMergeConfig(base: Config, override: Partial<Config>): Config {
@@ -33,10 +35,7 @@ function deepMergeConfig(base: Config, override: Partial<Config>): Config {
       }
     }
   }
-  return {
-    defaultChain: override.defaultChain ?? base.defaultChain,
-    chains,
-  };
+  return { chains };
 }
 
 export async function runCli(
@@ -79,6 +78,27 @@ export async function runCli(
 
   // Replace {{HOME}} placeholder in args
   const resolvedArgs = args.map((arg) => arg.replace(/\{\{HOME\}\}/g, tmpHome));
+
+  // Auto-inject `--chain polkadot` for command invocations so tests that don't
+  // care about chain resolution still work after the default-chain removal.
+  // Skip when:
+  //   - the test opts out (noDefaultChain),
+  //   - args already contain --chain,
+  //   - args[0] is __complete (its own --chain handling lives in precedingWords),
+  //   - any arg starts with a known chain name + "." (chain-prefixed dotpath).
+  const hasChainFlag = resolvedArgs.some((a) => a === "--chain" || a.startsWith("--chain="));
+  const isCompletion = resolvedArgs[0] === "__complete";
+  const chainPrefixRegex = new RegExp(`^(${Object.keys(finalConfig.chains).join("|")})\\.`, "i");
+  const hasChainPrefix = resolvedArgs.some((a) => chainPrefixRegex.test(a));
+  if (
+    !options?.noDefaultChain &&
+    !hasChainFlag &&
+    !isCompletion &&
+    !hasChainPrefix &&
+    resolvedArgs.length > 0
+  ) {
+    resolvedArgs.push("--chain", "polkadot");
+  }
 
   try {
     const spawnOpts: Parameters<typeof Bun.spawn>[1] = {

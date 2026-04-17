@@ -47,7 +47,7 @@ if (process.argv[2] === "__complete") {
 
   const cli = cac("dot");
 
-  cli.option("--chain <name>", "Target chain (default from config)");
+  cli.option("--chain <name>", "Target chain (required)");
   cli.option("--rpc <url>", "Override RPC endpoint for this call");
   cli.option("--output <format>", "Output format: pretty or json", {
     default: "pretty",
@@ -327,7 +327,7 @@ if (process.argv[2] === "__complete") {
     console.log("  completions <sh>   Generate shell completions (zsh, bash, fish)");
     console.log();
     console.log("Global options:");
-    console.log("  --chain <name>     Target chain (default from config)");
+    console.log("  --chain <name>     Target chain (required)");
     console.log("  --rpc <url>        Override RPC endpoint");
     console.log("  --json             Output as JSON");
     console.log("  --output <format>  Output format: pretty or json");
