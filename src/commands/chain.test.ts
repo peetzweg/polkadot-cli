@@ -527,4 +527,277 @@ describe("dot chain", () => {
     expect(stdout).toContain("└─");
     expect(stdout).toContain("[1000]");
   });
+
+  // Export / Import tests
+  test("export with no custom chains produces empty chains object", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "export"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.defaultChain).toBe("polkadot");
+    expect(Object.keys(parsed.chains).length).toBe(0);
+  });
+
+  test("export --all includes built-in chains", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "export", "--all"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chains.polkadot).toBeDefined();
+    expect(parsed.chains.paseo).toBeDefined();
+    expect(parsed.chains["polkadot-asset-hub"]).toBeDefined();
+  });
+
+  test("export includes custom chains", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "export"], {
+      config: {
+        chains: {
+          kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chains.kusama).toBeDefined();
+    expect(parsed.chains.kusama.rpc).toBe("wss://kusama-rpc.polkadot.io");
+  });
+
+  test("export specific chains by name", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "export", "kusama"], {
+      config: {
+        chains: {
+          kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
+          westend: { rpc: "wss://westend-rpc.polkadot.io" },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chains.kusama).toBeDefined();
+    expect(parsed.chains.westend).toBeUndefined();
+  });
+
+  test("export nonexistent chain errors", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "export", "nonexistent"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("not found");
+  });
+
+  test("export to --file writes to disk", async () => {
+    const { stdout, exitCode } = await runCli([
+      "chain",
+      "export",
+      "--all",
+      "--file",
+      "{{HOME}}/chains.json",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Exported");
+  });
+
+  test("export preserves relay and parachainId", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "export", "local-para"], {
+      config: {
+        chains: {
+          "local-relay": { rpc: "wss://local-relay.example" },
+          "local-para": {
+            rpc: "wss://local-para.example",
+            relay: "local-relay",
+            parachainId: 2000,
+          },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chains["local-para"].relay).toBe("local-relay");
+    expect(parsed.chains["local-para"].parachainId).toBe(2000);
+  });
+
+  test("import from file adds new chains", async () => {
+    const importData = JSON.stringify({
+      defaultChain: "polkadot",
+      chains: {
+        kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
+      },
+    });
+    const { stdout, exitCode } = await runCli(["chain", "import", "{{HOME}}/import.json"], {
+      files: { "import.json": importData },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Added: kusama");
+
+    // Verify it was actually added
+    const list = await runCli(["chain", "list", "--json"], {
+      config: {
+        chains: { kusama: { rpc: "wss://kusama-rpc.polkadot.io" } },
+      },
+    });
+    const parsed = JSON.parse(list.stdout);
+    const kusama = parsed.chains.find((c: any) => c.name === "kusama");
+    expect(kusama).toBeDefined();
+  });
+
+  test("import skips existing chains without --overwrite", async () => {
+    const importData = JSON.stringify({
+      defaultChain: "polkadot",
+      chains: {
+        kusama: { rpc: "wss://new-endpoint.example" },
+      },
+    });
+    const { stdout, stderr, exitCode } = await runCli(["chain", "import", "{{HOME}}/import.json"], {
+      config: {
+        chains: { kusama: { rpc: "wss://kusama-rpc.polkadot.io" } },
+      },
+      files: { "import.json": importData },
+    });
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain("Skipped");
+    expect(stdout).toContain("Skipped: kusama");
+  });
+
+  test("import --overwrite replaces existing chains", async () => {
+    const importData = JSON.stringify({
+      defaultChain: "polkadot",
+      chains: {
+        kusama: { rpc: "wss://new-endpoint.example" },
+      },
+    });
+    const { stdout, exitCode } = await runCli(
+      ["chain", "import", "{{HOME}}/import.json", "--overwrite"],
+      {
+        config: {
+          chains: { kusama: { rpc: "wss://kusama-rpc.polkadot.io" } },
+        },
+        files: { "import.json": importData },
+      },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Overwritten: kusama");
+  });
+
+  test("import --dry-run does not persist changes", async () => {
+    const importData = JSON.stringify({
+      defaultChain: "polkadot",
+      chains: {
+        kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
+      },
+    });
+    const { stdout, exitCode } = await runCli(
+      ["chain", "import", "{{HOME}}/import.json", "--dry-run"],
+      {
+        files: { "import.json": importData },
+      },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(dry run)");
+    expect(stdout).toContain("Added: kusama");
+  });
+
+  test("import warns about missing relay reference", async () => {
+    const importData = JSON.stringify({
+      defaultChain: "polkadot",
+      chains: {
+        "orphan-para": {
+          rpc: "wss://orphan.example",
+          relay: "nonexistent-relay",
+          parachainId: 2000,
+        },
+      },
+    });
+    const { stderr, exitCode } = await runCli(["chain", "import", "{{HOME}}/import.json"], {
+      files: { "import.json": importData },
+    });
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain("nonexistent-relay");
+    expect(stderr).toContain("does not exist");
+  });
+
+  test("import invalid JSON errors", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "import", "{{HOME}}/bad.json"], {
+      files: { "bad.json": "not valid json {{{" },
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Invalid JSON");
+  });
+
+  test("import invalid format (missing chains) errors", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "import", "{{HOME}}/bad.json"], {
+      files: { "bad.json": '{"foo": "bar"}' },
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("missing");
+  });
+
+  test("import --json returns structured output", async () => {
+    const importData = JSON.stringify({
+      defaultChain: "polkadot",
+      chains: {
+        kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
+      },
+    });
+    const { stdout, exitCode } = await runCli(
+      ["chain", "import", "{{HOME}}/import.json", "--json"],
+      {
+        files: { "import.json": importData },
+      },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.action).toBe("imported");
+    expect(parsed.added).toContain("kusama");
+  });
+
+  test("import from stdin", async () => {
+    const importData = JSON.stringify({
+      defaultChain: "polkadot",
+      chains: {
+        kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
+      },
+    });
+    const { stdout, exitCode } = await runCli(["chain", "import", "-"], { stdin: importData });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Added: kusama");
+  });
+
+  test("export round-trip: export then import is consistent", async () => {
+    const configOpts = {
+      config: {
+        chains: {
+          "local-relay": { rpc: "wss://local-relay.example" },
+          "local-para": {
+            rpc: "wss://local-para.example",
+            relay: "local-relay",
+            parachainId: 2000,
+          },
+        } as Record<string, any>,
+      },
+    };
+    const exported = await runCli(["chain", "export"], configOpts);
+    expect(exported.exitCode).toBe(0);
+    const parsed = JSON.parse(exported.stdout);
+    expect(parsed.chains["local-relay"]).toBeDefined();
+    expect(parsed.chains["local-para"]).toBeDefined();
+
+    // Import the exported data into a clean environment
+    const imported = await runCli(["chain", "import", "-", "--dry-run", "--json"], {
+      stdin: exported.stdout,
+    });
+    expect(imported.exitCode).toBe(0);
+    const result = JSON.parse(imported.stdout);
+    expect(result.added).toContain("local-relay");
+    expect(result.added).toContain("local-para");
+  });
+
+  test("import suggests running chain update", async () => {
+    const importData = JSON.stringify({
+      defaultChain: "polkadot",
+      chains: {
+        kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
+      },
+    });
+    const { stderr, exitCode } = await runCli(["chain", "import", "{{HOME}}/import.json"], {
+      files: { "import.json": importData },
+    });
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain("dot chain update --all");
+  });
 });

@@ -27,6 +27,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Message signing — sign arbitrary bytes with account keypairs for use as `MultiSignature` arguments
 - ✅ Unsigned/authorized transactions — submit governance-authorized calls without a signer (`--unsigned`)
 - ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
+- ✅ Export/import — portable chain and account configuration for backup, sharing, and CI bootstrapping
 
 ### Preconfigured chains
 
@@ -116,6 +117,38 @@ All built-in system parachains are preconfigured with their relay chain and para
 
 Removing a relay chain that has parachains prints a warning listing the orphaned chains. The parachains remain in the config and can be re-associated later.
 
+#### Export/import chain configuration
+
+Export and import chain configurations for backup, sharing across machines, or team collaboration. Metadata is not included — re-fetch with `dot chain update --all` after importing.
+
+```bash
+# Export custom chains to stdout (pipe-friendly JSON)
+dot chain export
+
+# Export all chains including built-ins
+dot chain export --all
+
+# Export specific chains
+dot chain export my-relay my-para
+
+# Export to a file
+dot chain export --all --file my-chains.json
+
+# Import from a file
+dot chain import my-chains.json
+
+# Preview without applying
+dot chain import my-chains.json --dry-run
+
+# Overwrite existing chains
+dot chain import my-chains.json --overwrite
+
+# Pipe between machines
+ssh remote-dev "dot chain export" | dot chain import -
+```
+
+By default, `export` only includes user-added chains and built-ins with modified RPCs. Use `--all` to include everything. Import skips existing chains unless `--overwrite` is passed, and validates relay references with warnings for missing relays.
+
 ### Manage accounts
 
 Dev accounts (Alice, Bob, Charlie, Dave, Eve, Ferdie) are always available for testnets. Create or import your own accounts for any chain.
@@ -158,6 +191,16 @@ MY_SECRET="word1 word2 ..." dot tx System.remark 0xdead --from ci-signer
 # Remove one or more accounts
 dot account remove my-validator
 dot account delete my-validator stale-key
+
+# Export accounts (secrets redacted by default)
+dot account export
+dot account export --include-secrets --file backup.json
+dot account export --watch-only
+
+# Batch-import accounts from a file
+dot account import --file team-accounts.json
+dot account import --file accounts.json --dry-run
+dot account import --file accounts.json --overwrite
 
 # Inspect an account — show public key and SS58 address
 dot account inspect alice
@@ -287,6 +330,38 @@ dot account derive treasury treasury-staking --path //staking
 | Hex seed (`0x` + 64 hex chars) | `0xabcdef0123...` | Not supported via CLI (see below) |
 
 **Known limitation:** Hex seed import (`--secret 0x...`) does not work from the command line. The CLI argument parser (`cac`) interprets `0x`-prefixed values as JavaScript numbers, which loses precision for 32-byte seeds. Use a BIP39 mnemonic instead. If you need to import a raw seed programmatically, write it directly to `~/.polkadot/accounts.json`.
+
+#### Export/import accounts
+
+Export and import accounts for backup, sharing, or bootstrapping CI environments. Secrets are **redacted by default** — safe to share or commit.
+
+```bash
+# Export accounts (secrets redacted by default)
+dot account export
+
+# Export specific accounts
+dot account export treasury my-validator
+
+# Include secrets (explicit opt-in, prints warning)
+dot account export --include-secrets --file backup.json
+
+# Export only watch-only accounts (always safe)
+dot account export --watch-only
+
+# Batch-import accounts from a file
+dot account import --file team-accounts.json
+
+# Preview without applying
+dot account import --file accounts.json --dry-run
+
+# Overwrite existing accounts
+dot account import --file accounts.json --overwrite
+
+# Pipe from another machine
+ssh remote-dev "dot account export --watch-only" | dot account import --file /dev/stdin
+```
+
+Security: default export replaces mnemonic/seed with `"<redacted>"`. `--include-secrets` is required for actual secrets. Env-backed accounts export the variable *name* (e.g. `{"env": "MY_SECRET"}`), never the value. Redacted accounts import as watch-only (public key preserved, no signing capability). The existing single-account `import` (`--secret`/`--env`) is unchanged — batch import uses `--file` to distinguish.
 
 ### Chain prefix
 
