@@ -72,6 +72,7 @@ if (process.argv[2] === "__complete") {
     .option("--to-yaml", "Decode call to YAML file format (for tx)")
     .option("--to-json", "Decode call to JSON file format (for tx)")
     .option("--ext <json>", "Custom signed extension values as JSON (for tx)")
+    .option("--asset <json>", "Pay fees in an alternative asset (XCM location JSON, for tx)")
     .option(
       "-w, --wait <level>",
       "Resolve at: broadcast, best-block (or best), finalized (for tx)",
@@ -101,6 +102,7 @@ if (process.argv[2] === "__complete") {
           toYaml?: boolean;
           toJson?: boolean;
           ext?: string;
+          asset?: string;
           wait?: string;
           nonce?: string;
           tip?: string;
@@ -143,6 +145,7 @@ if (process.argv[2] === "__complete") {
                 toYaml: opts.toYaml,
                 toJson: opts.toJson,
                 ext: opts.ext,
+                asset: opts.asset,
                 wait: opts.wait,
                 nonce: opts.nonce,
                 tip: opts.tip,
@@ -236,6 +239,7 @@ if (process.argv[2] === "__complete") {
               toYaml: opts.toYaml,
               toJson: opts.toJson,
               ext: opts.ext,
+              asset: opts.asset,
               wait: opts.wait,
               nonce: opts.nonce,
               tip: opts.tip,
