@@ -1,6 +1,7 @@
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { CliError } from "../utils/errors.ts";
 import type { ChainConfig, Config } from "./types.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
 
@@ -52,7 +53,7 @@ export async function loadConfig(): Promise<Config> {
         chains[name] = config;
       }
     }
-    return { ...saved, chains };
+    return { chains };
   }
   await saveConfig(DEFAULT_CONFIG);
   return DEFAULT_CONFIG;
@@ -89,13 +90,17 @@ export function findChainName(config: Config, input: string): string | undefined
 
 export function resolveChain(
   config: Config,
-  chainFlag?: string,
+  chainFlag: string | undefined,
 ): { name: string; chain: ChainConfig } {
-  const input = chainFlag ?? config.defaultChain;
-  const name = findChainName(config, input);
+  const available = Object.keys(config.chains).join(", ");
+  if (!chainFlag) {
+    throw new CliError(
+      `No chain specified. Pass --chain <name> or use a dotpath prefix (e.g. "dot polkadot.query.System.Number"). Available chains: ${available}`,
+    );
+  }
+  const name = findChainName(config, chainFlag);
   if (!name) {
-    const available = Object.keys(config.chains).join(", ");
-    throw new Error(`Unknown chain "${input}". Available chains: ${available}`);
+    throw new CliError(`Unknown chain "${chainFlag}". Available chains: ${available}`);
   }
   return { name, chain: config.chains[name]! };
 }

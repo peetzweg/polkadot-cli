@@ -203,7 +203,7 @@ describe("named subcommand completion", () => {
     expect(l).toContain("remove");
     expect(l).toContain("update");
     expect(l).toContain("list");
-    expect(l).toContain("default");
+    expect(l).not.toContain("default");
   });
 
   test("chain subcommand with prefix", async () => {
@@ -254,30 +254,30 @@ describe("named subcommand completion", () => {
 });
 
 describe("dotpath completion — apis category", () => {
-  test("'apis.' returns API names", async () => {
-    const { stdout } = await runCli(["__complete", "--", "apis.", ""]);
+  test("'apis.' with --chain returns API names", async () => {
+    const { stdout } = await runCli(["__complete", "--", "apis.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("apis."))).toBe(true);
     expect(l.some((s) => s === "apis.Core.")).toBe(true);
   });
 
-  test("'apis.Core.' returns method names", async () => {
-    const { stdout } = await runCli(["__complete", "--", "apis.Core.", ""]);
+  test("'apis.Core.' with --chain returns method names", async () => {
+    const { stdout } = await runCli(["__complete", "--", "apis.Core.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("apis.Core."))).toBe(true);
     expect(l.some((s) => s === "apis.Core.version")).toBe(true);
   });
 
-  test("'apis.Co' filters to matching API names", async () => {
-    const { stdout } = await runCli(["__complete", "--", "apis.Co", ""]);
+  test("'apis.Co' with --chain filters to matching API names", async () => {
+    const { stdout } = await runCli(["__complete", "--", "apis.Co", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l).toContain("apis.Core.");
   });
 
   test("apis method completions (terminal) do NOT end with dot", async () => {
-    const { stdout } = await runCli(["__complete", "--", "apis.Core.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "apis.Core.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     for (const s of l) {
@@ -286,18 +286,23 @@ describe("dotpath completion — apis category", () => {
   });
 
   test("apis API-level completions (intermediate) end with dot", async () => {
-    const { stdout } = await runCli(["__complete", "--", "apis.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "apis.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     for (const s of l) {
       expect(s.endsWith(".")).toBe(true);
     }
   });
+
+  test("'apis.' without --chain or dotpath prefix returns empty", async () => {
+    const { stdout } = await runCli(["__complete", "--", "apis.", ""]);
+    expect(stdout.trim()).toBe("");
+  });
 });
 
-describe("dotpath completion — category paths", () => {
+describe("dotpath completion — category paths (with --chain)", () => {
   test("'query.' returns pallet names with storage", async () => {
-    const { stdout } = await runCli(["__complete", "--", "query.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "query.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("query."))).toBe(true);
@@ -306,7 +311,7 @@ describe("dotpath completion — category paths", () => {
   });
 
   test("'tx.' returns pallets with calls", async () => {
-    const { stdout } = await runCli(["__complete", "--", "tx.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "tx.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("tx."))).toBe(true);
@@ -315,7 +320,7 @@ describe("dotpath completion — category paths", () => {
   });
 
   test("'const.' returns pallets with constants", async () => {
-    const { stdout } = await runCli(["__complete", "--", "const.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "const.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("const."))).toBe(true);
@@ -323,7 +328,7 @@ describe("dotpath completion — category paths", () => {
   });
 
   test("'events.' returns pallets with events", async () => {
-    const { stdout } = await runCli(["__complete", "--", "events.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "events.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("events."))).toBe(true);
@@ -331,7 +336,7 @@ describe("dotpath completion — category paths", () => {
   });
 
   test("'errors.' returns pallets with errors", async () => {
-    const { stdout } = await runCli(["__complete", "--", "errors.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "errors.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("errors."))).toBe(true);
@@ -339,14 +344,14 @@ describe("dotpath completion — category paths", () => {
   });
 
   test("'query.Sy' filters pallet names", async () => {
-    const { stdout } = await runCli(["__complete", "--", "query.Sy", ""]);
+    const { stdout } = await runCli(["__complete", "--", "query.Sy", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l).toContain("query.System.");
     expect(l).not.toContain("query.Balances.");
   });
 
   test("'query.System.' returns storage item names", async () => {
-    const { stdout } = await runCli(["__complete", "--", "query.System.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "query.System.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("query.System."))).toBe(true);
@@ -355,7 +360,7 @@ describe("dotpath completion — category paths", () => {
   });
 
   test("'tx.System.' returns call names", async () => {
-    const { stdout } = await runCli(["__complete", "--", "tx.System.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "tx.System.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("tx.System."))).toBe(true);
@@ -363,7 +368,7 @@ describe("dotpath completion — category paths", () => {
   });
 
   test("'const.Balances.' returns constant names", async () => {
-    const { stdout } = await runCli(["__complete", "--", "const.Balances.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "const.Balances.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("const.Balances."))).toBe(true);
@@ -371,7 +376,13 @@ describe("dotpath completion — category paths", () => {
   });
 
   test("'events.Balances.' returns event names", async () => {
-    const { stdout } = await runCli(["__complete", "--", "events.Balances.", ""]);
+    const { stdout } = await runCli([
+      "__complete",
+      "--",
+      "events.Balances.",
+      "--chain",
+      "polkadot",
+    ]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("events.Balances."))).toBe(true);
@@ -379,7 +390,13 @@ describe("dotpath completion — category paths", () => {
   });
 
   test("'errors.Balances.' returns error names", async () => {
-    const { stdout } = await runCli(["__complete", "--", "errors.Balances.", ""]);
+    const { stdout } = await runCli([
+      "__complete",
+      "--",
+      "errors.Balances.",
+      "--chain",
+      "polkadot",
+    ]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     expect(l.every((s) => s.startsWith("errors.Balances."))).toBe(true);
@@ -387,19 +404,36 @@ describe("dotpath completion — category paths", () => {
   });
 
   test("'query.System.Ac' filters item names", async () => {
-    const { stdout } = await runCli(["__complete", "--", "query.System.Ac", ""]);
+    const { stdout } = await runCli(["__complete", "--", "query.System.Ac", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l).toContain("query.System.Account");
     expect(l).not.toContain("query.System.Number");
   });
 
   test("item completion for nonexistent pallet returns empty", async () => {
-    const { stdout } = await runCli(["__complete", "--", "query.Nonexistent.", ""]);
+    const { stdout } = await runCli([
+      "__complete",
+      "--",
+      "query.Nonexistent.",
+      "--chain",
+      "polkadot",
+    ]);
     expect(stdout.trim()).toBe("");
   });
 
   test("too many segments returns empty", async () => {
-    const { stdout } = await runCli(["__complete", "--", "query.System.Account.extra.", ""]);
+    const { stdout } = await runCli([
+      "__complete",
+      "--",
+      "query.System.Account.extra.",
+      "--chain",
+      "polkadot",
+    ]);
+    expect(stdout.trim()).toBe("");
+  });
+
+  test("bare 'query.' without --chain or dotpath prefix returns empty", async () => {
+    const { stdout } = await runCli(["__complete", "--", "query.", ""]);
     expect(stdout.trim()).toBe("");
   });
 });
@@ -524,7 +558,7 @@ describe("dot suffix on intermediate completions", () => {
   });
 
   test("category-first pallets end with dot", async () => {
-    const { stdout } = await runCli(["__complete", "--", "query.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "query.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     for (const s of l) {
@@ -533,7 +567,7 @@ describe("dot suffix on intermediate completions", () => {
   });
 
   test("category-first pallets with partial also end with dot", async () => {
-    const { stdout } = await runCli(["__complete", "--", "query.Sy", ""]);
+    const { stdout } = await runCli(["__complete", "--", "query.Sy", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     for (const s of l) {
@@ -542,7 +576,7 @@ describe("dot suffix on intermediate completions", () => {
   });
 
   test("category-first items (terminal) do NOT end with dot", async () => {
-    const { stdout } = await runCli(["__complete", "--", "query.System.", ""]);
+    const { stdout } = await runCli(["__complete", "--", "query.System.", "--chain", "polkadot"]);
     const l = lines(stdout);
     expect(l.length).toBeGreaterThan(0);
     for (const s of l) {
@@ -624,7 +658,7 @@ describe("dot suffix on intermediate completions", () => {
 
   test("all five categories produce dot-suffixed pallets", async () => {
     for (const cat of ["query", "tx", "const", "events", "errors"]) {
-      const { stdout } = await runCli(["__complete", "--", `${cat}.`, ""]);
+      const { stdout } = await runCli(["__complete", "--", `${cat}.`, "--chain", "polkadot"]);
       const l = lines(stdout);
       if (l.length > 0) {
         for (const s of l) {
@@ -637,18 +671,15 @@ describe("dot suffix on intermediate completions", () => {
 
 describe("graceful degradation", () => {
   test("no metadata returns empty for pallet completion", async () => {
-    // Use a config with a chain that has no metadata file
     const { stdout } = await runCli(["__complete", "--", "query.", ""], {
-      config: {
-        defaultChain: "nochain",
-        chains: { nochain: { rpc: "wss://example.com" } },
-      },
+      config: { chains: { nochain: { rpc: "wss://example.com" } } },
     });
-    // runCli copies metadata for all chains in config, but "nochain" gets one too
-    // Let's use --chain to force a chain that doesn't exist
-    // Actually runCli copies metadata for ALL chains in finalConfig, so this will have metadata
-    // We can't easily test this without hacking the fixture. Skip.
     expect(stdout).toBeDefined();
+  });
+
+  test("pallet completion without --chain or dotpath prefix returns empty", async () => {
+    const { stdout } = await runCli(["__complete", "--", "query.", ""]);
+    expect(stdout.trim()).toBe("");
   });
 
   test("unknown first segment returns empty", async () => {

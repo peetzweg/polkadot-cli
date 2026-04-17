@@ -34,7 +34,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 
 | Network | Chain |
 |---------|-------|
-| Polkadot | `polkadot` (relay, default) |
+| Polkadot | `polkadot` (relay) |
 | | `polkadot-asset-hub` |
 | | `polkadot-bridge-hub` |
 | | `polkadot-collectives` |
@@ -82,12 +82,8 @@ dot chain add my-para --rpc wss://rpc.example.com --relay polkadot --parachain-i
 dot chain list
 
 # Re-fetch metadata after a runtime upgrade
-dot chain update          # updates default chain
 dot chain update kusama   # updates a specific chain
 dot chain update --all    # updates all configured chains in parallel
-
-# Set default chain
-dot chain default kusama
 
 # Remove a chain
 dot chain remove westend
@@ -100,7 +96,7 @@ dot chain remove westend
 ```
 Configured Chains
 
-  polkadot (default)  wss://polkadot.ibp.network
+  polkadot  wss://polkadot.ibp.network
   ├─ polkadot-asset-hub [1000]  wss://...
   ├─ polkadot-bridge-hub [1002]  wss://...
   ├─ polkadot-collectives [1001]  wss://...
@@ -117,6 +113,23 @@ Configured Chains
 All built-in system parachains are preconfigured with their relay chain and parachain ID. When adding a custom parachain with `--relay`, the CLI auto-detects the parachain ID from on-chain `ParachainInfo` storage. Use `--parachain-id` to set it explicitly if auto-detection is not available.
 
 Removing a relay chain that has parachains prints a warning listing the orphaned chains. The parachains remain in the config and can be re-associated later.
+
+#### Selecting a chain
+
+Every chain-consuming command must specify a chain explicitly — either with the global `--chain <name>` flag or with a dotpath chain prefix. There is no hidden default; running a command without a chain errors out with a message listing the configured chains.
+
+```bash
+# Via --chain flag
+dot query.System.Number --chain polkadot
+
+# Via dotpath chain prefix
+dot polkadot.query.System.Number
+
+# Both at once errors
+dot polkadot.query.System.Number --chain polkadot  # ✗ errors
+```
+
+Chain names are case-insensitive. The prefix form also works with the space-separated syntax (`dot query polkadot.System.Account ...`).
 
 #### Export/import chain configuration
 
@@ -376,9 +389,9 @@ dot inspect kusama.System
 dot inspect kusama.System.Account
 ```
 
-Chain names are case-insensitive — `Polkadot.System.Account`, `POLKADOT.System.Account`, and `polkadot.System.Account` all resolve the same way. The same applies to `--chain Polkadot` and `dot chain default Polkadot`.
+Chain names are case-insensitive — `Polkadot.System.Account`, `POLKADOT.System.Account`, and `polkadot.System.Account` all resolve the same way. The same applies to `--chain Polkadot`.
 
-The `--chain` flag and default chain still work as before. If both a chain prefix and `--chain` flag are provided, the CLI errors.
+Every invocation must specify a chain explicitly: either via a dotpath prefix (as above) or via `--chain <name>`. If both are provided, the CLI errors.
 
 ### Space-separated syntax
 
@@ -537,7 +550,6 @@ dot apis.Core.version --help
 Runtime API info requires v15 metadata. If `dot apis` shows 0 APIs, update the cached metadata:
 
 ```bash
-dot chain update              # default chain
 dot chain update people-paseo # specific chain
 dot chain update --all        # all configured chains
 ```
@@ -1155,7 +1167,7 @@ dot tx.System.remark 0xdead               # shows call help (no error)
 | Flag | Description |
 |------|-------------|
 | `--help` | Show help (global or command-specific) |
-| `--chain <name>` | Target chain (default from config) |
+| `--chain <name>` | Target chain (required unless a dotpath chain prefix is used) |
 | `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback). Always fetches fresh metadata, bypassing the cache |
 
 | `--json` | Structured JSON output (shorthand for `--output json`) |
@@ -1227,7 +1239,7 @@ dot apis.Core.<Tab>      # → apis.Core.version, ...
 dot polkadot.<Tab>       # → polkadot.query, polkadot.tx, ..., polkadot.apis
 dot --chain <Tab>        # → polkadot, paseo, ...
 dot --from <Tab>         # → alice, bob, ..., stored account names
-dot chain <Tab>          # → add, remove, update, list, default
+dot chain <Tab>          # → add, remove, update, list
 ```
 
 Completions are context-aware: `query.` shows pallets with storage items, `tx.` shows pallets with calls, `events.` and `errors.` filter accordingly, `apis.` shows runtime API names. Chain prefix paths like `polkadot.query.System.` work at any depth.
@@ -1276,7 +1288,7 @@ Config and metadata caches live in `~/.polkadot/`:
 
 ```
 ~/.polkadot/
-├── config.json          # chains and default chain
+├── config.json          # configured chains
 ├── accounts.json        # stored accounts (⚠️ secrets are NOT encrypted — see below)
 ├── update-check.json    # cached update check result
 └── chains/

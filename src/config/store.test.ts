@@ -4,7 +4,6 @@ import type { Config } from "./types.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
 
 const config: Config = {
-  defaultChain: "polkadot",
   chains: {
     polkadot: { rpc: "wss://rpc.polkadot.io" },
     kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
@@ -12,12 +11,10 @@ const config: Config = {
 };
 
 describe("resolveChain", () => {
-  test("returns default chain when no flag provided", () => {
-    const result = resolveChain(config);
-    expect(result).toEqual({
-      name: "polkadot",
-      chain: { rpc: "wss://rpc.polkadot.io" },
-    });
+  test("throws with helpful error when no chain flag is provided", () => {
+    expect(() => resolveChain(config, undefined)).toThrow(
+      /No chain specified.*--chain.*polkadot, kusama/s,
+    );
   });
 
   test("returns the flagged chain when flag is provided", () => {
@@ -31,16 +28,6 @@ describe("resolveChain", () => {
   test("throws with descriptive error for unknown chain name", () => {
     expect(() => resolveChain(config, "westend")).toThrow(
       'Unknown chain "westend". Available chains: polkadot, kusama',
-    );
-  });
-
-  test("throws for unknown chain when flag overrides valid default", () => {
-    const cfg: Config = {
-      defaultChain: "polkadot",
-      chains: { polkadot: { rpc: "wss://rpc.polkadot.io" } },
-    };
-    expect(() => resolveChain(cfg, "noexist")).toThrow(
-      'Unknown chain "noexist". Available chains: polkadot',
     );
   });
 
@@ -93,12 +80,11 @@ describe("loadConfig merge behavior", () => {
         chains[name] = config;
       }
     }
-    return { ...saved, chains };
+    return { chains };
   }
 
   test("saved config with only custom chains still includes all built-in chains", () => {
     const saved: Config = {
-      defaultChain: "my-chain",
       chains: { "my-chain": { rpc: "wss://my-chain.example" } },
     };
     const merged = simulateMerge(saved);
@@ -110,7 +96,6 @@ describe("loadConfig merge behavior", () => {
 
   test("saved config overrides for built-in chain are preserved", () => {
     const saved: Config = {
-      defaultChain: "polkadot",
       chains: { polkadot: { rpc: "wss://my-custom-rpc.example" } },
     };
     const merged = simulateMerge(saved);
@@ -120,14 +105,19 @@ describe("loadConfig merge behavior", () => {
   });
 
   test("empty saved chains still gets all built-in chains", () => {
-    const saved: Config = { defaultChain: "polkadot", chains: {} };
+    const saved: Config = { chains: {} };
     const merged = simulateMerge(saved);
     expect(Object.keys(merged.chains)).toEqual(Object.keys(DEFAULT_CONFIG.chains));
   });
 
+  test("merge silently drops legacy defaultChain field on saved config", () => {
+    const saved = { defaultChain: "kusama", chains: {} } as unknown as Config;
+    const merged = simulateMerge(saved);
+    expect("defaultChain" in merged).toBe(false);
+  });
+
   test("saved config with custom RPC for built-in chain preserves default topology", () => {
     const saved: Config = {
-      defaultChain: "polkadot",
       chains: { "polkadot-asset-hub": { rpc: "wss://my-custom-asset-hub.example" } },
     };
     const merged = simulateMerge(saved);
@@ -138,7 +128,6 @@ describe("loadConfig merge behavior", () => {
 
   test("user-added chain with relay and parachainId is preserved", () => {
     const saved: Config = {
-      defaultChain: "polkadot",
       chains: {
         "my-para": { rpc: "wss://my-para.example", relay: "polkadot", parachainId: 2000 },
       },
@@ -181,7 +170,6 @@ describe("loadConfig merge behavior", () => {
 
   test("user override of topology on built-in parachain takes precedence", () => {
     const saved: Config = {
-      defaultChain: "polkadot",
       chains: {
         "polkadot-asset-hub": {
           rpc: "wss://custom.example",

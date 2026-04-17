@@ -36,7 +36,7 @@ This installs the `dot` command globally. Ships with Polkadot and all system par
 
 ## Chains
 
-Manage chain connections. Polkadot is configured by default along with all system parachains for both Polkadot and Paseo networks. Add any Substrate-based chain by pointing to its RPC endpoint(s).
+Manage chain connections. Polkadot and all system parachains for both Polkadot and Paseo networks come preconfigured. Add any Substrate-based chain by pointing to its RPC endpoint(s).
 
 ### Preconfigured chains
 
@@ -44,7 +44,7 @@ The following chains are available out of the box — no `dot chain add` needed:
 
 | Network | Chain |
 |---------|-------|
-| Polkadot | `polkadot` (relay, default) |
+| Polkadot | `polkadot` (relay) |
 | | `polkadot-asset-hub` |
 | | `polkadot-bridge-hub` |
 | | `polkadot-collectives` |
@@ -109,7 +109,7 @@ Both forms are equivalent. `dot chains` is a shorthand that skips the `list` sub
 ```
 Configured Chains
 
-  polkadot (default)  wss://polkadot.ibp.network
+  polkadot  wss://polkadot.ibp.network
   ├─ polkadot-asset-hub [1000]  wss://...
   ├─ polkadot-bridge-hub [1002]  wss://...
   ├─ polkadot-collectives [1001]  wss://...
@@ -127,20 +127,11 @@ Standalone chains (no `relay` field, not referenced as a relay by other chains) 
 
 ### Update metadata
 
-Re-fetch metadata after a runtime upgrade. Targets the default chain if no name is given:
+Re-fetch metadata after a runtime upgrade. Either name a specific chain or use `--all`:
 
 ```
-dot chain update
 dot chain update kusama
 dot chain update --all
-```
-
-### Set default chain
-
-Change which chain commands target by default:
-
-```
-dot chain default kusama
 ```
 
 ### Remove a chain
@@ -148,6 +139,20 @@ dot chain default kusama
 ```
 dot chain remove westend
 ```
+
+### Selecting a chain
+
+Every chain-consuming command must specify a chain explicitly — either with the global `--chain <name>` flag or with a dotpath chain prefix. There is no implicit default; running a command without a chain errors out with a message listing the configured chains.
+
+```
+# Via --chain flag
+dot query.System.Number --chain polkadot
+
+# Via dotpath chain prefix
+dot polkadot.query.System.Number
+```
+
+Providing both a dotpath prefix and `--chain` at once errors with a clear message. Chain names are case-insensitive. See [Chain Prefix](#chain-prefix) below for the full dotpath form.
 
 Removing a chain that other chains reference as their `relay` prints a warning listing orphaned parachains. The removal still proceeds — orphaned chains keep their `relay` field but render as standalone until the relay is re-added.
 
@@ -172,11 +177,10 @@ dot chain export --file my-chains.json
 dot chain export --all --file my-chains.json
 ```
 
-The export format is JSON with `defaultChain` and `chains` fields:
+The export format is JSON with a `chains` field:
 
 ```json
 {
-  "defaultChain": "my-local-relay",
   "chains": {
     "my-local-relay": { "rpc": ["ws://localhost:9944"] },
     "my-para": { "rpc": ["ws://localhost:9945"], "relay": "my-local-relay", "parachainId": 2000 }
@@ -206,7 +210,6 @@ Import behavior:
 
 - **Existing chains** are skipped with a warning unless `--overwrite` is passed
 - **Relay references** are validated — a warning is printed if a chain references a relay that doesn't exist in the import file or current config
-- **Default chain** is updated only when `--overwrite` is used
 - After import, run `dot chain update --all` to fetch metadata for the new chains
 
 ## Accounts
@@ -521,9 +524,9 @@ dot inspect kusama.System
 dot inspect kusama.System.Account
 ```
 
-Chain names are case-insensitive — `polkadot.query.System.Account`, `Polkadot.query.System.Account`, and `POLKADOT.query.System.Account` all resolve the same way. The same applies to `--chain Polkadot` and `dot chain default Polkadot`.
+Chain names are case-insensitive — `polkadot.query.System.Account`, `Polkadot.query.System.Account`, and `POLKADOT.query.System.Account` all resolve the same way. The same applies to `--chain Polkadot`.
 
-The `--chain` flag and default chain still work as before. Using a dot-path without a chain prefix continues to target the default chain. If both a chain prefix and `--chain` flag are provided, the CLI errors with a clear message.
+Every invocation must specify a chain explicitly: either via a dotpath prefix (as above) or via `--chain <name>`. If both are provided, the CLI errors with a clear message.
 
 For `inspect`, a two-segment input like `kusama.System` is disambiguated by checking configured chain names. Chain names (lowercase, e.g. `kusama`) and pallet names (PascalCase, e.g. `System`) don't collide in practice. If they did, the chain prefix takes priority and `--chain` serves as an escape hatch.
 
@@ -1725,7 +1728,7 @@ dot polkadot.query.<Tab> # → polkadot.query.System, ...
 dot --chain <Tab>        # → polkadot, paseo, ...
 dot --from <Tab>         # → alice, bob, ..., stored account names
 dot --output <Tab>       # → pretty, json
-dot chain <Tab>          # → add, remove, update, list, default
+dot chain <Tab>          # → add, remove, update, list
 dot account <Tab>        # → create, import, derive, list, remove, ...
 dot hash <Tab>           # → blake2b256, blake2b128, keccak256, sha256
 ```
@@ -1810,7 +1813,7 @@ These flags work with any command:
 | Flag | Description |
 |------|-------------|
 | `--help` | Show help (global or command-specific) |
-| `--chain <name>` | Target chain (default from config) |
+| `--chain <name>` | Target chain (required unless a dotpath chain prefix is used) |
 | `--rpc <url>` | Override RPC endpoint(s) for this call (repeat for fallback). Always fetches fresh metadata, bypassing the cache |
 
 | `--json` | Structured JSON output (shorthand for `--output json`) |
@@ -1889,7 +1892,7 @@ Config and metadata caches live in `~/.polkadot/`:
 
 ```
 ~/.polkadot/
-├── config.json          # chains and default chain
+├── config.json          # configured chains
 ├── accounts.json        # stored accounts
 ├── update-check.json    # cached update check result
 └── chains/

@@ -35,7 +35,7 @@ describe("dot chain", () => {
     const { stdout, exitCode } = await runCli(["chain", "list"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("polkadot");
-    expect(stdout).toContain("(default)");
+    expect(stdout).not.toContain("(default)");
     expect(stdout).toContain("rpc.polkadot.io");
     expect(stdout).toContain("paseo");
     // Polkadot system parachains
@@ -144,29 +144,16 @@ describe("dot chain", () => {
     expect(stdout).not.toContain("light-client");
   });
 
-  test("default kusama succeeds", async () => {
-    const { stdout, exitCode } = await runCli(["chain", "default", "kusama"], {
-      config: {
-        chains: {
-          kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
-        },
-      },
-    });
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain("Default chain set");
+  test("default action is now unknown (feature removed)", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "default", "kusama"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Unknown action "default"');
   });
 
-  test("default (no name) errors", async () => {
-    const { stderr, exitCode } = await runCli(["chain", "default"]);
+  test("update (no name, no --all) errors with usage", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "update"]);
     expect(exitCode).toBe(1);
-    expect(stderr).toContain("Usage:");
-  });
-
-  test("default nonexistent errors", async () => {
-    const { stderr, exitCode } = await runCli(["chain", "default", "nonexistent"]);
-    expect(exitCode).toBe(1);
-    expect(stderr).toContain("not found");
-    expect(stderr).toContain("Available");
+    expect(stderr).toContain("Usage: dot chain update");
   });
 
   test("remove kusama succeeds", async () => {
@@ -229,19 +216,6 @@ describe("dot chain", () => {
     expect(stderr).toContain("Usage:");
   });
 
-  test("remove default chain resets to polkadot", async () => {
-    const { stdout, exitCode } = await runCli(["chain", "remove", "kusama"], {
-      config: {
-        defaultChain: "kusama",
-        chains: {
-          kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
-        },
-      },
-    });
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain('Default chain reset to "polkadot"');
-  });
-
   test("add (no name) errors", async () => {
     const { stderr, exitCode } = await runCli(["chain", "add"]);
     expect(exitCode).toBe(1);
@@ -266,18 +240,6 @@ describe("dot chain", () => {
     expect(stderr).toContain("Cannot remove");
   });
 
-  test("default Polkadot (case-insensitive) succeeds", async () => {
-    const { stdout, exitCode } = await runCli(["chain", "default", "Polkadot"]);
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain('Default chain set to "polkadot"');
-  });
-
-  test("default POLKADOT (all-caps) succeeds", async () => {
-    const { stdout, exitCode } = await runCli(["chain", "default", "POLKADOT"]);
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain('Default chain set to "polkadot"');
-  });
-
   // --json output tests
   test("list --json returns valid JSON with all chains", async () => {
     const { stdout, exitCode } = await runCli(["chain", "list", "--json"]);
@@ -286,7 +248,7 @@ describe("dot chain", () => {
     expect(Array.isArray(parsed.chains)).toBe(true);
     const polkadot = parsed.chains.find((c: any) => c.name === "polkadot");
     expect(polkadot).toBeDefined();
-    expect(polkadot.default).toBe(true);
+    expect(polkadot.default).toBeUndefined();
     expect(Array.isArray(polkadot.rpc)).toBe(true);
     expect(polkadot.rpc[0]).toContain("polkadot");
   });
@@ -296,14 +258,6 @@ describe("dot chain", () => {
     expect(exitCode).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(Array.isArray(parsed.chains)).toBe(true);
-  });
-
-  test("default --json returns action JSON", async () => {
-    const { stdout, exitCode } = await runCli(["chain", "default", "polkadot", "--json"]);
-    expect(exitCode).toBe(0);
-    const parsed = JSON.parse(stdout);
-    expect(parsed.action).toBe("default");
-    expect(parsed.chain).toBe("polkadot");
   });
 
   // Topology tests
@@ -533,7 +487,6 @@ describe("dot chain", () => {
     const { stdout, exitCode } = await runCli(["chain", "export"]);
     expect(exitCode).toBe(0);
     const parsed = JSON.parse(stdout);
-    expect(parsed.defaultChain).toBe("polkadot");
     expect(Object.keys(parsed.chains).length).toBe(0);
   });
 

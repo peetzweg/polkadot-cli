@@ -36,10 +36,10 @@ beforeAll(() => {
 // @ts-expect-error Bun supports describe(label, options, fn) at runtime
 describe("handleQuery JSON output (in-process coverage)", { timeout: 15_000 }, () => {
   test("category-only with json", async () => {
-    await handleQuery(undefined, [], { json: true });
+    await handleQuery(undefined, [], { json: true, chain: "polkadot" });
   });
   test("pallet-only with json", async () => {
-    await handleQuery("System", [], { json: true });
+    await handleQuery("System", [], { json: true, chain: "polkadot" });
   });
 });
 
