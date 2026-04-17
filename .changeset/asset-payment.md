@@ -31,7 +31,7 @@ from polkadot-api: it removes the extension from papi's builtin set, injects a
 user override of `{ tip, asset_id }`, and lets the existing custom-signed-extension
 pipeline SCALE-encode the value via metadata. This bypasses papi's
 `isAssetCompat` check, which otherwise rejects XCM Location payloads on the
-unsafe API path (see `papi-issue.md` for the upstream write-up).
+unsafe API path.
 
 **Requirements**
 
