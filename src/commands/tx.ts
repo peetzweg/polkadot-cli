@@ -98,6 +98,22 @@ export function parseMortalityOption(raw: string | undefined): MortalityOption |
   return { mortal: true, period: n };
 }
 
+export function parseAssetOption(raw: string | undefined): Record<string, any> | undefined {
+  if (raw === undefined) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("must be a JSON object");
+    }
+    return parsed;
+  } catch (err: any) {
+    throw new CliError(
+      `Invalid --asset value: ${err.message}\n` +
+        'Expected an XCM location, e.g. \'{"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"3"}]}}\'',
+    );
+  }
+}
+
 export function parseAtOption(raw: string | undefined): string | undefined {
   if (raw === undefined) return undefined;
   if (raw === "finalized") return undefined; // v2 defaults to finalized when omitted
@@ -127,6 +143,7 @@ export async function handleTx(
     output?: string;
     json?: boolean;
     ext?: string;
+    asset?: string;
     wait?: string;
     nonce?: string;
     tip?: string;
@@ -291,12 +308,35 @@ export async function handleTx(
 
     const nonce = parseNonceOption(opts.nonce);
     const tip = parseTipOption(opts.tip);
+    const asset = parseAssetOption(opts.asset);
     const mortality = parseMortalityOption(opts.mortality);
     const at = parseAtOption(opts.at);
 
     if (!decodeOnly || opts.unsigned) {
       const userExtOverrides = parseExtOption(opts.ext);
-      const customSignedExtensions = buildCustomSignedExtensions(meta, userExtOverrides);
+
+      // When --asset is specified, handle ChargeAssetTxPayment as a custom extension
+      // instead of letting PAPI handle it. PAPI's built-in path runs
+      // `isAssetCompat(asset)` (packages/client/src/tx/tx.ts) against a typedef
+      // derived from metadata; for XCM Location JSON on the unsafe API this
+      // check rejects with "Incompatible runtime asset" even with fresh metadata.
+      // Bypassing it lets us SCALE-encode the asset directly via the metadata
+      // builder.
+      const skipBuiltins =
+        asset !== undefined
+          ? new Set([...PAPI_BUILTIN_EXTENSIONS].filter((e) => e !== "ChargeAssetTxPayment"))
+          : PAPI_BUILTIN_EXTENSIONS;
+      if (asset !== undefined) {
+        userExtOverrides.ChargeAssetTxPayment ??= {
+          value: { tip: tip ?? 0n, asset_id: asset },
+        };
+      }
+
+      const customSignedExtensions = buildCustomSignedExtensions(
+        meta,
+        userExtOverrides,
+        skipBuiltins,
+      );
 
       const built: Record<string, any> = {};
       if (Object.keys(customSignedExtensions).length > 0)
@@ -421,6 +461,7 @@ export async function handleTx(
         };
         if (nonce !== undefined) result.nonce = nonce;
         if (tip !== undefined) result.tip = String(tip);
+        if (asset !== undefined) result.asset = asset;
         if (mortality !== undefined)
           result.mortality = mortality.mortal ? `mortal (period ${mortality.period})` : "immortal";
         if (at !== undefined) result.at = at;
@@ -434,6 +475,7 @@ export async function handleTx(
       console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
       if (nonce !== undefined) console.log(`  ${BOLD}Nonce:${RESET} ${nonce}`);
       if (tip !== undefined) console.log(`  ${BOLD}Tip:${RESET}   ${tip}`);
+      if (asset !== undefined) console.log(`  ${BOLD}Asset:${RESET} ${JSON.stringify(asset)}`);
       if (mortality !== undefined)
         console.log(
           `  ${BOLD}Mortality:${RESET} ${mortality.mortal ? `mortal (period ${mortality.period})` : "immortal"}`,
@@ -615,6 +657,7 @@ export async function handleTx(
     console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
     if (nonce !== undefined) console.log(`  ${BOLD}Nonce:${RESET} ${nonce}`);
     if (tip !== undefined) console.log(`  ${BOLD}Tip:${RESET}   ${tip}`);
+    if (asset !== undefined) console.log(`  ${BOLD}Asset:${RESET} ${JSON.stringify(asset)}`);
     if (mortality !== undefined)
       console.log(
         `  ${BOLD}Mortality:${RESET} ${mortality.mortal ? `mortal (period ${mortality.period})` : "immortal"}`,
@@ -1435,12 +1478,13 @@ const NO_DEFAULT = Symbol("no-default");
 function buildCustomSignedExtensions(
   meta: MetadataBundle,
   userOverrides: Record<string, any>,
+  builtins: Set<string> = PAPI_BUILTIN_EXTENSIONS,
 ): Record<string, { value?: any; additionalSigned?: any }> {
   const result: Record<string, { value?: any; additionalSigned?: any }> = {};
   const extensions = getSignedExtensions(meta);
 
   for (const ext of extensions) {
-    if (PAPI_BUILTIN_EXTENSIONS.has(ext.identifier)) continue;
+    if (builtins.has(ext.identifier)) continue;
 
     // User override takes priority
     if (ext.identifier in userOverrides) {
