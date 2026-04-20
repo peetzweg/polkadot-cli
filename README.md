@@ -19,7 +19,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Fuzzy matching with typo suggestions
 - ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
 - ✅ Named address resolution across all commands
-- ✅ Runtime API calls — `dot apis.Core.version`
+- ✅ Runtime API calls — `dot polkadot.apis.Core.version`
 - ✅ Chain topology — relay/parachain hierarchy with tree display and auto-detection
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
@@ -82,11 +82,11 @@ dot chain add my-para --rpc wss://rpc.example.com --relay polkadot --parachain-i
 dot chain list
 
 # Re-fetch metadata after a runtime upgrade
-dot chain update kusama   # updates a specific chain
-dot chain update --all    # updates all configured chains in parallel
+dot chain update polkadot   # updates a specific chain
+dot chain update --all      # updates all configured chains in parallel
 
-# Remove a chain
-dot chain remove westend
+# Remove a chain (only user-added chains can be removed)
+dot chain remove kusama
 ```
 
 #### Chain topology
@@ -129,7 +129,7 @@ dot polkadot.query.System.Number
 dot polkadot.query.System.Number --chain polkadot  # ✗ errors
 ```
 
-Chain names are case-insensitive. The prefix form also works with the space-separated syntax (`dot query polkadot.System.Account ...`).
+Chain names are case-insensitive (`Polkadot.query.System.Number` works the same).
 
 #### Export/import chain configuration
 
@@ -200,7 +200,7 @@ dot account import ci-signer --env MY_SECRET
 dot account derive treasury treasury-staking --path //staking
 
 # Use it — the env var is read at signing time
-MY_SECRET="word1 word2 ..." dot tx System.remark 0xdead --from ci-signer
+MY_SECRET="word1 word2 ..." dot tx.System.remark 0xdead --from ci-signer --chain polkadot
 
 # Remove one or more accounts
 dot account remove my-validator
@@ -244,13 +244,13 @@ Named accounts (both watch-only and keyed) resolve automatically everywhere an A
 
 ```bash
 # Use a named account as transfer recipient
-dot tx Balances.transferKeepAlive treasury 1000000000000 --from alice
+dot tx.Balances.transferKeepAlive treasury 1000000000000 --from alice --chain polkadot
 
 # Query by account name
-dot query System.Account treasury
+dot polkadot.query.System.Account treasury
 
 # Dev accounts also resolve
-dot tx Balances.transferKeepAlive bob 1000000000000 --from alice
+dot tx.Balances.transferKeepAlive bob 1000000000000 --from alice --chain polkadot
 ```
 
 Resolution order: dev account name > stored account name > SS58 address > hex public key. If the input doesn't match any, the CLI shows an error listing all available account names alphabetically, one per line. When the input is close to an existing name, a "Did you mean?" suggestion is included:
@@ -379,67 +379,59 @@ Security: default export replaces mnemonic/seed with `"<redacted>"`. `--include-
 
 ### Chain prefix
 
-Instead of the `--chain` flag, you can prefix any target with the chain name using dot notation:
+Instead of the `--chain` flag, you can prefix the dot-path with the chain name. The prefix becomes the first segment of the dot-path:
 
 ```bash
-dot query kusama.System.Account 5GrwvaEF...
-dot const kusama.Balances.ExistentialDeposit
-dot tx kusama.Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice
-dot inspect kusama.System
-dot inspect kusama.System.Account
+dot polkadot.query.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+dot polkadot.const.Balances.ExistentialDeposit
+dot polkadot.tx.Balances.transferKeepAlive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000000 --from alice
+dot inspect polkadot.System            # for `inspect`, the prefix is the first arg
+dot inspect polkadot.System.Account
 ```
 
-Chain names are case-insensitive — `Polkadot.System.Account`, `POLKADOT.System.Account`, and `polkadot.System.Account` all resolve the same way. The same applies to `--chain Polkadot`.
+Chain names are case-insensitive — `Polkadot.query.System.Account`, `POLKADOT.query.System.Account`, and `polkadot.query.System.Account` all resolve the same way. The same applies to `--chain Polkadot`.
 
 Every invocation must specify a chain explicitly: either via a dotpath prefix (as above) or via `--chain <name>`. If both are provided, the CLI errors.
 
 ### Space-separated syntax
 
-Pallet and item segments can also be provided as separate arguments instead of dot notation. These forms are equivalent:
+The `Pallet` and `Item` segments can be passed as separate arguments instead of dot-joined. These pairs are equivalent:
 
 ```bash
-# Dot notation vs space-separated — these are identical:
-dot query.System                          # dot notation
-dot query System                          # space-separated
+# Dot notation vs fully space-separated — these are identical:
+dot polkadot.query.System                 # dot notation
+dot query System --chain polkadot         # space-separated
 
-dot events.Balances.Transfer              # dot notation
-dot events Balances Transfer              # space-separated
+dot polkadot.events.Balances.Transfer
+dot events Balances Transfer --chain polkadot
 
-dot apis.Core                             # dot notation
-dot apis Core                             # space-separated
-
-# Especially useful with --chain flag:
-dot --chain kusama query System
-dot --chain kusama events Balances Transfer
-dot --chain kusama apis Core
+dot polkadot.apis.Core
+dot apis Core --chain polkadot
 ```
 
-This works for all categories (`query`, `tx`, `const`, `events`, `errors`, `apis`). Remaining arguments after the pallet and item are passed as method parameters as usual.
+This works for all categories (`query`, `tx`, `const`, `events`, `errors`, `apis`). When passing positional method arguments, keep `Pallet` and `Item` either fully dot-joined (`query.System.Account 5Grw...`) or fully space-separated (`query System Account 5Grw...`) — mixing the two (`query System.Account 5Grw...`) does not work because the second arg gets parsed as a pallet name.
 
 ### Query storage
 
 ```bash
 # Plain storage value
-dot query System.Number
+dot polkadot.query.System.Number
 
 # Map entry by key
-dot query System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+dot polkadot.query.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 
 # Map without key — shows help/usage (use --dump to fetch all entries)
-dot query System.Account
+dot polkadot.query.System.Account
 
 # Dump all map entries (requires --dump)
-dot query System.Account --dump
-
-# Enum variant as map key (case-insensitive)
-dot query people-preview.ChunksManager.Chunks R2e9 1
+dot polkadot.query.System.Account --dump
 
 # Pipe-safe — stdout is clean data, progress messages go to stderr
-dot query System.Account --dump | jq '.[0].value.data.free'
-dot query System.Number --json | jq '.+1'
+dot polkadot.query.System.Account --dump | jq '.[0].value.data.free'
+dot polkadot.query.System.Number --json | jq '.+1'
 
-# Query a specific chain using chain prefix
-dot query kusama.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+# --chain flag is equivalent to the dotpath prefix
+dot query.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY --chain polkadot
 ```
 
 #### Partial key queries
@@ -450,13 +442,13 @@ prefix-based iteration and does not require `--dump`.
 
 ```bash
 # Full key — returns a single value
-dot query Staking.ErasStakers 100 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+dot polkadot.query.Staking.ErasStakers 100 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 
 # Partial key — returns all entries matching the first key
-dot query Staking.ErasStakers 100
+dot polkadot.query.Staking.ErasStakers 100
 
 # No keys — requires --dump (safety net for large maps)
-dot query Staking.ErasStakers --dump
+dot polkadot.query.Staking.ErasStakers --dump
 ```
 
 #### Output formatting
@@ -469,47 +461,49 @@ Query results automatically convert on-chain types for readability:
 
 ```bash
 # Token metadata — symbol and name display as text, not {}
-dot query assethub-paseo.Assets.Metadata 50000413
+dot paseo-asset-hub.query.Assets.Metadata 50000413
 # { "deposit": "6693666000", "name": "Paseo Token", "symbol": "PAS", ... }
 ```
 
 ### Look up constants
 
 ```bash
-dot const Balances.ExistentialDeposit
-dot const System.SS58Prefix --chain kusama
-dot const kusama.Balances.ExistentialDeposit
+dot polkadot.const.Balances.ExistentialDeposit
+dot polkadot.const.System.SS58Prefix
+
+# --chain flag is equivalent
+dot const.Balances.ExistentialDeposit --chain polkadot
 
 # Pipe-safe — stdout is clean JSON, progress messages go to stderr
-dot const Balances.ExistentialDeposit --json | jq
+dot polkadot.const.Balances.ExistentialDeposit --json | jq
 ```
 
 ### Inspect metadata
 
-Works offline from cached metadata after the first fetch.
+Works offline from cached metadata after the first fetch. The chain is required: pass it with `--chain` or as a prefix on the inspect target (e.g. `dot inspect polkadot.System`).
 
 ```bash
 # List all pallets (shows storage, constants, calls, events, and errors counts)
-dot inspect
+dot inspect --chain polkadot
 
 # List a pallet's storage items, constants, calls, events, and errors
-dot inspect System
+dot inspect System --chain polkadot
 
 # Detailed type info for a specific storage item or constant
-dot inspect System.Account
+dot inspect System.Account --chain polkadot
 
 # Call detail — shows argument signature and docs
-dot inspect Balances.transfer_allow_death
+dot inspect Balances.transfer_allow_death --chain polkadot
 
 # Event detail — shows field signature and docs
-dot inspect Balances.Transfer
+dot inspect Balances.Transfer --chain polkadot
 
 # Error detail — shows docs
-dot inspect Balances.InsufficientBalance
+dot inspect Balances.InsufficientBalance --chain polkadot
 
-# Inspect a specific chain using chain prefix
-dot inspect kusama.System
-dot inspect kusama.System.Account
+# Chain prefix on the inspect target works too (note: `dot polkadot.inspect.X` does NOT — use either form below)
+dot inspect polkadot.System
+dot inspect polkadot.System.Account
 ```
 
 All listings — pallets, storage items, constants, calls, events, and errors — are sorted alphabetically, making it easy to find a specific item at a glance.
@@ -526,32 +520,32 @@ Documentation from the runtime metadata is shown on an indented line below each 
 
 ### Runtime APIs
 
-Browse and call Substrate runtime APIs. These are top-level APIs exposed by the runtime (e.g. `Core`, `AccountNonceApi`, `TransactionPaymentApi`), accessed as `dot apis.ApiName.method`.
+Browse and call Substrate runtime APIs. These are top-level APIs exposed by the runtime (e.g. `Core`, `AccountNonceApi`, `TransactionPaymentApi`), accessed as `dot <chain>.apis.ApiName.method`.
 
 ```bash
 # List all runtime APIs with method counts
-dot apis
+dot polkadot.apis
 
 # List methods in a specific API (with signatures)
-dot apis.Core
+dot polkadot.apis.Core
 
 # Call a runtime API method
-dot apis.Core.version
-
-# With chain prefix
 dot polkadot.apis.Core.version
 
-# Show method signature and docs
-dot apis.Core.version --help
+# --chain flag is equivalent
+dot apis.Core.version --chain polkadot
+
+# Show method signature and docs (chain still required to load metadata)
+dot apis.Core.version --chain polkadot --help
 ```
 
 `api` is an alias for `apis`.
 
-Runtime API info requires v15 metadata. If `dot apis` shows 0 APIs, update the cached metadata:
+Runtime API info requires v15 metadata. If `dot <chain>.apis` shows 0 APIs, update the cached metadata:
 
 ```bash
-dot chain update people-paseo # specific chain
-dot chain update --all        # all configured chains
+dot chain update polkadot   # specific chain
+dot chain update --all      # all configured chains
 ```
 
 #### Argument formats
@@ -577,7 +571,7 @@ ALICE=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 CONTRACT=0x970951a12f975e6762482aca81e57d5a2a4e73f4         # H160, [u8; 20]
 CALLDATA=$(cast calldata "set(uint256)" 42)
 
-dot --chain paseo-asset-hub apis.ReviveApi.call \
+dot paseo-asset-hub.apis.ReviveApi.call \
   "$ALICE" "$CONTRACT" 0 null null "$CALLDATA"
 #   ^ origin   ^ dest    ^ value ^ gas_limit (Option, none) ^ deposit (Option, none) ^ input_data (Vec<u8>)
 ```
@@ -587,9 +581,9 @@ dot --chain paseo-asset-hub apis.ReviveApi.call \
 Absent options (`None`) can be written three ways, all equivalent:
 
 ```bash
-dot apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 null       null       "$CALLDATA"
-dot apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 none       none       "$CALLDATA"
-dot apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 undefined  undefined  "$CALLDATA"
+dot paseo-asset-hub.apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 null       null       "$CALLDATA"
+dot paseo-asset-hub.apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 none       none       "$CALLDATA"
+dot paseo-asset-hub.apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 undefined  undefined  "$CALLDATA"
 ```
 
 `null` is the **recommended** form — it matches JSON / YAML semantics, so args read identically on the CLI and inside [file-based command](#file-based-commands) YAML/JSON inputs.
@@ -598,7 +592,7 @@ A present option (`Some(value)`) is just the value itself — no wrapping:
 
 ```bash
 # gas_limit = Some({ ref_time: 1_000_000, proof_size: 100_000 })
-dot apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 \
+dot paseo-asset-hub.apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 \
   '{"ref_time":1000000,"proof_size":100000}' \
   null \
   "$CALLDATA"
@@ -608,42 +602,44 @@ Notes:
 - The `null` / `none` / `undefined` literals are case-sensitive (lowercase only).
 - There is no `Some(value)` prefix — bare values are already treated as `Some`.
 
-Use `dot apis.<ApiName>.<method> --help` to see the exact argument signature for any method.
+Use `dot <chain>.apis.<ApiName>.<method> --help` to see the exact argument signature for any method.
 
-### Focused commands
+### Focused metadata listings
 
-Browse specific metadata categories directly without using `dot inspect`:
+Each category supports partial dot-paths for browsing metadata. Category-only invocations list pallets (or APIs); pallet-level invocations list items; item-level invocations show detail. Singular and plural aliases work: `event` = `events`, `error` = `errors`, `api` = `apis`, `consts` = `constants` = `const`.
 
 ```bash
-# List all pallets
-dot pallets
+# List pallets with calls (and the calls themselves)
+dot polkadot.tx                                 # pallets with calls
+dot polkadot.tx.Balances                        # calls with arg signatures
+dot polkadot.tx.Balances.transfer_allow_death   # call detail (or use --help)
 
-# List pallet calls with argument signatures
-dot calls Balances
-dot calls Balances.transfer_allow_death   # call detail
+# Events
+dot polkadot.events                             # pallets with events
+dot polkadot.events.Balances                    # events with field signatures
+dot polkadot.events.Balances.Transfer           # event detail
 
-# List pallet events with field signatures
-dot events Balances
-dot events Balances.Transfer              # event detail
+# Errors
+dot polkadot.errors                             # pallets with errors
+dot polkadot.errors.Balances                    # errors with docs
+dot polkadot.errors.Balances.InsufficientBalance
 
-# List pallet errors
-dot errors Balances
-dot errors Balances.InsufficientBalance   # error detail
+# Storage (via the query category)
+dot polkadot.query                              # pallets with storage items
+dot polkadot.query.System                       # storage items with types
+dot polkadot.query.System.Account               # storage help (use --dump for all entries)
 
-# List pallet storage items with types
-dot storage System
-dot storage System.Account               # storage detail
+# Constants
+dot polkadot.const                              # pallets with constants
+dot polkadot.const.Balances                     # list constants (offline)
+dot polkadot.const.Balances.ExistentialDeposit  # look up value (connects to chain)
 
-# List pallet constants (dual-purpose — also works as value lookup)
-dot const Balances                        # list constants
-dot const Balances.ExistentialDeposit     # look up value
-
-# List runtime APIs
-dot apis                                  # list all APIs
-dot apis.Core                             # list methods in Core
+# Runtime APIs
+dot polkadot.apis                               # all runtime APIs
+dot polkadot.apis.Core                          # methods in Core
 ```
 
-Each command supports `--chain <name>`, `--rpc <url>`, and chain prefix syntax. Singular and plural forms are interchangeable (e.g. `dot call` = `dot calls`, `dot event` = `dot events`, `dot api` = `dot apis`).
+`--chain <name>` works as an alternative to the prefix in every form (e.g. `dot tx.Balances --chain polkadot`). To browse pallets across all categories at once, use `dot inspect` (see [Inspect metadata](#inspect-metadata)).
 
 ### Submit extrinsics
 
@@ -651,21 +647,28 @@ Build, sign, and submit transactions. Pass a `Pallet.Call` with arguments, or a 
 
 ```bash
 # Simple remark
-dot tx System.remark 0xdeadbeef --from alice
+dot tx.System.remark 0xdeadbeef --from alice --chain polkadot
 
 # Transfer (amount in plancks)
-dot tx Balances.transferKeepAlive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000000 --from alice
+dot tx.Balances.transferKeepAlive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000000 --from alice --chain polkadot
 
 # Estimate fees without submitting
-dot tx Balances.transferKeepAlive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000000 --from alice --dry-run
+dot tx.Balances.transferKeepAlive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000000 --from alice --chain polkadot --dry-run
 
 # Submit a raw SCALE-encoded call (e.g. from a multisig proposal or another tool)
-dot tx 0x0503008eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48 --from alice
+dot tx 0x0503008eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48 --from alice --chain polkadot
 
 # Batch multiple transfers with Utility.batchAll (comma-separated encoded calls)
-A=$(dot tx Balances.transfer_keep_alive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000000 --encode)
-B=$(dot tx Balances.transfer_keep_alive 5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y 2000000000000 --encode)
-dot tx Utility.batchAll $A,$B --from alice
+A=$(dot tx.Balances.transfer_keep_alive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000000 --encode --chain polkadot)
+B=$(dot tx.Balances.transfer_keep_alive 5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y 2000000000000 --encode --chain polkadot)
+dot tx.Utility.batchAll $A,$B --from alice --chain polkadot
+```
+
+The dot-prefix form works for `tx` too — these are equivalent:
+
+```bash
+dot tx.System.remark 0xdeadbeef --from alice --chain polkadot
+dot polkadot.tx.System.remark 0xdeadbeef --from alice
 ```
 
 #### Enum shorthand
@@ -674,17 +677,17 @@ Enum arguments accept a concise `Variant(value)` syntax instead of verbose JSON:
 
 ```bash
 # Instead of: '{"type":"system","value":{"type":"Authorized"}}'
-dot tx Utility.dispatch_as 'system(Authorized)' $(dot tx System.remark 0xcafe --encode) --from alice
+dot tx.Utility.dispatch_as 'system(Authorized)' $(dot tx.System.remark 0xcafe --encode --chain polkadot) --from alice --chain polkadot
 
 # Nested enums work too
-dot tx Utility.dispatch_as 'system(Signed(5FHneW46...))' <call> --from alice
+dot tx.Utility.dispatch_as 'system(Signed(5FHneW46...))' <call> --from alice --chain polkadot
 
 # Void variants — empty parens or just the name
-dot tx ... 'Root()' ...
-dot tx ... 'Root' ...
+dot tx.Pallet.call 'Root()' ... --from alice --chain polkadot
+dot tx.Pallet.call 'Root' ... --from alice --chain polkadot
 
 # JSON inside parens for struct values
-dot tx ... 'AccountId32({"id":"0xd435..."})' ...
+dot tx.Pallet.call 'AccountId32({"id":"0xd435..."})' ... --from alice --chain polkadot
 ```
 
 Variant matching is case-insensitive (`system` resolves to `system`, `authorized` to `Authorized`). All existing formats (JSON objects, hex, SS58 addresses) continue to work unchanged.
@@ -695,13 +698,13 @@ Encode a call to hex without signing or submitting. Useful for preparing calls t
 
 ```bash
 # Encode a remark call
-dot tx System.remark 0xdeadbeef --encode
+dot tx.System.remark 0xdeadbeef --encode --chain polkadot
 
 # Encode a transfer (use the hex output in a batch or sudo call)
-dot tx Balances.transfer_keep_alive 5FHneW46... 1000000000000 --encode
+dot tx.Balances.transfer_keep_alive 5FHneW46... 1000000000000 --encode --chain polkadot
 
 # Use encoded output with Sudo.sudo
-dot tx Sudo.sudo $(dot tx System.remark 0xcafe --encode) --from alice
+dot tx.Sudo.sudo $(dot tx.System.remark 0xcafe --encode --chain polkadot) --from alice --chain polkadot
 ```
 
 #### Decode call data to YAML / JSON
@@ -710,18 +713,18 @@ Decode a hex-encoded call into a YAML or JSON file that is compatible with [file
 
 ```bash
 # Decode a raw hex call to YAML
-dot tx.0x0001076465616462656566 --to-yaml
+dot tx.0x0001076465616462656566 --to-yaml --chain polkadot
 
 # Decode a raw hex call to JSON
-dot tx.0x0001076465616462656566 --to-json
+dot tx.0x0001076465616462656566 --to-json --chain polkadot
 
 # Encode a named call and output as YAML
-dot tx.System.remark 0xdeadbeef --to-yaml
+dot tx.System.remark 0xdeadbeef --to-yaml --chain polkadot
 
 # Round-trip: encode to hex, decode to YAML, re-encode from file
-dot tx.System.remark 0xdeadbeef --encode              # 0x0001076465616462656566
-dot tx.0x0001076465616462656566 --to-yaml > remark.yaml
-dot ./remark.yaml --encode                             # same hex
+dot tx.System.remark 0xdeadbeef --encode --chain polkadot   # 0x0001076465616462656566
+dot tx.0x0001076465616462656566 --to-yaml --chain polkadot > remark.yaml
+dot ./remark.yaml --encode                                  # chain comes from the file
 ```
 
 `--to-yaml` / `--to-json` are mutually exclusive with each other and with `--encode` and `--dry-run`.
@@ -746,7 +749,7 @@ Complex calls (e.g. XCM teleports) that the primary decoder cannot handle are au
 The CLI exits with code **1** when a finalized transaction has a dispatch error (e.g. insufficient balance, bad origin). The full transaction output (events, explorer links) is still printed before the error so you can debug the failure. Module errors are formatted as `PalletName.ErrorVariant` (e.g. `Balances.InsufficientBalance`).
 
 ```bash
-dot tx Balances.transferKeepAlive 5FHneW46... 999999999999999999 --from alice
+dot tx.Balances.transferKeepAlive 5FHneW46... 999999999999999999 --from alice --chain polkadot
 # ... events and explorer links ...
 # Error: Transaction dispatch error: Balances.InsufficientBalance
 echo $?  # 1
@@ -757,7 +760,7 @@ echo $?  # 1
 When a call argument is invalid, the CLI shows a contextual error message with the argument name, the expected type, and a hint:
 
 ```bash
-dot tx Balances.transferKeepAlive 5GrwvaEF... abc --encode
+dot tx.Balances.transferKeepAlive 5GrwvaEF... abc --encode --chain polkadot
 # Error: Invalid value for argument 'value' (expected Compact<u128>): "abc"
 #   Hint: Compact<u128>
 ```
@@ -770,15 +773,15 @@ By default, `dot tx` waits for finalization (~30s on Polkadot). Use `--wait` / `
 
 ```bash
 # Return as soon as the tx is broadcast (fastest)
-dot tx System.remark 0xdead --from alice --wait broadcast
+dot tx.System.remark 0xdead --from alice --chain polkadot --wait broadcast
 
 # Return when included in a best block
-dot tx System.remark 0xdead --from alice -w best-block
-dot tx System.remark 0xdead --from alice -w best    # alias
+dot tx.System.remark 0xdead --from alice --chain polkadot -w best-block
+dot tx.System.remark 0xdead --from alice --chain polkadot -w best    # alias
 
 # Wait for finalization (default, unchanged)
-dot tx System.remark 0xdead --from alice --wait finalized
-dot tx System.remark 0xdead --from alice             # same
+dot tx.System.remark 0xdead --from alice --chain polkadot --wait finalized
+dot tx.System.remark 0xdead --from alice --chain polkadot            # same
 ```
 
 | Level | Resolves when | Events shown | Explorer links |
@@ -791,7 +794,7 @@ The `--wait` flag is silently ignored when combined with `--dry-run` or `--encod
 
 #### Custom signed extensions
 
-Chains with non-standard signed extensions (e.g. `people-preview`) are auto-handled:
+Chains with non-standard signed extensions are auto-handled:
 
 - `void` → empty bytes
 - `Option<T>` → `None`
@@ -800,7 +803,7 @@ Chains with non-standard signed extensions (e.g. `people-preview`) are auto-hand
 For manual override, use `--ext` with a JSON object:
 
 ```bash
-dot tx System.remark 0xdeadbeef --from alice --ext '{"MyExtension":{"value":"..."}}'
+dot tx.System.remark 0xdeadbeef --from alice --chain polkadot --ext '{"MyExtension":{"value":"..."}}'
 ```
 
 #### Transaction options
@@ -816,23 +819,23 @@ Override low-level transaction parameters. Useful for rapid-fire submission (cus
 
 ```bash
 # Fire-and-forget: submit two txs in rapid succession with manual nonces
-dot tx System.remark 0xdead --from alice --nonce 0 --wait broadcast
-dot tx System.remark 0xbeef --from alice --nonce 1 --wait broadcast
+dot tx.System.remark 0xdead --from alice --chain polkadot --nonce 0 --wait broadcast
+dot tx.System.remark 0xbeef --from alice --chain polkadot --nonce 1 --wait broadcast
 
 # Add a priority tip (in planck)
-dot tx Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice --tip 1000000
+dot tx.Balances.transferKeepAlive 5FHneW46... 1000000000000 --from alice --chain polkadot --tip 1000000
 
 # Submit an immortal transaction (no expiry)
-dot tx System.remark 0xdead --from alice --mortality immortal
+dot tx.System.remark 0xdead --from alice --chain polkadot --mortality immortal
 
 # Set a custom mortality period (rounds up to nearest power of two)
-dot tx System.remark 0xdead --from alice --mortality 128
+dot tx.System.remark 0xdead --from alice --chain polkadot --mortality 128
 
 # Validate against a specific block hash
-dot tx System.remark 0xdead --from alice --at 0x1234...abcd
+dot tx.System.remark 0xdead --from alice --chain polkadot --at 0x1234...abcd
 
 # Combine: rapid-fire with tip and broadcast-only
-dot tx System.remark 0xdead --from alice --nonce 5 --tip 500000 --wait broadcast
+dot tx.System.remark 0xdead --from alice --chain polkadot --nonce 5 --tip 500000 --wait broadcast
 ```
 
 When set, nonce / tip / mortality / at are shown in both `--dry-run` and submission output. These flags are silently ignored with `--encode`, `--to-yaml`, and `--to-json` (which return before signing).
@@ -843,12 +846,12 @@ On asset-hub-style chains (Polkadot Asset Hub, Paseo Asset Hub, etc.) the `Charg
 
 ```bash
 # Pay fees in USDT (asset id 1337, PalletInstance 50) on Polkadot Asset Hub
-dot tx Balances.transfer_keep_alive 5FHneW46... 1000000000000 \
+dot tx.Balances.transfer_keep_alive 5FHneW46... 1000000000000 \
   --from alice --chain polkadot-asset-hub \
   --asset '{"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"1337"}]}}'
 
 # Dry-run to see the native-denominated fee estimate
-dot tx Balances.transfer_keep_alive 5FHneW46... 1000000000000 \
+dot tx.Balances.transfer_keep_alive 5FHneW46... 1000000000000 \
   --from alice --chain polkadot-asset-hub --dry-run \
   --asset '{"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"1337"}]}}'
 ```
@@ -868,19 +871,19 @@ Submit transactions without a signer using `--unsigned`. This is for calls autho
 
 ```bash
 # Submit an authorized call on the People chain
-dot tx People.create_people_collection --unsigned --chain people
+dot tx.People.create_people_collection --unsigned --chain polkadot-people
 
 # Dry-run to inspect before submitting
-dot tx People.create_people_collection --unsigned --chain people --dry-run
+dot tx.People.create_people_collection --unsigned --chain polkadot-people --dry-run
 
 # Encode the full general transaction bytes
-dot tx People.create_people_collection --unsigned --chain people --encode
+dot tx.People.create_people_collection --unsigned --chain polkadot-people --encode
 
 # With raw hex call data
-dot tx 0x3306 --unsigned --chain people
+dot tx 0x3306 --unsigned --chain polkadot-people
 
 # JSON output for scripting
-dot tx People.create_people_collection --unsigned --chain people --json
+dot tx.People.create_people_collection --unsigned --chain polkadot-people --json
 ```
 
 The CLI constructs a v5 general transaction with all extension values auto-defaulted (`VerifySignature::Disabled`, `Era::Immortal`, nonce `0`, tip `0`, etc.). Override individual extensions with `--ext` if needed.
@@ -888,7 +891,7 @@ The CLI constructs a v5 general transaction with all extension values auto-defau
 `--unsigned` is mutually exclusive with `--from`, `--nonce`, `--tip`, and `--mortality`. File-based input supports `unsigned: true`:
 
 ```yaml
-chain: people
+chain: polkadot-people
 unsigned: true
 tx:
   People:
@@ -1076,7 +1079,7 @@ Hex values passed via `--var` are preserved as-is, including leading zeros. This
 
 ```bash
 # Encode a remark, then embed it in an XCM Transact via --var
-CALL=$(dot tx.System.remark 0xdead --encode)
+CALL=$(dot tx.System.remark 0xdead --encode --chain polkadot)
 dot ./xcm-transact.yaml --var CALL=$CALL --encode
 ```
 
@@ -1201,21 +1204,24 @@ dot hash --help         # same as `dot hash` — shows algorithms and examples
 
 #### Item-level help
 
-Use `--help` on any fully-qualified dot-path to see metadata detail and category-specific usage hints — all offline, no chain connection required:
+Use `--help` on any fully-qualified dot-path to see metadata detail and category-specific usage hints. The chain is required (so the CLI knows which metadata to load), but the call itself runs offline from the cache:
 
 ```bash
-dot tx.System.remark --help               # call args, docs, and tx options
-dot query.System.Account --help           # storage type, key/value info, and query options
-dot const.Balances.ExistentialDeposit --help  # constant type and docs
-dot events.Balances.Transfer --help       # event fields and docs
-dot errors.Balances.InsufficientBalance --help  # error docs
-dot apis.Core.version --help             # runtime API method signature and docs
+dot tx.System.remark --help --chain polkadot                    # call args, docs, and tx options
+dot query.System.Account --help --chain polkadot                # storage type, key/value info, and query options
+dot const.Balances.ExistentialDeposit --help --chain polkadot   # constant type and docs
+dot events.Balances.Transfer --help --chain polkadot            # event fields and docs
+dot errors.Balances.InsufficientBalance --help --chain polkadot # error docs
+dot apis.Core.version --help --chain polkadot                   # runtime API method signature and docs
+
+# A chain prefix is equivalent
+dot polkadot.tx.System.remark --help
 ```
 
 For `tx` commands, omitting both `--from` and `--encode` shows this same help output instead of an error:
 
 ```bash
-dot tx.System.remark 0xdead               # shows call help (no error)
+dot tx.System.remark 0xdead --chain polkadot   # shows call help (no error)
 ```
 
 ### Global options
@@ -1236,20 +1242,20 @@ dot tx.System.remark 0xdead               # shows call help (no error)
 Every command supports `--json` for machine-readable output. This works on data queries, metadata inspection, account management, chain configuration, and transaction submission:
 
 ```bash
-dot inspect --json                          # All pallets as JSON
-dot inspect Balances --json                 # Pallet detail with storage, constants, calls, events, errors
-dot chain list --json                       # Configured chains
-dot account list --json                     # Dev and stored accounts
-dot account create my-key --json            # New account details (mnemonic warning on stderr)
-dot tx.System.remark 0xdead --encode --json # Encoded call hex wrapped in JSON
-dot events.Balances --json                  # Event listing with field signatures
-dot const.System --json                     # Constant listing with types
+dot inspect --json --chain polkadot                   # All pallets as JSON
+dot inspect Balances --json --chain polkadot          # Pallet detail with storage, constants, calls, events, errors
+dot chain list --json                                 # Configured chains
+dot account list --json                               # Dev and stored accounts
+dot account create my-key --json                      # New account details (mnemonic warning on stderr)
+dot polkadot.tx.System.remark 0xdead --encode --json  # Encoded call hex wrapped in JSON
+dot polkadot.events.Balances --json                   # Event listing with field signatures
+dot polkadot.const.System --json                      # Constant listing with types
 ```
 
 For transaction submission, `--json` emits NDJSON (one JSON object per lifecycle event):
 
 ```bash
-dot tx.System.remark 0xdead --from alice --json
+dot tx.System.remark 0xdead --from alice --chain polkadot --json
 # {"event":"signed","txHash":"0x..."}
 # {"event":"broadcasted","txHash":"0x..."}
 # {"event":"finalized","blockNumber":123,"blockHash":"0x...","ok":true,"events":[...]}
@@ -1260,11 +1266,11 @@ dot tx.System.remark 0xdead --from alice --json
 All commands follow Unix conventions: **data goes to stdout, progress goes to stderr**. This means you can safely pipe `--json` into `jq` or other tools without progress messages ("Fetching metadata...", spinner output, "Connecting...") corrupting the data stream:
 
 ```bash
-dot const System.SS58Prefix --json | jq '.+1'
-dot query System.Number --json | jq
+dot polkadot.const.System.SS58Prefix --json | jq '.+1'
+dot polkadot.query.System.Number --json | jq
 dot chain list --json | jq '.chains[].name'
 dot account list --json | jq '.stored[].address'
-dot inspect --json | jq '.pallets[] | select(.events > 10) | .name'
+dot inspect --json --chain polkadot | jq '.pallets[] | select(.events > 10) | .name'
 ```
 
 In an interactive terminal, both streams render together so you see progress and results normally.
@@ -1308,7 +1314,7 @@ Completions are context-aware: `query.` shows pallets with storage items, `tx.` 
 | **Read constants** | yes | yes | yes | — |
 | **Submit extrinsics** | yes, with dry-run | yes (via `--seed`) | — | ink! contract calls only |
 | **Inspect metadata** | yes | — | yes (excellent browser) | — |
-| **Chain presets** | built-in aliases (`--chain kusama`) | — (manual `--ws` every call) | — | parachain templates |
+| **Chain presets** | built-in aliases (`--chain polkadot`) | — (manual `--ws` every call) | — | parachain templates |
 | **Tx tracking + explorer links** | spinner progress, block + explorer link | basic events | — | — |
 
 polkadot-cli aims to be the single tool for day-to-day chain interaction: storage reads, constant lookups, transaction submission, and metadata browsing with a polished terminal UX. @polkadot/api-cli covers similar ground but is in maintenance mode and requires verbose flags. subxt-cli has an excellent metadata explorer but cannot sign or submit transactions. Pop CLI targets a different workflow — scaffolding parachains and deploying ink! contracts rather than end-user chain queries.
@@ -1364,7 +1370,7 @@ Requires [Bun](https://bun.sh).
 
 ```bash
 bun install
-bun run dev -- query System.Number
+bun run dev -- polkadot.query.System.Number
 bun run build
 bun test
 ```
