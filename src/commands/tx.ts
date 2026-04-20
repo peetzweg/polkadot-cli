@@ -1156,7 +1156,13 @@ function normalizeValue(lookup: Lookup, entry: any, value: unknown): unknown {
         innerResolved.value === "u8" &&
         typeof value === "string"
       ) {
-        if (/^0x[0-9a-fA-F]*$/.test(value)) return Binary.fromHex(value as `0x${string}`);
+        const isHex = /^0x[0-9a-fA-F]*$/.test(value);
+        // Sized [u8; N]: papi's isCompatible only accepts a 0x hex string for
+        // sized binary typedefs (Uint8Array is rejected). Mirrors the
+        // top-level parseTypedArg rule so nested byte arrays inside JSON args
+        // round-trip through the same compat check.
+        if (resolved.type === "array" && isHex) return value;
+        if (isHex) return Binary.fromHex(value as `0x${string}`);
         return Binary.fromText(value);
       }
 

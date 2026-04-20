@@ -51,6 +51,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.5",
     "@changesets/cli": "^2.29.4",
+    "@polkadot-api/metadata-compatibility": "^0.6.1",
     "@types/bun": "^1.3.9",
     "husky": "^9.1.7"
   }

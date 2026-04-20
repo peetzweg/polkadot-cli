@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, linkSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { isCompatible, mapLookupToTypedef } from "@polkadot-api/metadata-compatibility";
 import { Binary } from "polkadot-api";
 import { DEFAULT_CONFIG } from "../config/types.ts";
 import { getTestMetadata } from "./__fixtures__/load-metadata.ts";
@@ -541,7 +542,8 @@ describe("parseTypedArg", () => {
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
     const result = (await parseTypedArg(meta, enumEntry, `AccountId32({"id":"${hex}"})`)) as any;
     expect(result.type).toBe("AccountId32");
-    expect(result.value.id).toBeInstanceOf(Uint8Array);
+    // Sized [u8; N] hex is passed through as a 0x string (papi compat).
+    expect(result.value.id).toBe(hex);
   });
 
   test("enum shorthand does not break SS58 auto-wrap", async () => {
@@ -733,6 +735,62 @@ describe("parseTypedArg", () => {
       const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 4 };
       const result = await parseTypedArg(meta, arrEntry, "0xDEADBEEF");
       expect(result).toBe("0xDEADBEEF");
+    });
+  });
+
+  // Compat-smoke: for a representative set of byte-array typedefs, assert
+  // that the value produced by parseTypedArg passes papi's isCompatible
+  // guard against the same typedef mapped via mapLookupToTypedef. This
+  // closes the loop on the "Incompatible runtime entry" class of bugs:
+  // any future drift where our parsing produces a value papi rejects will
+  // fail here before it ships.
+  describe("isCompatible regression suite", () => {
+    test("[u8; 20] parsed from 0x hex is accepted by isCompatible", async () => {
+      const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 20 };
+      const typedef = mapLookupToTypedef(arrEntry as any);
+      const parsed = await parseTypedArg(
+        meta,
+        arrEntry,
+        "0x970951a12f975e6762482aca81e57d5a2a4e73f4",
+      );
+      expect(isCompatible(parsed, typedef, () => ({}) as any)).toBe(true);
+    });
+
+    test("[u8; 32] parsed from 0x hex is accepted by isCompatible", async () => {
+      const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 32 };
+      const typedef = mapLookupToTypedef(arrEntry as any);
+      const parsed = await parseTypedArg(
+        meta,
+        arrEntry,
+        "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+      );
+      expect(isCompatible(parsed, typedef, () => ({}) as any)).toBe(true);
+    });
+
+    test("Vec<u8> parsed from 0x hex is accepted by isCompatible", async () => {
+      const seqEntry = { type: "sequence", value: { type: "primitive", value: "u8" } };
+      const typedef = mapLookupToTypedef(seqEntry as any);
+      const parsed = await parseTypedArg(meta, seqEntry, "0xdeadbeef");
+      expect(isCompatible(parsed, typedef, () => ({}) as any)).toBe(true);
+    });
+
+    test("Vec<u8> parsed from text is accepted by isCompatible", async () => {
+      const seqEntry = { type: "sequence", value: { type: "primitive", value: "u8" } };
+      const typedef = mapLookupToTypedef(seqEntry as any);
+      const parsed = await parseTypedArg(meta, seqEntry, "hello");
+      expect(isCompatible(parsed, typedef, () => ({}) as any)).toBe(true);
+    });
+
+    test("[u8; N] parsed from text fallback (Uint8Array) is NOT accepted — documents the known limitation", async () => {
+      // Non-hex text for sized binary still goes through Binary.fromText →
+      // Uint8Array, which papi's isCompatible rejects for sized binary. This
+      // is rare in practice (users pass hex for sized fields) but is worth
+      // pinning so we notice if papi relaxes the check.
+      const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 5 };
+      const typedef = mapLookupToTypedef(arrEntry as any);
+      const parsed = await parseTypedArg(meta, arrEntry, "hello");
+      expect(parsed).toBeInstanceOf(Uint8Array);
+      expect(isCompatible(parsed, typedef, () => ({}) as any)).toBe(false);
     });
   });
 });
@@ -973,7 +1031,7 @@ describe("normalizeValue", () => {
     expect(result).toEqual({ type: "X1", value: 7 });
   });
 
-  test("converts hex string to Binary for [u8; N] byte arrays", () => {
+  test("keeps 0x hex string for sized [u8; N] byte arrays (papi compat)", () => {
     const mockEntry = {
       type: "array",
       value: { type: "primitive", value: "u8" },
@@ -981,8 +1039,20 @@ describe("normalizeValue", () => {
     };
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
     const result = normalizeValue(meta.lookup, mockEntry, hex);
+    expect(result).toBe(hex);
+  });
+
+  test("converts text string to Binary for [u8; N] when not 0x hex", () => {
+    // Non-hex text still goes through Binary.fromText — papi's SCALE encoder
+    // accepts Uint8Array; only the sized-binary compat check prefers 0x strings.
+    const mockEntry = {
+      type: "array",
+      value: { type: "primitive", value: "u8" },
+      len: 5,
+    };
+    const result = normalizeValue(meta.lookup, mockEntry, "hello");
     expect(result).toBeInstanceOf(Uint8Array);
-    expect(Binary.toHex(result as Uint8Array)).toBe(hex);
+    expect(Binary.toText(result as Uint8Array)).toBe("hello");
   });
 
   test("converts text string to Binary for Vec<u8> byte sequences", () => {
@@ -995,18 +1065,27 @@ describe("normalizeValue", () => {
     expect(Binary.toText(result as Uint8Array)).toBe("hello");
   });
 
-  test("converts hex string to Binary for [u8; N] through lookupEntry indirection", () => {
+  test("Vec<u8> hex string still becomes Uint8Array (unsized binary)", () => {
     const mockEntry = {
-      type: "array",
-      value: { type: "lookupEntry", value: { type: "primitive", value: "u8" } },
-      len: 4,
+      type: "sequence",
+      value: { type: "primitive", value: "u8" },
     };
     const result = normalizeValue(meta.lookup, mockEntry, "0xdeadbeef");
     expect(result).toBeInstanceOf(Uint8Array);
     expect(Binary.toHex(result as Uint8Array)).toBe("0xdeadbeef");
   });
 
-  test("converts nested byte arrays inside structs", () => {
+  test("keeps 0x hex string for [u8; N] through lookupEntry indirection", () => {
+    const mockEntry = {
+      type: "array",
+      value: { type: "lookupEntry", value: { type: "primitive", value: "u8" } },
+      len: 4,
+    };
+    const result = normalizeValue(meta.lookup, mockEntry, "0xdeadbeef");
+    expect(result).toBe("0xdeadbeef");
+  });
+
+  test("keeps 0x hex for nested [u8; N] inside structs", () => {
     const mockEntry = {
       type: "struct",
       value: {
@@ -1015,11 +1094,10 @@ describe("normalizeValue", () => {
     };
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
     const result = normalizeValue(meta.lookup, mockEntry, { id: hex }) as any;
-    expect(result.id).toBeInstanceOf(Uint8Array);
-    expect(Binary.toHex(result.id as Uint8Array)).toBe(hex);
+    expect(result.id).toBe(hex);
   });
 
-  test("converts nested byte arrays inside enum variants", () => {
+  test("keeps 0x hex for nested [u8; N] inside enum variants", () => {
     const mockEntry = {
       type: "enum",
       value: {
@@ -1034,8 +1112,7 @@ describe("normalizeValue", () => {
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
     const input = { type: "AccountId32", value: { id: hex } };
     const result = normalizeValue(meta.lookup, mockEntry, input) as any;
-    expect(result.value.id).toBeInstanceOf(Uint8Array);
-    expect(Binary.toHex(result.value.id as Uint8Array)).toBe(hex);
+    expect(result.value.id).toBe(hex);
   });
 
   test("converts string to bigint for u128 primitives in JSON", () => {
