@@ -547,7 +547,8 @@ export async function showItemHelp(
     }
     console.log();
     console.log(`${BOLD}Usage:${RESET}`);
-    console.log(`  dot apis.${api.name}.${method.name}`);
+    console.log(`  dot ${chainName}.apis.${api.name}.${method.name}`);
+    console.log(`  dot apis.${api.name}.${method.name} --chain ${chainName}`);
     console.log();
     return;
   }
@@ -595,8 +596,9 @@ export async function showItemHelp(
       }
       console.log();
       console.log(`${BOLD}Usage:${RESET}`);
-      console.log(`  dot tx.${pallet.name}.${callItem.name} --from <account>`);
-      console.log(`  dot tx.${pallet.name}.${callItem.name} --encode`);
+      console.log(`  dot tx.${pallet.name}.${callItem.name} --from <account> --chain ${chainName}`);
+      console.log(`  dot tx.${pallet.name}.${callItem.name} --encode --chain ${chainName}`);
+      console.log(`  dot ${chainName}.tx.${pallet.name}.${callItem.name} --from <account>`);
       console.log();
       console.log(`${BOLD}Options:${RESET}`);
       console.log(`  --from <name>    Account to sign with`);
@@ -628,11 +630,13 @@ export async function showItemHelp(
       console.log();
       if (storageItem.keyTypeId != null) {
         console.log(`${BOLD}Usage:${RESET}`);
-        console.log(`  dot query.${pallet.name}.${storageItem.name} <key>`);
-        console.log(`  dot query.${pallet.name}.${storageItem.name} --dump       # all entries`);
+        console.log(`  dot ${chainName}.query.${pallet.name}.${storageItem.name} <key>`);
+        console.log(
+          `  dot ${chainName}.query.${pallet.name}.${storageItem.name} --dump       # all entries`,
+        );
       } else {
         console.log(`${BOLD}Usage:${RESET}`);
-        console.log(`  dot query.${pallet.name}.${storageItem.name}`);
+        console.log(`  dot ${chainName}.query.${pallet.name}.${storageItem.name}`);
       }
       console.log();
       console.log(`${BOLD}Options:${RESET}`);
@@ -659,7 +663,7 @@ export async function showItemHelp(
       }
       console.log();
       console.log(`${BOLD}Usage:${RESET}`);
-      console.log(`  dot const.${pallet.name}.${constItem.name}`);
+      console.log(`  dot ${chainName}.const.${pallet.name}.${constItem.name}`);
       console.log();
       return;
     }
@@ -679,7 +683,7 @@ export async function showItemHelp(
       }
       console.log();
       console.log(`${BOLD}Usage:${RESET}`);
-      console.log(`  dot events.${pallet.name}.${eventItem.name}`);
+      console.log(`  dot ${chainName}.events.${pallet.name}.${eventItem.name}`);
       console.log();
       return;
     }
@@ -696,7 +700,7 @@ export async function showItemHelp(
       }
       console.log();
       console.log(`${BOLD}Usage:${RESET}`);
-      console.log(`  dot errors.${pallet.name}.${errorItem.name}`);
+      console.log(`  dot ${chainName}.errors.${pallet.name}.${errorItem.name}`);
       console.log();
       return;
     }

@@ -357,7 +357,7 @@ export async function handleTx(
       if (args.length > 0) {
         throw new Error(
           "Extra arguments are not allowed when submitting a raw call hex.\n" +
-            "Usage: dot tx 0x<call_hex> --from <account>",
+            "Usage: dot tx 0x<call_hex> --from <account> --chain <chain>",
         );
       }
       callHex = target;
