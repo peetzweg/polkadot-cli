@@ -303,18 +303,24 @@ if (process.argv[2] === "__complete") {
     console.log("  apis      Browse and call runtime APIs");
     console.log();
     console.log("Examples:");
-    console.log("  dot query.System.Account <addr>         Query a storage item");
-    console.log("  dot query.System                        List storage items in System");
-    console.log("  dot tx.System.remark 0xdead --from alice");
-    console.log("  dot tx.System.remark 0xdead --unsigned    Submit unsigned/bare tx");
-    console.log("  dot const.Balances.ExistentialDeposit");
-    console.log("  dot events.Balances                     List events in Balances");
-    console.log("  dot apis.Core.version                    Call a runtime API");
-    console.log("  dot polkadot.query.System.Number        With chain prefix");
-    console.log("  dot ./transfer.yaml --from alice        Run from file");
-    console.log("  dot tx.0x1f0003... --to-yaml             Decode hex call to YAML");
-    console.log("  dot tx.System.remark 0xdead --to-json   Encode & output as JSON file format");
-    console.log("  dot query.System.Number --json           Output as JSON");
+    console.log("  dot polkadot.query.System.Account <addr>            Query a storage item");
+    console.log(
+      "  dot polkadot.query.System                           List storage items in System",
+    );
+    console.log("  dot tx.System.remark 0xdead --from alice --chain polkadot");
+    console.log("  dot tx.People.create_people_collection --unsigned --chain polkadot-people");
+    console.log("  dot polkadot.const.Balances.ExistentialDeposit");
+    console.log("  dot polkadot.events.Balances                        List events in Balances");
+    console.log("  dot polkadot.apis.Core.version                      Call a runtime API");
+    console.log("  dot query.System.Number --chain polkadot            --chain flag form");
+    console.log(
+      "  dot ./transfer.yaml --from alice                    Run from file (chain in YAML)",
+    );
+    console.log("  dot tx.0x1f0003... --to-yaml --chain polkadot       Decode hex call to YAML");
+    console.log(
+      "  dot tx.System.remark 0xdead --to-json --chain polkadot   Output as JSON file format",
+    );
+    console.log("  dot polkadot.query.System.Number --json             JSON output");
     console.log();
     console.log("Commands:");
     console.log("  inspect [target]   Inspect chain metadata (alias: explore)");
