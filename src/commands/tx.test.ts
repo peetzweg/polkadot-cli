@@ -433,6 +433,33 @@ describe("parseTypedArg", () => {
     expect(await parseTypedArg(meta, optionEntry, "none")).toBeUndefined();
   });
 
+  describe("Option<T> literals", () => {
+    const optionU128 = { type: "option", value: { type: "primitive", value: "u128" } };
+
+    test("'null' is the canonical None literal", async () => {
+      expect(await parseTypedArg(meta, optionU128, "null")).toBeUndefined();
+    });
+
+    test("'none' is an accepted None alias", async () => {
+      expect(await parseTypedArg(meta, optionU128, "none")).toBeUndefined();
+    });
+
+    test("'undefined' is an accepted None alias", async () => {
+      expect(await parseTypedArg(meta, optionU128, "undefined")).toBeUndefined();
+    });
+
+    test("None literals are case-sensitive (lowercase only)", async () => {
+      // Documented behaviour — uppercase should NOT match. If it parses as
+      // bigint("Null") it'd throw; we treat the failure as a clear signal.
+      expect(parseTypedArg(meta, optionU128, "Null")).rejects.toThrow();
+      expect(parseTypedArg(meta, optionU128, "NONE")).rejects.toThrow();
+    });
+
+    test("a bare value is treated as Some(value)", async () => {
+      expect(await parseTypedArg(meta, optionU128, "42")).toBe(42n);
+    });
+  });
+
   test("compact u128 returns bigint", async () => {
     const compactEntry = { type: "compact", isBig: true };
     expect(await parseTypedArg(meta, compactEntry, "1000000000000")).toBe(1000000000000n);
@@ -654,9 +681,59 @@ describe("parseTypedArg", () => {
   });
 
   test("comma-separated does not apply to [u8; N] byte arrays", async () => {
+    // Sized [u8; N] is passed through as a 0x hex string — papi's isCompatible
+    // rejects Uint8Array for sized binary typedefs in the runtime-API path.
     const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 4 };
     const result = await parseTypedArg(meta, arrEntry, "0xdeadbeef");
-    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result).toBe("0xdeadbeef");
+  });
+
+  // Regression suite for the sized-binary runtime-API fix.
+  // papi's metadata-compatibility maps [u8; N] to { type: "binary", value: N },
+  // and isCompatible only accepts a `0x`-prefixed string for that shape — a
+  // Uint8Array is rejected (which surfaced as
+  // `Error: Incompatible runtime entry RuntimeCall(...)` for e.g. ReviveApi.call).
+  describe("[u8; N] sized binary -> 0x hex string", () => {
+    test("[u8; 20] (H160 contract address) stays a 0x string", async () => {
+      const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 20 };
+      const hex = "0x970951a12f975e6762482aca81e57d5a2a4e73f4";
+      const result = await parseTypedArg(meta, arrEntry, hex);
+      expect(typeof result).toBe("string");
+      expect(result).toBe(hex);
+    });
+
+    test("[u8; 32] (H256 / AccountId32 raw bytes) stays a 0x string", async () => {
+      const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 32 };
+      const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+      const result = await parseTypedArg(meta, arrEntry, hex);
+      expect(result).toBe(hex);
+    });
+
+    test("Vec<u8> (sequence) still returns Uint8Array — unsized binary accepts it", async () => {
+      const seqEntry = { type: "sequence", value: { type: "primitive", value: "u8" } };
+      const result = await parseTypedArg(meta, seqEntry, "0xdeadbeef");
+      expect(result).toBeInstanceOf(Uint8Array);
+      expect(Binary.toHex(result as Uint8Array)).toBe("0xdeadbeef");
+    });
+
+    test("non-hex text still falls through to Binary.fromText for [u8; N]", async () => {
+      const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 5 };
+      const result = await parseTypedArg(meta, arrEntry, "hello");
+      expect(result).toBeInstanceOf(Uint8Array);
+      expect(Binary.toText(result as Uint8Array)).toBe("hello");
+    });
+
+    test("empty 0x byte string is preserved as a string for [u8; 0]", async () => {
+      const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 0 };
+      const result = await parseTypedArg(meta, arrEntry, "0x");
+      expect(result).toBe("0x");
+    });
+
+    test("uppercase hex digits are preserved verbatim", async () => {
+      const arrEntry = { type: "array", value: { type: "primitive", value: "u8" }, len: 4 };
+      const result = await parseTypedArg(meta, arrEntry, "0xDEADBEEF");
+      expect(result).toBe("0xDEADBEEF");
+    });
   });
 });
 

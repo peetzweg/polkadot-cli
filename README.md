@@ -554,6 +554,62 @@ dot chain update people-paseo # specific chain
 dot chain update --all        # all configured chains
 ```
 
+#### Argument formats
+
+Runtime API arguments accept the same shorthand as `dot tx` arguments:
+
+| Type | Pass as | Example |
+|------|---------|---------|
+| Integers (`u8` … `u32`, `i8` … `i32`) | decimal | `0`, `42` |
+| Big integers (`u64`, `u128`, `u256`, `i64` …) | decimal | `1000000000000` |
+| `bool` | `true` / `false` | `true` |
+| `AccountId32` | dev name, stored account, SS58, or `0x` + 64 hex pubkey | `alice`, `5GrwvaEF…` |
+| `Vec<u8>` (unsized bytes) | `0x…` hex or text | `0xdeadbeef`, `hello` |
+| `[u8; N]` (sized bytes, e.g. `H160`/`H256`/raw `AccountId`) | `0x` + exactly `2 * N` hex chars (recommended), or text | `0x970951a12f975e6762482aca81e57d5a2a4e73f4` |
+| `Option<T>` | `null` (recommended), `none`, `undefined` — or a `T` value for `Some(value)` | `null` |
+| `Vec<T>` (non-byte) | JSON array or comma-separated | `[1,2,3]`, `1,2,3` |
+| Structs / nested enums | JSON | `{"type":"X1","value":{…}}` |
+
+For sized byte arrays (`[u8; N]`) — common for Ethereum-style addresses (`H160`, `[u8; 20]`), 32-byte hashes (`H256`), and raw `AccountId32` bytes — pass a `0x`-prefixed hex string. Example: a contract call against the `pallet-revive` runtime API:
+
+```bash
+ALICE=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+CONTRACT=0x970951a12f975e6762482aca81e57d5a2a4e73f4         # H160, [u8; 20]
+CALLDATA=$(cast calldata "set(uint256)" 42)
+
+dot --chain paseo-asset-hub apis.ReviveApi.call \
+  "$ALICE" "$CONTRACT" 0 null null "$CALLDATA"
+#   ^ origin   ^ dest    ^ value ^ gas_limit (Option, none) ^ deposit (Option, none) ^ input_data (Vec<u8>)
+```
+
+##### Passing `Option<T>`
+
+Absent options (`None`) can be written three ways, all equivalent:
+
+```bash
+dot apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 null       null       "$CALLDATA"
+dot apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 none       none       "$CALLDATA"
+dot apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 undefined  undefined  "$CALLDATA"
+```
+
+`null` is the **recommended** form — it matches JSON / YAML semantics, so args read identically on the CLI and inside [file-based command](#file-based-commands) YAML/JSON inputs.
+
+A present option (`Some(value)`) is just the value itself — no wrapping:
+
+```bash
+# gas_limit = Some({ ref_time: 1_000_000, proof_size: 100_000 })
+dot apis.ReviveApi.call "$ALICE" "$CONTRACT" 0 \
+  '{"ref_time":1000000,"proof_size":100000}' \
+  null \
+  "$CALLDATA"
+```
+
+Notes:
+- The `null` / `none` / `undefined` literals are case-sensitive (lowercase only).
+- There is no `Some(value)` prefix — bare values are already treated as `Some`.
+
+Use `dot apis.<ApiName>.<method> --help` to see the exact argument signature for any method.
+
 ### Focused commands
 
 Browse specific metadata categories directly without using `dot inspect`:

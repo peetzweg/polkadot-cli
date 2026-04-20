@@ -1364,7 +1364,11 @@ async function parseTypedArg(meta: MetadataBundle, entry: any, arg: string): Pro
       // Vec<u8> / [u8; N] -> Binary
       const inner = entry.value;
       if (inner.type === "primitive" && inner.value === "u8") {
-        if (/^0x[0-9a-fA-F]*$/.test(arg)) return Binary.fromHex(arg as any);
+        const isHex = /^0x[0-9a-fA-F]*$/.test(arg);
+        // Sized [u8; N]: papi's isCompatible wants a 0x hex string for sized
+        // binary typedefs (Uint8Array is only accepted for unsized Vec<u8>).
+        if (entry.type === "array" && isHex) return arg;
+        if (isHex) return Binary.fromHex(arg as any);
         return Binary.fromText(arg);
       }
       // Try JSON array
