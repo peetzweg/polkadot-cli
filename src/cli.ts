@@ -6,7 +6,12 @@ import { handleApis } from "./commands/apis.ts";
 import { registerChainCommands } from "./commands/chain.ts";
 import { registerCompletionsCommand } from "./commands/completions.ts";
 import { handleConst } from "./commands/const.ts";
-import { handleErrors, handleEvents, showItemHelp } from "./commands/focused-inspect.ts";
+import {
+  handleErrors,
+  handleEvents,
+  handleExtensions,
+  showItemHelp,
+} from "./commands/focused-inspect.ts";
 import { registerHashCommand } from "./commands/hash.ts";
 import { registerInspectCommand } from "./commands/inspect.ts";
 import { registerParachainCommand } from "./commands/parachain.ts";
@@ -265,6 +270,15 @@ if (process.argv[2] === "__complete") {
           case "apis":
             await handleApis(target, args, handlerOpts);
             break;
+          case "extensions": {
+            if (parsed.item) {
+              throw new CliError(
+                `Transaction extensions have no sub-items. Try "dot extensions.${parsed.pallet}".`,
+              );
+            }
+            await handleExtensions(parsed.pallet, handlerOpts);
+            break;
+          }
         }
       },
     );
@@ -301,6 +315,7 @@ if (process.argv[2] === "__complete") {
     console.log("  events    List or inspect pallet events");
     console.log("  errors    List or inspect pallet errors");
     console.log("  apis      Browse and call runtime APIs");
+    console.log("  extensions  List transaction extensions on a chain");
     console.log();
     console.log("Examples:");
     console.log("  dot polkadot.query.System.Account <addr>            Query a storage item");
@@ -312,6 +327,10 @@ if (process.argv[2] === "__complete") {
     console.log("  dot polkadot.const.Balances.ExistentialDeposit");
     console.log("  dot polkadot.events.Balances                        List events in Balances");
     console.log("  dot polkadot.apis.Core.version                      Call a runtime API");
+    console.log(
+      "  dot polkadot.extensions                             List transaction extensions",
+    );
+    console.log("  dot polkadot.extensions.CheckMortality              Inspect one extension");
     console.log("  dot query.System.Number --chain polkadot            --chain flag form");
     console.log(
       "  dot ./transfer.yaml --from alice                    Run from file (chain in YAML)",

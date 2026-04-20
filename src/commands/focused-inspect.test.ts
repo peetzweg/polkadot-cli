@@ -8,6 +8,7 @@ import {
   handleCalls,
   handleErrors,
   handleEvents,
+  handleExtensions,
   handleStorage,
   showItemHelp,
 } from "./focused-inspect.ts";
@@ -163,6 +164,25 @@ describe("handler JSON output (in-process coverage)", { timeout: 15_000 }, () =>
   });
   test("handleStorage pallet.item with json", async () => {
     await handleStorage("System.Account", { json: true, chain: "polkadot" });
+  });
+
+  // handleExtensions
+  test("handleExtensions category-only with json", async () => {
+    await handleExtensions(undefined, { json: true, chain: "polkadot" });
+  });
+  test("handleExtensions identifier with json", async () => {
+    await handleExtensions("CheckMortality", { json: true, chain: "polkadot" });
+  });
+  test("handleExtensions category-only pretty", async () => {
+    await handleExtensions(undefined, { chain: "polkadot" });
+  });
+  test("handleExtensions identifier pretty", async () => {
+    await handleExtensions("CheckMortality", { chain: "polkadot" });
+  });
+  test("handleExtensions unknown identifier throws with suggestion", async () => {
+    await expect(handleExtensions("CheckMortalty", { chain: "polkadot" })).rejects.toThrow(
+      /CheckMortality/,
+    );
   });
 
   // showItemHelp with json
@@ -623,5 +643,74 @@ describe("stdout/stderr separation (pipe-safe output)", () => {
     expect(parsed.pallet).toBe("Balances");
     expect(Array.isArray(parsed.errors)).toBe(true);
     expect(parsed.errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe("dot extensions", () => {
+  test("lists extensions with types", async () => {
+    const { stdout, exitCode } = await runCli(["extensions"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Transaction extensions");
+    expect(stdout).toContain("CheckMortality");
+    expect(stdout).toContain("[builtin]");
+  });
+
+  test("shows extension detail", async () => {
+    const { stdout, exitCode } = await runCli(["extensions.CheckMortality"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Transaction Extension)");
+    expect(stdout).toContain("Value type:");
+    expect(stdout).toContain("AdditionalSigned:");
+    expect(stdout).toContain("polkadot-api (builtin)");
+  });
+
+  test("extension alias works", async () => {
+    const { stdout, exitCode } = await runCli(["extension.CheckMortality"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Transaction Extension)");
+  });
+
+  test("typo suggests correct name", async () => {
+    const { stderr, exitCode } = await runCli(["extensions.CheckMortalty"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("CheckMortality");
+  });
+
+  test("chain prefix works", async () => {
+    const config = {
+      chains: { kusama: { rpc: "wss://kusama-rpc.polkadot.io" } },
+    };
+    const { stdout, exitCode } = await runCli(["kusama.extensions"], { config });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Transaction extensions");
+  });
+
+  test("rejects sub-items with a helpful message", async () => {
+    const { stderr, exitCode } = await runCli(["extensions.CheckMortality.value"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("no sub-items");
+  });
+
+  test("extensions --json lists identifiers", async () => {
+    const { stdout, exitCode } = await runCli(["extensions", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.chain).toBe("polkadot");
+    expect(Array.isArray(parsed.extensions)).toBe(true);
+    const mortality = parsed.extensions.find((e: any) => e.identifier === "CheckMortality");
+    expect(mortality).toBeDefined();
+    expect(mortality.isBuiltin).toBe(true);
+    expect(typeof mortality.valueType).toBe("string");
+    expect(typeof mortality.additionalSignedType).toBe("string");
+  });
+
+  test("extensions.CheckMortality --json returns extension detail", async () => {
+    const { stdout, exitCode } = await runCli(["extensions.CheckMortality", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.identifier).toBe("CheckMortality");
+    expect(parsed.isBuiltin).toBe(true);
+    expect(typeof parsed.valueTypeId).toBe("number");
+    expect(typeof parsed.additionalSignedTypeId).toBe("number");
   });
 });

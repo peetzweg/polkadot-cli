@@ -14,7 +14,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ zsh, bash, and fish autocompletion
 - ✅ Exposes all on-chain metadata documentation
 - ✅ Encode, dry-run, and submit extrinsics
-- ✅ Support for custom signed extensions
+- ✅ Support for custom signed extensions — and a `dot extensions` inspector to discover them
 - ✅ Built with agent use in mind — structured JSON output on every command (`--json`)
 - ✅ Fuzzy matching with typo suggestions
 - ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
@@ -409,7 +409,7 @@ dot polkadot.apis.Core
 dot apis Core --chain polkadot
 ```
 
-This works for all categories (`query`, `tx`, `const`, `events`, `errors`, `apis`). When passing positional method arguments, keep `Pallet` and `Item` either fully dot-joined (`query.System.Account 5Grw...`) or fully space-separated (`query System Account 5Grw...`) — mixing the two (`query System.Account 5Grw...`) does not work because the second arg gets parsed as a pallet name.
+This works for all categories (`query`, `tx`, `const`, `events`, `errors`, `apis`, `extensions`). When passing positional method arguments, keep `Pallet` and `Item` either fully dot-joined (`query.System.Account 5Grw...`) or fully space-separated (`query System Account 5Grw...`) — mixing the two (`query System.Account 5Grw...`) does not work because the second arg gets parsed as a pallet name.
 
 ### Query storage
 
@@ -637,9 +637,43 @@ dot polkadot.const.Balances.ExistentialDeposit  # look up value (connects to cha
 # Runtime APIs
 dot polkadot.apis                               # all runtime APIs
 dot polkadot.apis.Core                          # methods in Core
+
+# Transaction extensions (flat — no pallet sub-level)
+dot polkadot.extensions                         # all transaction extensions
+dot polkadot.extensions.CheckMortality          # extension detail
 ```
 
 `--chain <name>` works as an alternative to the prefix in every form (e.g. `dot tx.Balances --chain polkadot`). To browse pallets across all categories at once, use `dot inspect` (see [Inspect metadata](#inspect-metadata)).
+
+### Transaction extensions
+
+List the transaction extensions (also known as signed extensions) a chain declares in its runtime, with types and a marker indicating whether `polkadot-api` handles the extension automatically or whether you need to provide a value via `--ext` when building a transaction (see [Submit extrinsics](#submit-extrinsics)).
+
+```bash
+# List all transaction extensions on a chain
+dot polkadot.extensions
+
+# Detail view for a single extension
+dot polkadot.extensions.CheckMortality
+
+# --chain flag form is equivalent
+dot extensions.ChargeTransactionPayment --chain polkadot
+
+# Space-separated syntax also works
+dot extensions CheckMortality --chain polkadot
+
+# Structured output for scripts
+dot polkadot.extensions --json
+```
+
+`extension` and `ext` are aliases for `extensions`. Shell completion suggests identifiers after `dot polkadot.extensions.<Tab>`.
+
+The list view tags each entry:
+
+- `[builtin]` — `polkadot-api` fills this in for you (e.g. `CheckMortality`, `CheckNonce`, `ChargeTransactionPayment`, `CheckMetadataHash`)
+- `[custom]` — you must provide a value with `--ext` when signing, for example `--ext '{"<Identifier>":{"value":<v>}}'`
+
+The detail view shows the extension's value type, its `additionalSigned` type, and a ready-to-adapt `--ext` snippet for custom extensions. Use this to discover what `--ext` payload a chain expects before submitting a `dot tx` command.
 
 ### Submit extrinsics
 
@@ -805,6 +839,8 @@ For manual override, use `--ext` with a JSON object:
 ```bash
 dot tx.System.remark 0xdeadbeef --from alice --chain polkadot --ext '{"MyExtension":{"value":"..."}}'
 ```
+
+Not sure which extensions a chain exposes? Run `dot <chain>.extensions` (see [Transaction extensions](#transaction-extensions)) to list them all with value types and a `[builtin]` / `[custom]` marker.
 
 #### Transaction options
 

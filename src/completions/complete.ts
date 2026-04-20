@@ -4,9 +4,14 @@ import type { Config } from "../config/types.ts";
 import { DEV_NAMES } from "../core/accounts.ts";
 import { getAlgorithmNames } from "../core/hash.ts";
 import type { PalletInfo } from "../core/metadata.ts";
-import { listPallets, listRuntimeApis, parseMetadata } from "../core/metadata.ts";
+import {
+  getSignedExtensionNames,
+  listPallets,
+  listRuntimeApis,
+  parseMetadata,
+} from "../core/metadata.ts";
 
-const CATEGORIES = ["query", "tx", "const", "events", "errors", "apis"] as const;
+const CATEGORIES = ["query", "tx", "const", "events", "errors", "apis", "extensions"] as const;
 
 const CATEGORY_ALIASES: Record<string, string> = {
   query: "query",
@@ -20,6 +25,9 @@ const CATEGORY_ALIASES: Record<string, string> = {
   error: "errors",
   apis: "apis",
   api: "apis",
+  extensions: "extensions",
+  extension: "extensions",
+  ext: "extensions",
 };
 
 const NAMED_COMMANDS = ["chain", "account", "inspect", "hash", "sign", "parachain", "completions"];
@@ -74,6 +82,15 @@ async function loadRuntimeApiNames(
     name: a.name,
     methodNames: a.methods.map((m) => m.name),
   }));
+}
+
+async function loadExtensionIdentifiers(
+  _config: Config,
+  chainName: string,
+): Promise<string[] | null> {
+  const raw = await loadMetadata(chainName);
+  if (!raw) return null;
+  return getSignedExtensionNames(parseMetadata(raw));
 }
 
 function filterPallets(pallets: PalletInfo[], category: string): PalletInfo[] {
@@ -256,6 +273,18 @@ async function completeDotpath(
       );
     }
 
+    // Transaction extensions are flat: <category>.<Identifier> (no sub-items)
+    if (category === "extensions") {
+      return completeExtensionsCategory(
+        first,
+        numComplete,
+        endsWithDot,
+        currentWord,
+        config,
+        chainFromFlag,
+      );
+    }
+
     if (numComplete === 1 && endsWithDot) {
       // "category." → pallet names
       const chainName = chainFromFlag;
@@ -321,6 +350,17 @@ async function completeDotpath(
           numComplete - 1,
           endsWithDot,
           completeSegments.slice(1),
+          currentWord,
+          config,
+          chainName,
+        );
+      }
+
+      if (category === "extensions") {
+        return completeExtensionsCategory(
+          `${first}.${completeSegments[1]!}`,
+          numComplete - 1,
+          endsWithDot,
           currentWord,
           config,
           chainName,
@@ -408,6 +448,38 @@ async function completeApisCategory(
     if (!api) return [];
     const candidates = api.methodNames.map((m) => `${prefix}.${apiName}.${m}`);
     return filterPrefix(candidates, endsWithDot ? currentWord.slice(0, -1) : currentWord);
+  }
+
+  return [];
+}
+
+/**
+ * Complete transaction extension identifiers.
+ * Extensions are flat: `extensions.<Identifier>` (no sub-items).
+ * `prefix` is the dotpath prefix before the identifier (e.g. "extensions" or "polkadot.extensions").
+ * `numComplete` is the number of complete segments after the category (0 or 1).
+ */
+async function completeExtensionsCategory(
+  prefix: string,
+  numComplete: number,
+  endsWithDot: boolean,
+  currentWord: string,
+  config: Config,
+  chainNameOverride?: string,
+): Promise<string[]> {
+  const chainName = chainNameOverride;
+  if (!chainName) return [];
+  const names = await loadExtensionIdentifiers(config, chainName);
+  if (!names) return [];
+
+  if (numComplete === 1 && endsWithDot) {
+    const candidates = names.map((n) => `${prefix}.${n}`);
+    return filterPrefix(candidates, currentWord.slice(0, -1));
+  }
+
+  if (numComplete === 1 && !endsWithDot) {
+    const candidates = names.map((n) => `${prefix}.${n}`);
+    return filterPrefix(candidates, currentWord);
   }
 
   return [];

@@ -5,13 +5,17 @@ import {
   describeCallArgs,
   describeEventFields,
   describeRuntimeApiMethodArgs,
+  describeSignedExtension,
   describeType,
   fetchMetadataFromChain,
   findPallet,
   findRuntimeApi,
+  findSignedExtension,
   getOrFetchMetadata,
   getPalletNames,
   getRuntimeApiNames,
+  getSignedExtensionNames,
+  getSignedExtensions,
   listPallets,
   parseMetadata,
 } from "../core/metadata.ts";
@@ -705,4 +709,79 @@ export async function showItemHelp(
       return;
     }
   }
+}
+
+export async function handleExtensions(
+  target: string | undefined,
+  opts: { chain?: string; rpc?: string; output?: string; json?: boolean },
+) {
+  const config = await loadConfig();
+  const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
+  const meta = await loadMeta(chainName, chainConfig, opts.rpc);
+
+  if (!target) {
+    const extensions = getSignedExtensions(meta)
+      .map((e) => describeSignedExtension(meta, e))
+      .sort((a, b) => a.identifier.localeCompare(b.identifier));
+
+    if (isJsonOutput(opts)) {
+      console.log(
+        formatJson({
+          chain: chainName,
+          extensions: extensions.map((e) => ({
+            identifier: e.identifier,
+            valueType: e.valueType,
+            additionalSignedType: e.additionalSignedType,
+            isBuiltin: e.isBuiltin,
+          })),
+        }),
+      );
+      return;
+    }
+
+    printHeading(`Transaction extensions on ${chainName} (${extensions.length})`);
+    for (const e of extensions) {
+      const tag = e.isBuiltin ? `${DIM}[builtin]${RESET}` : `${CYAN}[custom]${RESET}`;
+      printItem(e.identifier, `${e.valueType}  ${tag}`);
+    }
+    console.log();
+    return;
+  }
+
+  const info = findSignedExtension(meta, target);
+  if (!info) {
+    const names = getSignedExtensionNames(meta);
+    throw new Error(suggestMessage("transaction extension", target, names));
+  }
+  const described = describeSignedExtension(meta, info);
+
+  if (isJsonOutput(opts)) {
+    console.log(
+      formatJson({
+        chain: chainName,
+        identifier: described.identifier,
+        valueType: described.valueType,
+        additionalSignedType: described.additionalSignedType,
+        valueTypeId: described.valueTypeId,
+        additionalSignedTypeId: described.additionalSignedTypeId,
+        isBuiltin: described.isBuiltin,
+      }),
+    );
+    return;
+  }
+
+  printHeading(`${described.identifier} (Transaction Extension)`);
+  console.log(`  ${BOLD}Value type:${RESET}       ${described.valueType}`);
+  console.log(`  ${BOLD}AdditionalSigned:${RESET} ${described.additionalSignedType}`);
+  console.log(
+    `  ${BOLD}Handled by:${RESET}       ${described.isBuiltin ? "polkadot-api (builtin)" : "user (custom — provide via --ext)"}`,
+  );
+  if (!described.isBuiltin) {
+    console.log();
+    console.log(`${BOLD}Usage:${RESET}`);
+    console.log(
+      `  dot tx.<Pallet>.<Call> --from <acc> --ext '{"${described.identifier}":{"value":<v>}}'`,
+    );
+  }
+  console.log();
 }
