@@ -160,7 +160,7 @@ Removing a chain that other chains reference as their `relay` prints a warning l
 
 ### Export chain configuration
 
-Export chain configurations to a JSON file or stdout for backup, sharing, or transfer to another machine. By default, only user-added chains and built-ins with modified RPCs are exported. Metadata is not included — re-fetch with `dot chain update --all` after importing.
+Export chain configurations to a JSON file or stdout for backup, sharing, or transfer to another machine. By default, only user-added chains and built-ins with modified RPCs are exported. Metadata is not included in the export — `dot chain import` re-fetches it automatically for each imported chain (see [Import chain configuration](#import-chain-configuration) below).
 
 ```
 # Export custom chains to stdout (pipe-friendly)
@@ -192,7 +192,7 @@ The export format is JSON with a `chains` field:
 
 ### Import chain configuration
 
-Import chain configurations from a JSON file or stdin:
+Import chain configurations from a JSON file or stdin. Running `dot chain import` with no file prints this section's help instead of blocking on stdin — there's no way to accidentally hang the CLI.
 
 ```
 # Import from a file
@@ -204,6 +204,9 @@ dot chain import my-chains.json --dry-run
 # Overwrite existing chains
 dot chain import my-chains.json --overwrite
 
+# Skip automatic metadata fetch (offline / CI bootstrap)
+dot chain import my-chains.json --no-metadata
+
 # Import from stdin (pipe from another machine)
 ssh remote-dev "dot chain export" | dot chain import -
 ```
@@ -212,7 +215,26 @@ Import behavior:
 
 - **Existing chains** are skipped with a warning unless `--overwrite` is passed
 - **Relay references** are validated — a warning is printed if a chain references a relay that doesn't exist in the import file or current config
-- After import, run `dot chain update --all` to fetch metadata for the new chains
+- **Metadata is fetched automatically** for every newly added or overwritten chain so tab completion and metadata-dependent commands (`dot <chain>.query.*`, `dot inspect`, …) work immediately. Partial fetch failures print `✗ <chain> — <error>` but do not fail the import. Pass `--no-metadata` to skip the fetch; you can always backfill later with `dot chain update --all`.
+
+Output prints one line per chain with a status glyph (`✓` added, `⟳` overwritten, `-` skipped) and a terse count summary at the end:
+
+```
+  ✓ preview
+  ✓ preview-people
+  ⟳ polkadot (overwritten)
+  - paseo (skipped)
+
+2 added, 1 overwritten, 1 skipped
+
+Updating metadata for 3 chain(s)...
+
+  ✓ preview
+  ✓ preview-people
+  ✓ polkadot
+```
+
+With `--json` the output is structured — `{ action, added, overwritten, skipped, warnings }` — and the metadata-fetch phase is skipped.
 
 ## Accounts
 
@@ -257,36 +279,38 @@ Watch-only accounts appear in `dot account list` with a `(watch-only)` badge. Th
 
 The `add` subcommand is context-sensitive:
 - `add <name> <address>` — creates a watch-only entry (no secret)
-- `add <name> --secret "..."` — imports a keyed account (same as `import`)
-- `add <name> --env VAR` — imports an env-backed account (same as `import`)
+- `add <name> --secret "..."` — adds a keyed account from a BIP39 mnemonic
+- `add <name> --env VAR` — adds an env-backed account
 
-### Import an account
+`dot account import` is reserved for file-based batch import only (see [Batch-import accounts](#batch-import-accounts) below).
 
-Import from a BIP39 mnemonic or raw hex seed:
+### Add a keyed account
 
-```
-dot account import treasury --secret "word1 word2 ... word12"
-dot account import raw-key --secret 0xabcdef...
-```
-
-Use `--path` to import with a derivation path:
+Add an account from a BIP39 mnemonic or raw hex seed:
 
 ```
-dot account import hot-wallet --secret "word1 word2 ... word12" --path //hot
+dot account add treasury --secret "word1 word2 ... word12"
+dot account add raw-key --secret 0xabcdef...
 ```
 
-### Import an env-var-backed account
+Use `--path` to add with a derivation path:
+
+```
+dot account add hot-wallet --secret "word1 word2 ... word12" --path //hot
+```
+
+### Add an env-var-backed account
 
 Store a reference to an environment variable instead of the secret itself. The secret never touches disk — ideal for CI/CD pipelines and security-conscious workflows:
 
 ```
-dot account import ci-signer --env MY_SECRET
+dot account add ci-signer --env MY_SECRET
 ```
 
 `--secret` and `--env` are mutually exclusive. Both `--secret` and `--env` can be combined with `--path`:
 
 ```
-dot account import ci-signer --env MY_SECRET --path //ci
+dot account add ci-signer --env MY_SECRET --path //ci
 ```
 
 At signing time, the CLI reads `$MY_SECRET` and derives the keypair. If the variable is not set, the CLI errors with a clear message.
@@ -316,14 +340,14 @@ dot account derive treasury treasury-staking --path //staking
 
 ### Derivation paths
 
-Use `--path` with `create`, `import`, or `derive` to derive child keys from the same secret. Different paths produce different keypairs, enabling key separation (e.g. staking vs. governance) without managing multiple mnemonics.
+Use `--path` with `create`, `add`, or `derive` to derive child keys from the same secret. Different paths produce different keypairs, enabling key separation (e.g. staking vs. governance) without managing multiple mnemonics.
 
 Derivation paths use the Substrate convention: `//hard` for hard derivation, `/soft` for soft derivation. Paths can have multiple segments:
 
 ```
 dot account create validator --path //staking
 dot account create multi --path //polkadot//0/wallet
-dot account import treasury --secret "..." --path //hot
+dot account add treasury --secret "..." --path //hot
 dot account derive treasury treasury-gov --path //governance
 ```
 
@@ -440,21 +464,23 @@ Security considerations:
 
 ### Batch-import accounts
 
-Import accounts from a previously exported JSON file. This is distinct from the existing `dot account import <name> --secret "..."` (single account from mnemonic) — batch import uses `--file`:
+Import accounts from a previously exported JSON file. `dot account import` is file-only — analog to `dot chain import`. The path is passed positionally (the legacy `--file` flag is still accepted). For single-account imports from a mnemonic or env variable, use [`dot account add`](#add-a-keyed-account) instead.
 
 ```
-# Import from a file
-dot account import --file team-accounts.json
+# Import from a file (positional path)
+dot account import team-accounts.json
 
 # Preview without applying changes
-dot account import --file accounts.json --dry-run
+dot account import accounts.json --dry-run
 
 # Overwrite existing accounts
-dot account import --file accounts.json --overwrite
+dot account import accounts.json --overwrite
 
 # Import from stdin
-ssh remote-dev "dot account export --watch-only" | dot account import --file /dev/stdin
+ssh remote-dev "dot account export --watch-only" | dot account import -
 ```
+
+Running `dot account import` with no file prints this section's help instead of blocking on stdin.
 
 Import behavior:
 
@@ -465,11 +491,26 @@ Import behavior:
 - **Bandersnatch keys** are preserved if present in the export
 - **Dev account names** (alice, bob, etc.) are skipped
 
-The existing single-account import is unchanged:
+Output prints one line per account with a status glyph (`✓` added, `⟳` overwritten, `-` skipped) and a terse count summary at the end:
 
 ```
-dot account import treasury --secret "word1 word2 ..."     # single account (unchanged)
-dot account import --file accounts.json                     # batch import (new)
+  ✓ treasury
+  ✓ council-member
+  - alice (skipped)
+
+2 added, 1 skipped
+```
+
+Migration from the pre-1.x single-account import form:
+
+```
+# Before
+dot account import treasury --secret "word1 word2 ..."     # removed
+dot account import --file accounts.json                     # still works
+
+# After
+dot account add treasury --secret "word1 word2 ..."        # canonical single-account
+dot account import accounts.json                           # positional batch import
 ```
 
 ### Inspect accounts

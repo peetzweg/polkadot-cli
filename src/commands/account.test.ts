@@ -79,10 +79,10 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stderr).toContain("already exists");
   });
 
-  test("import name --secret <mnemonic> succeeds", async () => {
+  test("add name --secret <mnemonic> succeeds", async () => {
     const { stdout, exitCode } = await runCli([
       "account",
-      "import",
+      "add",
       "my-imported",
       "--secret",
       TEST_MNEMONIC,
@@ -92,10 +92,10 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stdout).toContain("Address:");
   });
 
-  test("import with invalid secret errors", async () => {
+  test("add with invalid secret errors", async () => {
     const { stderr, exitCode } = await runCli([
       "account",
-      "import",
+      "add",
       "bad-key",
       "--secret",
       "not a valid mnemonic at all",
@@ -104,26 +104,13 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stderr).toContain("Invalid secret");
   });
 
-  test("import (no name) errors", async () => {
-    const { stderr, exitCode } = await runCli(["account", "import"]);
+  test("import (no file, no stdin) errors without hanging", async () => {
+    const { exitCode } = await runCli(["account", "import"]);
     expect(exitCode).toBe(1);
-    expect(stderr).toContain("name is required");
   });
 
-  test("import name (no --secret or --env) errors", async () => {
-    const { stderr, exitCode } = await runCli(["account", "import", "my-key"]);
-    expect(exitCode).toBe(1);
-    expect(stderr).toContain("--secret or --env is required");
-  });
-
-  test("import bob (dev name) errors", async () => {
-    const { stderr, exitCode } = await runCli([
-      "account",
-      "import",
-      "bob",
-      "--secret",
-      TEST_MNEMONIC,
-    ]);
+  test("add bob (dev name) errors", async () => {
+    const { stderr, exitCode } = await runCli(["account", "add", "bob", "--secret", TEST_MNEMONIC]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("built-in dev account");
   });
@@ -186,32 +173,9 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stderr).toContain("not found");
   });
 
-  test("add is an alias for import (--secret)", async () => {
-    const { stdout, exitCode } = await runCli([
-      "account",
-      "add",
-      "my-imported",
-      "--secret",
-      TEST_MNEMONIC,
-    ]);
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain("Account Imported");
-    expect(stdout).toContain("Address:");
-  });
-
-  test("add is an alias for import (--env)", async () => {
+  test("add name --env VAR (env set) succeeds with address", async () => {
     const { stdout, exitCode } = await runCli(
       ["account", "add", "env-test", "--env", "MY_SECRET"],
-      { env: { MY_SECRET: TEST_MNEMONIC } },
-    );
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain("Account Imported");
-    expect(stdout).toContain("Address:");
-  });
-
-  test("import name --env VAR (env set) succeeds with address", async () => {
-    const { stdout, exitCode } = await runCli(
-      ["account", "import", "env-test", "--env", "MY_SECRET"],
       {
         env: { MY_SECRET: TEST_MNEMONIC },
       },
@@ -221,9 +185,9 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stdout).toContain("Address:");
   });
 
-  test("import name --env VAR (env not set) succeeds with deferred", async () => {
+  test("add name --env VAR (env not set) succeeds with deferred", async () => {
     const { stdout, exitCode } = await runCli(
-      ["account", "import", "env-test", "--env", "MY_SECRET"],
+      ["account", "add", "env-test", "--env", "MY_SECRET"],
       { env: { MY_SECRET: "" } },
     );
     expect(exitCode).toBe(0);
@@ -231,29 +195,26 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stdout).toContain("will resolve");
   });
 
-  test("import --secret and --env together errors", async () => {
+  test("add --secret and --env together errors", async () => {
     const { stderr, exitCode } = await runCli(
-      ["account", "import", "env-test", "--secret", TEST_MNEMONIC, "--env", "MY_SECRET"],
+      ["account", "add", "env-test", "--secret", TEST_MNEMONIC, "--env", "MY_SECRET"],
       { env: { MY_SECRET: TEST_MNEMONIC } },
     );
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Use --secret or --env, not both");
   });
 
-  test("import alice --env VAR (dev name) errors", async () => {
-    const { stderr, exitCode } = await runCli(
-      ["account", "import", "alice", "--env", "MY_SECRET"],
-      {
-        env: { MY_SECRET: TEST_MNEMONIC },
-      },
-    );
+  test("add alice --env VAR (dev name) errors", async () => {
+    const { stderr, exitCode } = await runCli(["account", "add", "alice", "--env", "MY_SECRET"], {
+      env: { MY_SECRET: TEST_MNEMONIC },
+    });
     expect(exitCode).toBe(1);
     expect(stderr).toContain("built-in dev account");
   });
 
-  test("import duplicate --env VAR errors", async () => {
+  test("add duplicate --env VAR errors", async () => {
     const { stderr, exitCode } = await runCli(
-      ["account", "import", "my-account", "--env", "MY_SECRET"],
+      ["account", "add", "my-account", "--env", "MY_SECRET"],
       {
         accounts: [STORED_ACCOUNT],
         env: { MY_SECRET: TEST_MNEMONIC },
@@ -368,10 +329,10 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stdout).toContain("Address:");
   });
 
-  test("import --secret with --path stores path", async () => {
+  test("add --secret with --path stores path", async () => {
     const { stdout, exitCode } = await runCli([
       "account",
-      "import",
+      "add",
       "my-derived",
       "--secret",
       TEST_MNEMONIC,
@@ -385,9 +346,9 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stdout).toContain("Address:");
   });
 
-  test("import --env with --path stores path", async () => {
+  test("add --env with --path stores path", async () => {
     const { stdout, exitCode } = await runCli(
-      ["account", "import", "env-derived", "--env", "MY_SECRET", "--path", "//ci"],
+      ["account", "add", "env-derived", "--env", "MY_SECRET", "--path", "//ci"],
       { env: { MY_SECRET: TEST_MNEMONIC } },
     );
     expect(exitCode).toBe(0);
@@ -502,10 +463,10 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stdout).toContain("Address:");
   });
 
-  test("import --secret with multi-segment --path //hard/soft//hard2", async () => {
+  test("add --secret with multi-segment --path //hard/soft//hard2", async () => {
     const { stdout, exitCode } = await runCli([
       "account",
-      "import",
+      "add",
       "multi-imported",
       "--secret",
       TEST_MNEMONIC,
@@ -519,11 +480,11 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stdout).toContain("Address:");
   });
 
-  test("import with different multi-segment paths produces different addresses", async () => {
+  test("add with different multi-segment paths produces different addresses", async () => {
     const run = async (path: string) => {
       const { stdout, exitCode } = await runCli([
         "account",
-        "import",
+        "add",
         `acct-${path.replace(/\//g, "-")}`,
         "--secret",
         TEST_MNEMONIC,
@@ -961,7 +922,7 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(parsed.accounts[0].bandersnatch).toEqual({ "": "0xaabb", candidate: "0xccdd" });
   });
 
-  test("batch import adds new accounts", async () => {
+  test("batch import adds new accounts (positional file)", async () => {
     const importData = JSON.stringify({
       accounts: [
         {
@@ -971,12 +932,12 @@ describe("dot account", { timeout: 15_000 }, () => {
         },
       ],
     });
-    const { stdout, exitCode } = await runCli(
-      ["account", "import", "--file", "{{HOME}}/import.json"],
-      { files: { "import.json": importData } },
-    );
+    const { stdout, exitCode } = await runCli(["account", "import", "{{HOME}}/import.json"], {
+      files: { "import.json": importData },
+    });
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("Added: imported-watch");
+    expect(stdout).toContain("imported-watch");
+    expect(stdout).toContain("1 added");
   });
 
   test("batch import skips existing accounts without --overwrite", async () => {
@@ -990,12 +951,13 @@ describe("dot account", { timeout: 15_000 }, () => {
       ],
     });
     const { stdout, stderr, exitCode } = await runCli(
-      ["account", "import", "--file", "{{HOME}}/import.json"],
+      ["account", "import", "{{HOME}}/import.json"],
       { accounts: [STORED_ACCOUNT], files: { "import.json": importData } },
     );
     expect(exitCode).toBe(0);
     expect(stderr).toContain("Skipped");
-    expect(stdout).toContain("Skipped: my-account");
+    expect(stdout).toContain("my-account (skipped)");
+    expect(stdout).toContain("1 skipped");
   });
 
   test("batch import --overwrite replaces existing accounts", async () => {
@@ -1009,11 +971,13 @@ describe("dot account", { timeout: 15_000 }, () => {
       ],
     });
     const { stdout, exitCode } = await runCli(
-      ["account", "import", "--file", "{{HOME}}/import.json", "--overwrite"],
+      ["account", "import", "{{HOME}}/import.json", "--overwrite"],
       { accounts: [STORED_ACCOUNT], files: { "import.json": importData } },
     );
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("Overwritten: my-account");
+    expect(stdout).toContain("my-account");
+    expect(stdout).toContain("(overwritten)");
+    expect(stdout).toContain("1 overwritten");
   });
 
   test("batch import --dry-run does not persist", async () => {
@@ -1027,12 +991,13 @@ describe("dot account", { timeout: 15_000 }, () => {
       ],
     });
     const { stdout, exitCode } = await runCli(
-      ["account", "import", "--file", "{{HOME}}/import.json", "--dry-run"],
+      ["account", "import", "{{HOME}}/import.json", "--dry-run"],
       { files: { "import.json": importData } },
     );
     expect(exitCode).toBe(0);
     expect(stdout).toContain("(dry run)");
-    expect(stdout).toContain("Added: dry-run-acct");
+    expect(stdout).toContain("dry-run-acct");
+    expect(stdout).toContain("1 added");
   });
 
   test("batch import redacted account becomes watch-only", async () => {
@@ -1047,7 +1012,7 @@ describe("dot account", { timeout: 15_000 }, () => {
       ],
     });
     const { stdout, exitCode } = await runCli(
-      ["account", "import", "--file", "{{HOME}}/import.json", "--json"],
+      ["account", "import", "{{HOME}}/import.json", "--json"],
       { files: { "import.json": importData } },
     );
     expect(exitCode).toBe(0);
@@ -1067,7 +1032,7 @@ describe("dot account", { timeout: 15_000 }, () => {
       ],
     });
     const { stdout, exitCode } = await runCli(
-      ["account", "import", "--file", "{{HOME}}/import.json", "--json"],
+      ["account", "import", "{{HOME}}/import.json", "--json"],
       { files: { "import.json": importData } },
     );
     expect(exitCode).toBe(0);
@@ -1087,7 +1052,7 @@ describe("dot account", { timeout: 15_000 }, () => {
       ],
     });
     const { stdout, exitCode } = await runCli(
-      ["account", "import", "--file", "{{HOME}}/import.json", "--json"],
+      ["account", "import", "{{HOME}}/import.json", "--json"],
       { files: { "import.json": importData } },
     );
     expect(exitCode).toBe(0);
@@ -1099,25 +1064,23 @@ describe("dot account", { timeout: 15_000 }, () => {
     const importData = JSON.stringify({
       accounts: [{ name: "alice", publicKey: "0xaabb", derivationPath: "" }],
     });
-    const { stderr, exitCode } = await runCli(
-      ["account", "import", "--file", "{{HOME}}/import.json"],
-      { files: { "import.json": importData } },
-    );
+    const { stderr, exitCode } = await runCli(["account", "import", "{{HOME}}/import.json"], {
+      files: { "import.json": importData },
+    });
     expect(exitCode).toBe(0);
     expect(stderr).toContain("Skipped");
     expect(stderr).toContain("dev account");
   });
 
   test("batch import invalid JSON errors", async () => {
-    const { stderr, exitCode } = await runCli(
-      ["account", "import", "--file", "{{HOME}}/bad.json"],
-      { files: { "bad.json": "not valid json" } },
-    );
+    const { stderr, exitCode } = await runCli(["account", "import", "{{HOME}}/bad.json"], {
+      files: { "bad.json": "not valid json" },
+    });
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Invalid JSON");
   });
 
-  test("batch import from stdin via /dev/stdin", async () => {
+  test("batch import from stdin", async () => {
     const importData = JSON.stringify({
       accounts: [
         {
@@ -1127,11 +1090,12 @@ describe("dot account", { timeout: 15_000 }, () => {
         },
       ],
     });
-    const { stdout, exitCode } = await runCli(["account", "import", "--file", "/dev/stdin"], {
+    const { stdout, exitCode } = await runCli(["account", "import", "-"], {
       stdin: importData,
     });
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("Added: stdin-acct");
+    expect(stdout).toContain("stdin-acct");
+    expect(stdout).toContain("1 added");
   });
 
   test("batch import --json returns structured output", async () => {
@@ -1145,7 +1109,7 @@ describe("dot account", { timeout: 15_000 }, () => {
       ],
     });
     const { stdout, exitCode } = await runCli(
-      ["account", "import", "--file", "{{HOME}}/import.json", "--json"],
+      ["account", "import", "{{HOME}}/import.json", "--json"],
       { files: { "import.json": importData } },
     );
     expect(exitCode).toBe(0);
@@ -1161,8 +1125,8 @@ describe("dot account", { timeout: 15_000 }, () => {
     });
     expect(exported.exitCode).toBe(0);
 
-    // Import into clean environment via /dev/stdin
-    const imported = await runCli(["account", "import", "--file", "/dev/stdin", "--json"], {
+    // Import into clean environment via stdin
+    const imported = await runCli(["account", "import", "-", "--json"], {
       stdin: exported.stdout,
     });
     expect(imported.exitCode).toBe(0);
@@ -1171,11 +1135,10 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(result.added).toContain("treasury");
   });
 
-  test("existing single import still works alongside batch import", async () => {
-    // Existing single-account import should still work
+  test("single-account add still works alongside batch import", async () => {
     const { stdout, exitCode } = await runCli([
       "account",
-      "import",
+      "add",
       "test-single",
       "--secret",
       TEST_MNEMONIC,
@@ -1183,5 +1146,65 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Account Imported");
     expect(stdout).toContain("test-single");
+  });
+
+  test("batch import prints per-item lines, not comma-joined summary", async () => {
+    const importData = JSON.stringify({
+      accounts: [
+        {
+          name: "acct-a",
+          publicKey: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          derivationPath: "",
+        },
+        {
+          name: "acct-b",
+          publicKey: "0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48",
+          derivationPath: "",
+        },
+        {
+          name: "acct-c",
+          publicKey: "0x306721211d5404bd9da88e0204360a1a9ab8b87c66c1bc2fcdd37f3c2222cc20",
+          derivationPath: "",
+        },
+      ],
+    });
+    const { stdout, exitCode } = await runCli(
+      ["account", "import", "{{HOME}}/import.json", "--dry-run"],
+      { files: { "import.json": importData } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/✓ acct-a\b/);
+    expect(stdout).toMatch(/✓ acct-b\b/);
+    expect(stdout).toMatch(/✓ acct-c\b/);
+    expect(stdout).not.toContain("acct-a, acct-b, acct-c");
+    expect(stdout).not.toContain("Added: acct-a");
+    expect(stdout).toContain("3 added");
+  });
+
+  test("batch import empty file prints no-accounts message", async () => {
+    const importData = JSON.stringify({ accounts: [] });
+    const { stdout, exitCode } = await runCli(
+      ["account", "import", "{{HOME}}/import.json", "--dry-run"],
+      { files: { "import.json": importData } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("No accounts imported");
+  });
+
+  test("account import no longer accepts --secret (single-import removed)", async () => {
+    // `dot account import <name> --secret ...` must NOT create an account anymore.
+    // The canonical path is `dot account add <name> --secret ...`.
+    const { exitCode } = await runCli(
+      ["account", "import", "should-not-work", "--secret", TEST_MNEMONIC],
+      {},
+    );
+    // Either errors or no-op, but MUST NOT create an account.
+    const list = await runCli(["account", "list", "--json"]);
+    const parsed = JSON.parse(list.stdout);
+    const match = parsed.accounts?.find?.((a: { name: string }) => a.name === "should-not-work");
+    expect(match).toBeUndefined();
+    // Exit code can be 0 (help shown) or 1 (invalid JSON when no stdin);
+    // either way, no account was created.
+    expect([0, 1]).toContain(exitCode);
   });
 });
