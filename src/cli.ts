@@ -272,9 +272,12 @@ if (process.argv[2] === "__complete") {
             break;
           case "extensions": {
             if (parsed.item) {
-              throw new CliError(
-                `Transaction extensions have no sub-items. Try "dot extensions.${parsed.pallet}".`,
-              );
+              const suggestion = parsed.chain
+                ? `dot ${parsed.chain}.extensions.${parsed.pallet}`
+                : opts.chain
+                  ? `dot extensions.${parsed.pallet} --chain ${opts.chain}`
+                  : `dot extensions.${parsed.pallet} --chain <chain>`;
+              throw new CliError(`Transaction extensions have no sub-items. Try "${suggestion}".`);
             }
             await handleExtensions(parsed.pallet, handlerOpts);
             break;
