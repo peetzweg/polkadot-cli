@@ -18,6 +18,7 @@ import {
   getPalletNames,
   getSignedExtensions,
   listPallets,
+  PAPI_BUILTIN_EXTENSIONS,
 } from "../core/metadata.ts";
 import {
   BOLD,
@@ -1443,22 +1444,6 @@ function parsePrimitive(prim: string, arg: string): string | number | bigint | b
 
 // --- Custom signed extensions support ---
 
-/** Extensions that polkadot-api handles internally */
-const PAPI_BUILTIN_EXTENSIONS = new Set([
-  "CheckNonZeroSender",
-  "CheckSpecVersion",
-  "CheckTxVersion",
-  "CheckGenesis",
-  "CheckMortality",
-  "CheckNonce",
-  "CheckWeight",
-  "ChargeTransactionPayment",
-  "ChargeAssetTxPayment",
-  "CheckMetadataHash",
-  "StorageWeightReclaim",
-  "PrevalidateAttests",
-]);
-
 function parseExtOption(ext: string | undefined): Record<string, any> {
   if (!ext) return {};
   try {
@@ -1482,7 +1467,7 @@ const NO_DEFAULT = Symbol("no-default");
 function buildCustomSignedExtensions(
   meta: MetadataBundle,
   userOverrides: Record<string, any>,
-  builtins: Set<string> = PAPI_BUILTIN_EXTENSIONS,
+  builtins: ReadonlySet<string> = PAPI_BUILTIN_EXTENSIONS,
 ): Record<string, { value?: any; additionalSigned?: any }> {
   const result: Record<string, { value?: any; additionalSigned?: any }> = {};
   const extensions = getSignedExtensions(meta);

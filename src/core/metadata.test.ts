@@ -4,17 +4,21 @@ import { MetadataError } from "../utils/errors.ts";
 import {
   describeCallArgs,
   describeRuntimeApiMethodArgs,
+  describeSignedExtension,
   describeType,
   findPallet,
   findRuntimeApi,
+  findSignedExtension,
   getOrFetchMetadata,
   getPalletNames,
   getRuntimeApiNames,
+  getSignedExtensionNames,
   getSignedExtensions,
   type Lookup,
   listPallets,
   listRuntimeApis,
   type MetadataBundle,
+  PAPI_BUILTIN_EXTENSIONS,
   parseMetadata,
 } from "./metadata.ts";
 
@@ -221,6 +225,59 @@ describe("getSignedExtensions", () => {
       expect(typeof ext.identifier).toBe("string");
       expect(typeof ext.type).toBe("number");
       expect(typeof ext.additionalSigned).toBe("number");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSignedExtensionNames / findSignedExtension / describeSignedExtension
+// ---------------------------------------------------------------------------
+describe("getSignedExtensionNames", () => {
+  test("returns sorted identifiers matching getSignedExtensions", () => {
+    const names = getSignedExtensionNames(meta);
+    const expected = getSignedExtensions(meta)
+      .map((e) => e.identifier)
+      .sort((a, b) => a.localeCompare(b));
+    expect(names).toEqual(expected);
+  });
+
+  test("CheckMortality is present", () => {
+    expect(getSignedExtensionNames(meta)).toContain("CheckMortality");
+  });
+});
+
+describe("findSignedExtension", () => {
+  test("finds by exact name", () => {
+    const ext = findSignedExtension(meta, "CheckMortality");
+    expect(ext?.identifier).toBe("CheckMortality");
+  });
+
+  test("matches case-insensitively", () => {
+    const ext = findSignedExtension(meta, "checkmortality");
+    expect(ext?.identifier).toBe("CheckMortality");
+  });
+
+  test("returns undefined for unknown identifier", () => {
+    expect(findSignedExtension(meta, "TotallyBogusExtension")).toBeUndefined();
+  });
+});
+
+describe("describeSignedExtension", () => {
+  test("marks builtin extensions as builtin", () => {
+    const info = findSignedExtension(meta, "CheckMortality")!;
+    const described = describeSignedExtension(meta, info);
+    expect(described.identifier).toBe("CheckMortality");
+    expect(described.isBuiltin).toBe(true);
+    expect(typeof described.valueType).toBe("string");
+    expect(typeof described.additionalSignedType).toBe("string");
+    expect(described.valueTypeId).toBe(info.type);
+    expect(described.additionalSignedTypeId).toBe(info.additionalSigned);
+  });
+
+  test("isBuiltin mirrors PAPI_BUILTIN_EXTENSIONS set", () => {
+    for (const info of getSignedExtensions(meta)) {
+      const described = describeSignedExtension(meta, info);
+      expect(described.isBuiltin).toBe(PAPI_BUILTIN_EXTENSIONS.has(info.identifier));
     }
   });
 });

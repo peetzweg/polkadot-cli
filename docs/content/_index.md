@@ -9,7 +9,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ zsh, bash, and fish autocompletion
 - ✅ Exposes all on-chain metadata documentation
 - ✅ Encode, dry-run, and submit extrinsics
-- ✅ Support for custom signed extensions
+- ✅ Support for custom signed extensions — and a `dot extensions` inspector to discover them
 - ✅ Built with agent use in mind — structured JSON output on every command (`--json`)
 - ✅ Fuzzy matching with typo suggestions
 - ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
@@ -878,6 +878,33 @@ Notes:
 
 Run `dot <chain>.apis.<ApiName>.<method> --help` to see the exact argument signature for any method.
 
+### Transaction extensions
+
+Every Substrate transaction carries a list of transaction extensions (also known as signed extensions) that extend the transaction with metadata the runtime validates — nonce, mortality, fee payment, metadata hash, and chain-specific extras. Use `dot <chain>.extensions` to discover which extensions a chain declares, what their value types look like, and which ones you need to fill in yourself when building a transaction.
+
+```
+dot polkadot.extensions                              # list every transaction extension on the chain
+dot polkadot.extensions.CheckMortality               # detail view for one extension
+dot extensions.ChargeTransactionPayment --chain polkadot   # --chain flag form
+dot extensions CheckMortality --chain polkadot       # space-separated form
+dot polkadot.extensions --json                       # structured output for scripts / agents
+```
+
+`extension` and `ext` are aliases for `extensions`. Shell completion suggests identifiers after `dot polkadot.extensions.<Tab>`.
+
+Each entry is tagged:
+
+- `[builtin]` — `polkadot-api` handles this extension for you when signing. Examples: `CheckMortality`, `CheckNonce`, `ChargeTransactionPayment`, `CheckMetadataHash`, `StorageWeightReclaim`.
+- `[custom]` — you must provide a value via `--ext` when signing. The detail view shows the value type and a ready-to-adapt snippet:
+
+  ```
+  dot tx.<Pallet>.<Call> --from <acc> --chain <chain> --ext '{"<Identifier>":{"value":<v>}}'
+  ```
+
+The detail view also shows the extension's `additionalSigned` type (included in the signed payload but not in the transaction body). `--json` output emits structured records with `identifier`, `valueType`, `additionalSignedType`, `valueTypeId`, `additionalSignedTypeId`, and `isBuiltin` — handy for agents and scripts that generate `--ext` payloads automatically.
+
+This is the companion discovery surface for [Custom signed extensions](#custom-signed-extensions) below — run `dot <chain>.extensions` first to learn what the chain expects, then pass the right values to `dot tx ... --ext`.
+
 ## Transactions
 
 Build, sign, and submit extrinsics using dot-path syntax: `dot tx.Pallet.Call`. Pass arguments after the dot-path, or submit a raw SCALE-encoded call hex. Both forms display a decoded human-readable representation of the call.
@@ -1101,6 +1128,8 @@ For manual override, use `--ext` with a JSON object:
 dot tx.System.remark 0xdeadbeef --from alice --chain polkadot \
   --ext '{"MyExtension":{"value":"..."}}'
 ```
+
+Not sure which extensions a chain exposes or which ones need a `--ext` override? Run `dot extensions --chain <chain>` (see [Transaction extensions](#transaction-extensions)) to list every extension with its value type and a `[builtin]` / `[custom]` marker.
 
 ### Transaction options
 

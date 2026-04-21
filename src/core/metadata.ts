@@ -219,12 +219,66 @@ export interface SignedExtensionInfo {
   additionalSigned: number;
 }
 
+/** Signed extensions that polkadot-api fills in automatically when building a tx. */
+export const PAPI_BUILTIN_EXTENSIONS: ReadonlySet<string> = new Set([
+  "CheckNonZeroSender",
+  "CheckSpecVersion",
+  "CheckTxVersion",
+  "CheckGenesis",
+  "CheckMortality",
+  "CheckNonce",
+  "CheckWeight",
+  "ChargeTransactionPayment",
+  "ChargeAssetTxPayment",
+  "CheckMetadataHash",
+  "StorageWeightReclaim",
+  "PrevalidateAttests",
+]);
+
 export function getSignedExtensions(meta: MetadataBundle): SignedExtensionInfo[] {
   const byVersion = meta.unified.extrinsic.signedExtensions;
   // Use the first (and typically only) version key
   const versionKeys = Object.keys(byVersion);
   if (versionKeys.length === 0) return [];
   return byVersion[Number(versionKeys[0])] ?? [];
+}
+
+export function getSignedExtensionNames(meta: MetadataBundle): string[] {
+  return getSignedExtensions(meta)
+    .map((e) => e.identifier)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+export function findSignedExtension(
+  meta: MetadataBundle,
+  identifier: string,
+): SignedExtensionInfo | undefined {
+  return getSignedExtensions(meta).find(
+    (e) => e.identifier.toLowerCase() === identifier.toLowerCase(),
+  );
+}
+
+export interface SignedExtensionDescription {
+  identifier: string;
+  valueType: string;
+  additionalSignedType: string;
+  valueTypeId: number;
+  additionalSignedTypeId: number;
+  isBuiltin: boolean;
+}
+
+export function describeSignedExtension(
+  meta: MetadataBundle,
+  info: SignedExtensionInfo,
+): SignedExtensionDescription {
+  return {
+    identifier: info.identifier,
+    valueType: describeType(meta.lookup, info.type),
+    additionalSignedType: describeType(meta.lookup, info.additionalSigned),
+    valueTypeId: info.type,
+    additionalSignedTypeId: info.additionalSigned,
+    isBuiltin: PAPI_BUILTIN_EXTENSIONS.has(info.identifier),
+  };
 }
 
 export function getPalletNames(meta: MetadataBundle): string[] {
