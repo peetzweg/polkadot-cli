@@ -57,6 +57,25 @@ npm install -g polkadot-cli@latest
 
 This installs the `dot` command globally.
 
+## Claude Code skill
+
+This repo ships a [Claude Code](https://claude.com/claude-code) skill that teaches Claude how to drive the `dot` CLI — query patterns, tx encoding, runtime API calls, and bash scripting gotchas.
+
+Register the marketplace and install the skill:
+
+```
+/plugin marketplace add peetzweg/polkadot-cli
+/plugin install dot-cli@polkadot-cli
+```
+
+The skill auto-triggers when you ask Claude about `dot`, Substrate storage queries, extrinsic submission, runtime APIs, or XCM. You can also invoke it directly with `/dot-cli`.
+
+To pull the latest skill updates:
+
+```
+/plugin marketplace update polkadot-cli
+```
+
 ## Usage
 
 ### Manage chains
