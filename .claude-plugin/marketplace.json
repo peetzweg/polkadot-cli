@@ -1,0 +1,20 @@
+{
+  "name": "polkadot-cli",
+  "owner": {
+    "name": "peetzweg",
+    "email": "phil.czek@gmail.com"
+  },
+  "metadata": {
+    "description": "Claude Code skill for the polkadot-cli (`dot`) CLI — query, tx, runtime APIs, and scripting patterns for Polkadot/Substrate chains.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "dot-cli",
+      "description": "Guide for using the `dot` CLI to interact with Polkadot/Substrate chains — storage queries, extrinsic submission, runtime APIs, chain management, and bash scripting patterns.",
+      "source": "./",
+      "strict": false,
+      "skills": ["./dot-cli"]
+    }
+  ]
+}
