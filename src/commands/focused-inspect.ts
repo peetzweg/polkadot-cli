@@ -780,7 +780,7 @@ export async function handleExtensions(
     console.log();
     console.log(`${BOLD}Usage:${RESET}`);
     console.log(
-      `  dot tx.<Pallet>.<Call> --from <acc> --ext '{"${described.identifier}":{"value":<v>}}'`,
+      `  dot ${chainName}.tx.<Pallet>.<Call> --from <acc> --ext '{"${described.identifier}":{"value":<v>}}'`,
     );
   }
   console.log();

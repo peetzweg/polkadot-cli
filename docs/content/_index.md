@@ -9,7 +9,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ zsh, bash, and fish autocompletion
 - ✅ Exposes all on-chain metadata documentation
 - ✅ Encode, dry-run, and submit extrinsics
-- ✅ Support for custom signed extensions — and a `dot extensions` inspector to discover them
+- ✅ Support for custom signed extensions — and a `dot <chain>.extensions` inspector to discover them
 - ✅ Built with agent use in mind — structured JSON output on every command (`--json`)
 - ✅ Fuzzy matching with typo suggestions
 - ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
