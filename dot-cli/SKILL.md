@@ -34,16 +34,20 @@ dot apis.XcmPaymentApi             # list methods
 ```bash
 dot chain add my-chain --rpc wss://rpc.example.com
 dot chain list
-dot chain default my-chain
 ```
 
-Once registered, prefix any command: `dot my-chain.query.System.Number`
-
-**Critical gotcha:** Always use registered chain aliases, not `--rpc`. The `--rpc` flag can silently resolve metadata from the wrong chain (known bug). Register first, then query:
+Once registered, every command needs an explicit chain — either a `<chain>.` dotpath prefix or `--chain <name>`. There is no default chain.
 
 ```bash
-# WRONG — may use cached metadata from a different chain
-dot --rpc wss://example.com/asset-hub inspect
+dot my-chain.query.System.Number       # dotpath prefix
+dot query.System.Number --chain my-chain  # --chain flag
+```
+
+**Critical gotcha:** Don't combine `--chain <name>` with `--rpc <url>` pointing at a different chain. The metadata cache is keyed by chain name, not RPC URL, so the CLI will decode against stale metadata and silently produce wrong results. Register a fresh alias instead:
+
+```bash
+# WRONG — polkadot metadata decoded against a Kusama RPC
+dot inspect --chain polkadot --rpc wss://kusama-rpc.polkadot.io
 
 # CORRECT
 dot chain add my-ah --rpc wss://example.com/asset-hub

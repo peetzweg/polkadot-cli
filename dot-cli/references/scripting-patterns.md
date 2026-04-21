@@ -200,14 +200,12 @@ dot chain.apis.AssetConversionApi.get_reserves "$NATIVE" "$ASSET" --json
 
 1. **`undefined` is not JSON.** Always check before piping to `jq`.
 
-2. **`--rpc` uses wrong metadata.** Always register chains with `dot chain add`, never rely on `--rpc` alone.
+2. **`--rpc` uses wrong metadata.** Always register chains with `dot chain add`, never rely on `--rpc` alone. Metadata cache is keyed by chain name, not RPC URL, so `--rpc` can pick up stale metadata from a previous chain with the same alias.
 
-3. **`inspect` only works with chain prefix or default chain.** `dot chain.inspect` works, `dot inspect --rpc wss://...` may not.
+3. **Every command needs an explicit chain.** No default chain — use a `<chain>.` dotpath prefix (`dot polkadot.inspect`) or `--chain <name>`. Commands without either error out.
 
 4. **u128 returned as quoted strings.** `"1000000000000"` not `1000000000000`. Strip quotes for comparison: `tr -d '"'`
 
 5. **`--json` doesn't guarantee JSON.** Errors and `undefined` are not valid JSON even with `--json`.
 
-6. **Positional tx args aren't validated.** Wrong argument order is silently accepted and fails on-chain. Check the call signature first: `dot chain.tx.Pallet.call` (no args shows usage).
-
-7. **`--dump` required for keyless map queries.** `dot query.Map` without a key or `--dump` shows usage help, not results.
+6. **`--dump` required for keyless map queries.** `dot query.Map` without a key or `--dump` shows usage help, not results.
