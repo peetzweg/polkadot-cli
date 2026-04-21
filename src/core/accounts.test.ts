@@ -1,15 +1,20 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { getPublicKey, sign, verify } from "@scure/sr25519";
 import { TEST_MNEMONIC } from "../commands/__fixtures__/run-cli.ts";
 import type { StoredAccount } from "../config/accounts-types.ts";
 import { isEnvSecret, isWatchOnly } from "../config/accounts-types.ts";
 import {
+  bytesToHex,
   createNewAccount,
+  deriveExpandedSecret,
   fromSs58,
   getDevAddress,
   importAccount,
   isDevAccount,
   isHexPublicKey,
+  miniSecretFromSecret,
   publicKeyToHex,
+  resolveAccountExpandedSecret,
   resolveAccountKeypair,
   resolveAccountSigner,
   resolveSecret,
@@ -401,6 +406,118 @@ describe("isWatchOnly", () => {
       derivationPath: "",
     };
     expect(isWatchOnly(account)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveAccountExpandedSecret — sr25519 expanded 64-byte private key
+// ---------------------------------------------------------------------------
+
+describe("resolveAccountExpandedSecret", () => {
+  test("dev account returns 64-byte expanded secret", async () => {
+    const secret = await resolveAccountExpandedSecret("dave");
+    expect(secret).toBeInstanceOf(Uint8Array);
+    expect(secret).toHaveLength(64);
+  });
+
+  test("getPublicKey(expandedSecret) matches the keypair's public key for all dev accounts", async () => {
+    for (const name of ["alice", "bob", "charlie", "dave", "eve", "ferdie"]) {
+      const secret = await resolveAccountExpandedSecret(name);
+      const keypair = await resolveAccountKeypair(name);
+      expect(publicKeyToHex(getPublicKey(secret))).toBe(publicKeyToHex(keypair.publicKey));
+    }
+  });
+
+  test("signatures made with expanded secret verify against the account's public key", async () => {
+    const secret = await resolveAccountExpandedSecret("dave");
+    const pub = getPublicKey(secret);
+    const message = new TextEncoder().encode("hello dave");
+    const sig = sign(secret, message);
+    expect(verify(message, sig, pub)).toBe(true);
+  });
+
+  test("all dev accounts produce distinct 64-byte expanded secrets", async () => {
+    const hexes = new Set<string>();
+    for (const name of ["alice", "bob", "charlie", "dave", "eve", "ferdie"]) {
+      const s = await resolveAccountExpandedSecret(name);
+      expect(s).toHaveLength(64);
+      hexes.add(bytesToHex(s));
+    }
+    expect(hexes.size).toBe(6);
+  });
+
+  test("unknown account throws", async () => {
+    await expect(resolveAccountExpandedSecret("nonexistent_xyz_42")).rejects.toThrow(
+      /Unknown account/,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deriveExpandedSecret / miniSecretFromSecret
+// ---------------------------------------------------------------------------
+
+describe("miniSecretFromSecret", () => {
+  test("returns 32 bytes for a valid BIP39 mnemonic", () => {
+    const bytes = miniSecretFromSecret(TEST_MNEMONIC);
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(bytes).toHaveLength(32);
+  });
+
+  test("returns 32 bytes for a 0x-prefixed hex seed", () => {
+    const hexSeed = `0x${"11".repeat(32)}`;
+    const bytes = miniSecretFromSecret(hexSeed);
+    expect(bytes).toHaveLength(32);
+    // All-0x11 seed round-trips exactly
+    expect(bytesToHex(bytes)).toBe(hexSeed);
+  });
+
+  test("throws on garbage input", () => {
+    expect(() => miniSecretFromSecret("not-a-valid-secret")).toThrow("Invalid secret");
+  });
+});
+
+describe("deriveExpandedSecret", () => {
+  const rootSeed = miniSecretFromSecret(TEST_MNEMONIC);
+
+  test("root path returns a 64-byte expanded secret", () => {
+    const sk = deriveExpandedSecret(rootSeed, "");
+    expect(sk).toBeInstanceOf(Uint8Array);
+    expect(sk).toHaveLength(64);
+    // getPublicKey(sk) must match what importAccount derives at root
+    const expectedPub = importAccount(TEST_MNEMONIC, "").publicKey;
+    expect(publicKeyToHex(getPublicKey(sk))).toBe(publicKeyToHex(expectedPub));
+  });
+
+  test("hard path //a produces a different secret than root and matches importAccount's public key", () => {
+    const root = deriveExpandedSecret(rootSeed, "");
+    const hard = deriveExpandedSecret(rootSeed, "//a");
+    expect(bytesToHex(root)).not.toBe(bytesToHex(hard));
+    const expectedPub = importAccount(TEST_MNEMONIC, "//a").publicKey;
+    expect(publicKeyToHex(getPublicKey(hard))).toBe(publicKeyToHex(expectedPub));
+  });
+
+  test("soft path /a exercises the soft branch of the derivation", () => {
+    const soft = deriveExpandedSecret(rootSeed, "/a");
+    expect(soft).toHaveLength(64);
+    const expectedPub = importAccount(TEST_MNEMONIC, "/a").publicKey;
+    expect(publicKeyToHex(getPublicKey(soft))).toBe(publicKeyToHex(expectedPub));
+  });
+
+  test("numeric junction //0 exercises the u32 branch of createChainCode", () => {
+    const sk = deriveExpandedSecret(rootSeed, "//0");
+    expect(sk).toHaveLength(64);
+    // Numeric and string components produce different secrets
+    const viaString = deriveExpandedSecret(rootSeed, "//zero");
+    expect(bytesToHex(sk)).not.toBe(bytesToHex(viaString));
+    // And matches importAccount at the same path
+    const expectedPub = importAccount(TEST_MNEMONIC, "//0").publicKey;
+    expect(publicKeyToHex(getPublicKey(sk))).toBe(publicKeyToHex(expectedPub));
+  });
+
+  test("throws when a junction component exceeds 31 bytes", () => {
+    const tooLong = "x".repeat(32);
+    expect(() => deriveExpandedSecret(rootSeed, `//${tooLong}`)).toThrow(/too long/);
   });
 });
 
