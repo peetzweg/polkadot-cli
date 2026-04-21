@@ -24,6 +24,7 @@ import {
   GREEN,
   isJsonOutput,
   printHeading,
+  printImportResults,
   RED,
   RESET,
   YELLOW,
@@ -54,6 +55,7 @@ ${BOLD}Examples:${RESET}
   $ dot chain import my-chains.json
   $ dot chain import my-chains.json --dry-run
   $ dot chain import my-chains.json --overwrite
+  $ dot chain import my-chains.json --no-metadata
 `.trimStart();
 
 export function registerChainCommands(cli: CAC) {
@@ -69,6 +71,7 @@ export function registerChainCommands(cli: CAC) {
     .option("--file <path>", "Output/input file for export/import")
     .option("--overwrite", "Overwrite existing chains on import")
     .option("--dry-run", "Preview import without applying changes")
+    .option("--no-metadata", "Skip automatic metadata fetch after import")
     .action(
       async (
         action: string | undefined,
@@ -81,6 +84,7 @@ export function registerChainCommands(cli: CAC) {
           file?: string;
           overwrite?: boolean;
           dryRun?: boolean;
+          metadata?: boolean;
           output?: string;
           json?: boolean;
         },
@@ -341,8 +345,20 @@ async function chainUpdateAll(config: {
   chains: Record<string, import("../config/types.ts").ChainConfig>;
 }) {
   const chainNames = Object.keys(config.chains).sort();
+  const failed = await updateChainsMetadata(config, chainNames);
+  if (failed > 0) {
+    console.error(`\n${failed} of ${chainNames.length} chains failed to update.`);
+    process.exit(1);
+  }
+}
 
-  process.stderr.write(`Updating metadata for ${chainNames.length} chains...\n\n`);
+async function updateChainsMetadata(
+  config: { chains: Record<string, import("../config/types.ts").ChainConfig> },
+  chainNames: string[],
+): Promise<number> {
+  if (chainNames.length === 0) return 0;
+
+  process.stderr.write(`Updating metadata for ${chainNames.length} chain(s)...\n\n`);
 
   const results = await Promise.allSettled(
     chainNames.map(async (chainName) => {
@@ -368,11 +384,7 @@ async function chainUpdateAll(config: {
     }
   }
 
-  const failed = results.filter((r) => r.status === "rejected").length;
-  if (failed > 0) {
-    console.error(`\n${failed} of ${chainNames.length} chains failed to update.`);
-    process.exit(1);
-  }
+  return results.filter((r) => r.status === "rejected").length;
 }
 
 function isBuiltinModified(name: string, config: Config): boolean {
@@ -455,17 +467,21 @@ async function chainImport(
     file?: string;
     overwrite?: boolean;
     dryRun?: boolean;
+    metadata?: boolean;
     output?: string;
     json?: boolean;
   },
 ) {
-  // Resolve input: positional arg, --file flag, or stdin
   const inputPath = filePath ?? opts.file;
   let raw: string;
-  if (inputPath && inputPath !== "-") {
-    raw = await readFile(inputPath, "utf-8");
-  } else {
+  if (!inputPath || inputPath === "-") {
+    if (process.stdin.isTTY) {
+      console.log(CHAIN_HELP);
+      return;
+    }
     raw = await readStdin();
+  } else {
+    raw = await readFile(inputPath, "utf-8");
   }
 
   let importData: ChainExportData;
@@ -496,7 +512,6 @@ async function chainImport(
       continue;
     }
 
-    // Validate relay reference
     if (chainConfig.relay) {
       const relayInImport = Object.keys(importData.chains).some(
         (n) => n.toLowerCase() === chainConfig.relay!.toLowerCase(),
@@ -538,14 +553,16 @@ async function chainImport(
     return;
   }
 
-  const prefix = opts.dryRun ? "(dry run) " : "";
-  if (added.length > 0) console.log(`${prefix}Added: ${added.join(", ")}`);
-  if (overwritten.length > 0) console.log(`${prefix}Overwritten: ${overwritten.join(", ")}`);
-  if (skipped.length > 0) console.log(`${prefix}Skipped: ${skipped.join(", ")}`);
+  printImportResults({
+    added,
+    overwritten,
+    skipped,
+    dryRun: opts.dryRun ?? false,
+    noun: "chain",
+  });
 
-  if (added.length === 0 && overwritten.length === 0) {
-    console.log(`${prefix}No chains imported.`);
-  } else if (!opts.dryRun) {
-    console.error(`\nRun "dot chain update --all" to fetch metadata for imported chains.`);
+  if (!opts.dryRun && opts.metadata !== false && (added.length > 0 || overwritten.length > 0)) {
+    console.log();
+    await updateChainsMetadata(config, [...added, ...overwritten]);
   }
 }

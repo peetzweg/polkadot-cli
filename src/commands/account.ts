@@ -24,6 +24,7 @@ import {
   formatJson,
   isJsonOutput,
   printHeading,
+  printImportResults,
   printItem,
   RESET,
   YELLOW,
@@ -35,9 +36,7 @@ ${BOLD}Usage:${RESET}
   $ dot account add <name> --secret <s> [--path <derivation>]        Import from BIP39 mnemonic
   $ dot account add <name> --env <VAR> [--path <derivation>]         Import account backed by env variable
   $ dot account create|new <name> [--path <derivation>]              Create a new account
-  $ dot account import <name> --secret <s> [--path <derivation>]     Import from BIP39 mnemonic
-  $ dot account import <name> --env <VAR> [--path <derivation>]      Import account backed by env variable
-  $ dot account import --file <path>                                 Batch-import accounts from a file
+  $ dot account import <file>                                        Batch-import accounts from a file
   $ dot account export [names...]                                    Export accounts to stdout
   $ dot account derive <source> <new-name> --path <derivation>       Derive a child account
   $ dot account inspect <input> [--prefix <N>]                       Inspect an account/address/key
@@ -46,14 +45,14 @@ ${BOLD}Usage:${RESET}
 
 ${BOLD}Examples:${RESET}
   $ dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+  $ dot account add treasury --secret "word1 word2 ... word12"
+  $ dot account add ci-signer --env MY_SECRET --path //ci
   $ dot account create my-validator
   $ dot account create my-staking --path //staking
   $ dot account create multi --path //polkadot//0/wallet
-  $ dot account import treasury --secret "word1 word2 ... word12"
-  $ dot account import ci-signer --env MY_SECRET --path //ci
-  $ dot account import --file team-accounts.json
-  $ dot account import --file accounts.json --dry-run
-  $ dot account import --file accounts.json --overwrite
+  $ dot account import team-accounts.json
+  $ dot account import accounts.json --dry-run
+  $ dot account import accounts.json --overwrite
   $ dot account export
   $ dot account export treasury my-validator
   $ dot account export --include-secrets --file backup.json
@@ -117,8 +116,7 @@ export function registerAccountCommands(cli: CAC) {
             if (opts.secret || opts.env) return accountImport(names[0], opts);
             return accountAddWatchOnly(names[0], names[1], opts);
           case "import":
-            if (opts.file) return accountBatchImport(opts);
-            return accountImport(names[0], opts);
+            return accountBatchImport(names[0], opts);
           case "export":
             return accountExport(names, opts);
           case "derive":
@@ -780,18 +778,26 @@ async function accountExport(
   }
 }
 
-async function accountBatchImport(opts: {
-  file?: string;
-  overwrite?: boolean;
-  dryRun?: boolean;
-  output?: string;
-  json?: boolean;
-}) {
+async function accountBatchImport(
+  filePath: string | undefined,
+  opts: {
+    file?: string;
+    overwrite?: boolean;
+    dryRun?: boolean;
+    output?: string;
+    json?: boolean;
+  },
+) {
+  const inputPath = filePath ?? opts.file;
   let raw: string;
-  if (!opts.file || opts.file === "-") {
+  if (!inputPath || inputPath === "-") {
+    if (process.stdin.isTTY) {
+      console.log(ACCOUNT_HELP);
+      return;
+    }
     raw = await readStdin();
   } else {
-    raw = await readFile(opts.file, "utf-8");
+    raw = await readFile(inputPath, "utf-8");
   }
 
   let importData: AccountExportData;
@@ -894,12 +900,11 @@ async function accountBatchImport(opts: {
     return;
   }
 
-  const prefix = opts.dryRun ? "(dry run) " : "";
-  if (added.length > 0) console.log(`${prefix}Added: ${added.join(", ")}`);
-  if (overwritten.length > 0) console.log(`${prefix}Overwritten: ${overwritten.join(", ")}`);
-  if (skipped.length > 0) console.log(`${prefix}Skipped: ${skipped.join(", ")}`);
-
-  if (added.length === 0 && overwritten.length === 0) {
-    console.log(`${prefix}No accounts imported.`);
-  }
+  printImportResults({
+    added,
+    overwritten,
+    skipped,
+    dryRun: opts.dryRun ?? false,
+    noun: "account",
+  });
 }

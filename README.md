@@ -133,7 +133,7 @@ Chain names are case-insensitive (`Polkadot.query.System.Number` works the same)
 
 #### Export/import chain configuration
 
-Export and import chain configurations for backup, sharing across machines, or team collaboration. Metadata is not included — re-fetch with `dot chain update --all` after importing.
+Export and import chain configurations for backup, sharing across machines, or team collaboration.
 
 ```bash
 # Export custom chains to stdout (pipe-friendly JSON)
@@ -157,11 +157,35 @@ dot chain import my-chains.json --dry-run
 # Overwrite existing chains
 dot chain import my-chains.json --overwrite
 
+# Skip automatic metadata fetch (faster for offline/CI bootstrap)
+dot chain import my-chains.json --no-metadata
+
 # Pipe between machines
 ssh remote-dev "dot chain export" | dot chain import -
 ```
 
 By default, `export` only includes user-added chains and built-ins with modified RPCs. Use `--all` to include everything. Import skips existing chains unless `--overwrite` is passed, and validates relay references with warnings for missing relays.
+
+After a non-dry-run import, metadata is fetched automatically for each newly added or overwritten chain so tab completion and metadata-dependent commands work immediately. Pass `--no-metadata` to skip the fetch — you can always backfill later with `dot chain update --all`.
+
+Output shows one line per chain with a status glyph and a terse summary:
+
+```
+  ✓ preview
+  ✓ preview-people
+  ⟳ polkadot (overwritten)
+  - paseo (skipped)
+
+2 added, 1 overwritten, 1 skipped
+
+Updating metadata for 3 chain(s)...
+
+  ✓ preview
+  ✓ preview-people
+  ✓ polkadot
+```
+
+Running `dot chain import` with no file path prints the subcommand help instead of blocking on stdin.
 
 ### Manage accounts
 
@@ -187,14 +211,14 @@ dot account create my-validator
 # Create with a derivation path
 dot account create my-staking --path //staking
 
-# Import from a BIP39 mnemonic
-dot account import treasury --secret "word1 word2 ... word12"
+# Add a keyed account from a BIP39 mnemonic
+dot account add treasury --secret "word1 word2 ... word12"
 
-# Import with a derivation path
-dot account import hot-wallet --secret "word1 word2 ... word12" --path //hot
+# Add with a derivation path
+dot account add hot-wallet --secret "word1 word2 ... word12" --path //hot
 
-# Import an env-var-backed account (secret stays off disk)
-dot account import ci-signer --env MY_SECRET
+# Add an env-var-backed account (secret stays off disk)
+dot account add ci-signer --env MY_SECRET
 
 # Derive a child account from an existing one
 dot account derive treasury treasury-staking --path //staking
@@ -212,9 +236,9 @@ dot account export --include-secrets --file backup.json
 dot account export --watch-only
 
 # Batch-import accounts from a file
-dot account import --file team-accounts.json
-dot account import --file accounts.json --dry-run
-dot account import --file accounts.json --overwrite
+dot account import team-accounts.json
+dot account import accounts.json --dry-run
+dot account import accounts.json --overwrite
 
 # Inspect an account — show public key and SS58 address
 dot account inspect alice
@@ -236,7 +260,7 @@ dot account add council 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684
 
 Watch-only accounts appear in `dot account list` with a `(watch-only)` badge and can be inspected and removed like any other account. They cannot be used with `--from` (signing) or as a source for `derive`.
 
-The `add` subcommand is context-sensitive: bare `add <name> <address>` creates a watch-only entry, while `add --secret` or `add --env` imports a keyed account (same as `import`).
+The `add` subcommand is context-sensitive: bare `add <name> <address>` creates a watch-only entry, while `add --secret` or `add --env` imports a keyed account. `dot account import` is reserved for file-based batch import.
 
 #### Named address resolution
 
@@ -302,16 +326,16 @@ dot account inspect alice --json
 For CI/CD and security-conscious workflows, store a reference to an environment variable instead of the secret itself:
 
 ```bash
-dot account import ci-signer --env MY_SECRET
+dot account add ci-signer --env MY_SECRET
 ```
 
-`--secret` and `--env` are mutually exclusive. `add` is an alias for `import`.
+`--secret` and `--env` are mutually exclusive. Use `dot account add` for single-account imports; `dot account import` is reserved for file-based batch import.
 
 The secret is never written to disk. At signing time, the CLI reads `$MY_SECRET` and derives the keypair. If the variable is not set, the CLI errors with a clear message. `account list` shows an `(env: MY_SECRET)` badge and resolves the address live when the variable is available.
 
 #### Derivation paths
 
-Use `--path` with `create`, `import`, or the `derive` action to derive child keys from the same secret. Different paths produce different keypairs, enabling key separation (e.g. staking vs. governance) without managing multiple mnemonics.
+Use `--path` with `create`, `add`, or the `derive` action to derive child keys from the same secret. Different paths produce different keypairs, enabling key separation (e.g. staking vs. governance) without managing multiple mnemonics.
 
 ```bash
 # Create with a derivation path
@@ -320,8 +344,8 @@ dot account create my-staking --path //staking
 # Multi-segment path (hard + soft junctions)
 dot account create multi --path //polkadot//0/wallet
 
-# Import with a path
-dot account import hot --secret "word1 word2 ..." --path //hot
+# Add with a path
+dot account add hot --secret "word1 word2 ..." --path //hot
 
 # Derive a child from an existing account
 dot account derive treasury treasury-staking --path //staking
@@ -362,20 +386,24 @@ dot account export --include-secrets --file backup.json
 # Export only watch-only accounts (always safe)
 dot account export --watch-only
 
-# Batch-import accounts from a file
-dot account import --file team-accounts.json
+# Batch-import accounts from a file (positional path, like `dot chain import`)
+dot account import team-accounts.json
 
 # Preview without applying
-dot account import --file accounts.json --dry-run
+dot account import accounts.json --dry-run
 
 # Overwrite existing accounts
-dot account import --file accounts.json --overwrite
+dot account import accounts.json --overwrite
 
 # Pipe from another machine
-ssh remote-dev "dot account export --watch-only" | dot account import --file /dev/stdin
+ssh remote-dev "dot account export --watch-only" | dot account import -
 ```
 
-Security: default export replaces mnemonic/seed with `"<redacted>"`. `--include-secrets` is required for actual secrets. Env-backed accounts export the variable *name* (e.g. `{"env": "MY_SECRET"}`), never the value. Redacted accounts import as watch-only (public key preserved, no signing capability). The existing single-account `import` (`--secret`/`--env`) is unchanged — batch import uses `--file` to distinguish.
+Output mirrors `dot chain import` — one line per account with a status glyph (`✓` added, `⟳` overwritten, `-` skipped) and a terse count summary at the end. Running `dot account import` with no file path prints the subcommand help instead of blocking on stdin.
+
+`dot account import` is file-only. For a single-account import from a mnemonic or env variable, use `dot account add <name> --secret "..."` or `dot account add <name> --env VAR`.
+
+Security: default export replaces mnemonic/seed with `"<redacted>"`. `--include-secrets` is required for actual secrets. Env-backed accounts export the variable *name* (e.g. `{"env": "MY_SECRET"}`), never the value. Redacted accounts import as watch-only (public key preserved, no signing capability).
 
 ### Chain prefix
 

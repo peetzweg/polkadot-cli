@@ -75,6 +75,40 @@ export function printDocs(docs: string[]): void {
 
 const CHECK_MARK = "✓";
 
+export function printImportResults(params: {
+  added: string[];
+  overwritten: string[];
+  skipped: string[];
+  dryRun: boolean;
+  noun: string;
+}): void {
+  const { added, overwritten, skipped, dryRun, noun } = params;
+
+  for (const name of added) {
+    console.log(`  ${GREEN}${CHECK_MARK}${RESET} ${name}`);
+  }
+  for (const name of overwritten) {
+    console.log(`  ${YELLOW}⟳${RESET} ${name}${DIM} (overwritten)${RESET}`);
+  }
+  for (const name of skipped) {
+    console.log(`  ${DIM}- ${name} (skipped)${RESET}`);
+  }
+
+  if (added.length === 0 && overwritten.length === 0 && skipped.length === 0) {
+    const prefix = dryRun ? "(dry run) " : "";
+    console.log(`${prefix}No ${noun}s imported.`);
+    return;
+  }
+
+  const parts: string[] = [];
+  if (added.length > 0) parts.push(`${added.length} added`);
+  if (overwritten.length > 0) parts.push(`${overwritten.length} overwritten`);
+  if (skipped.length > 0) parts.push(`${skipped.length} skipped`);
+  const suffix = dryRun ? " (dry run)" : "";
+  console.log();
+  console.log(`${parts.join(", ")}${suffix}`);
+}
+
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 class Spinner {

@@ -1,6 +1,13 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { Binary } from "polkadot-api";
-import { firstSentence, formatJson, formatPretty, isJsonOutput, Spinner } from "./output.ts";
+import {
+  firstSentence,
+  formatJson,
+  formatPretty,
+  isJsonOutput,
+  printImportResults,
+  Spinner,
+} from "./output.ts";
 
 describe("formatJson", () => {
   test("formats object with 2-space indentation", () => {
@@ -249,6 +256,123 @@ describe("firstSentence", () => {
     expect(firstSentence(["Use e.g. this method. Then do something else."])).toBe(
       "Use e.g. this method.",
     );
+  });
+});
+
+describe("printImportResults", () => {
+  const capture = (fn: () => void): string => {
+    const lines: string[] = [];
+    const spy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      lines.push(args.map((a) => String(a)).join(" "));
+    });
+    try {
+      fn();
+    } finally {
+      spy.mockRestore();
+    }
+    return lines.join("\n");
+  };
+
+  test("prints one line per added entry with a checkmark", () => {
+    const out = capture(() =>
+      printImportResults({
+        added: ["a", "b", "c"],
+        overwritten: [],
+        skipped: [],
+        dryRun: false,
+        noun: "chain",
+      }),
+    );
+    expect(out).toMatch(/✓ a/);
+    expect(out).toMatch(/✓ b/);
+    expect(out).toMatch(/✓ c/);
+    // No comma-joined list
+    expect(out).not.toContain("a, b, c");
+    expect(out).toContain("3 added");
+  });
+
+  test("prints overwritten entries with overwritten marker and count", () => {
+    const out = capture(() =>
+      printImportResults({
+        added: [],
+        overwritten: ["x", "y"],
+        skipped: [],
+        dryRun: false,
+        noun: "chain",
+      }),
+    );
+    expect(out).toContain("x");
+    expect(out).toContain("y");
+    expect(out).toContain("(overwritten)");
+    expect(out).toContain("2 overwritten");
+  });
+
+  test("prints skipped entries dimmed and counted", () => {
+    const out = capture(() =>
+      printImportResults({
+        added: [],
+        overwritten: [],
+        skipped: ["s1", "s2"],
+        dryRun: false,
+        noun: "account",
+      }),
+    );
+    expect(out).toContain("s1 (skipped)");
+    expect(out).toContain("s2 (skipped)");
+    expect(out).toContain("2 skipped");
+  });
+
+  test("summary combines multiple categories", () => {
+    const out = capture(() =>
+      printImportResults({
+        added: ["a"],
+        overwritten: ["b", "c"],
+        skipped: ["d"],
+        dryRun: false,
+        noun: "chain",
+      }),
+    );
+    expect(out).toContain("1 added, 2 overwritten, 1 skipped");
+  });
+
+  test("dry-run adds suffix to summary", () => {
+    const out = capture(() =>
+      printImportResults({
+        added: ["a"],
+        overwritten: [],
+        skipped: [],
+        dryRun: true,
+        noun: "chain",
+      }),
+    );
+    expect(out).toContain("1 added (dry run)");
+  });
+
+  test("no results prints 'No <noun>s imported' with dry-run prefix", () => {
+    const out = capture(() =>
+      printImportResults({
+        added: [],
+        overwritten: [],
+        skipped: [],
+        dryRun: true,
+        noun: "chain",
+      }),
+    );
+    expect(out).toContain("(dry run) No chains imported");
+  });
+
+  test("no results without dry-run still uses the noun", () => {
+    const out = capture(() =>
+      printImportResults({
+        added: [],
+        overwritten: [],
+        skipped: [],
+        dryRun: false,
+        noun: "account",
+      }),
+    );
+    expect(out).toContain("No accounts imported");
+    expect(out).not.toContain("(dry run)");
   });
 });
 
