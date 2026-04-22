@@ -8,6 +8,7 @@ import {
   type StoredAccount,
 } from "../config/accounts-types.ts";
 import {
+  bytesToHex,
   createNewAccount,
   DEV_NAMES,
   fromSs58,
@@ -16,6 +17,7 @@ import {
   isDevAccount,
   isHexPublicKey,
   publicKeyToHex,
+  resolveAccountExpandedSecret,
   toSs58,
   tryDerivePublicKey,
 } from "../core/accounts.ts";
@@ -39,7 +41,7 @@ ${BOLD}Usage:${RESET}
   $ dot account import <file>                                        Batch-import accounts from a file
   $ dot account export [names...]                                    Export accounts to stdout
   $ dot account derive <source> <new-name> --path <derivation>       Derive a child account
-  $ dot account inspect <input> [--prefix <N>]                       Inspect an account/address/key
+  $ dot account inspect <input> [--prefix <N>] [--show-secret]       Inspect an account/address/key
   $ dot account list                                                 List all accounts
   $ dot account remove|delete <name> [name2] ...                     Remove stored account(s)
 
@@ -59,6 +61,7 @@ ${BOLD}Examples:${RESET}
   $ dot account export --watch-only
   $ dot account derive treasury treasury-staking --path //staking
   $ dot account inspect alice
+  $ dot account inspect dave --show-secret
   $ dot account inspect 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
   $ dot account inspect 0xd435...a27d --prefix 0
   $ dot account list
@@ -85,6 +88,7 @@ export function registerAccountCommands(cli: CAC) {
     .option("--dry-run", "Preview batch import without applying changes")
     .option("--include-secrets", "Include secrets in export (redacted by default)")
     .option("--watch-only", "Export only watch-only accounts")
+    .option("--show-secret", "Reveal the 64-byte sr25519 expanded private key (inspect only)")
     .action(
       async (
         action: string | undefined,
@@ -99,6 +103,7 @@ export function registerAccountCommands(cli: CAC) {
           dryRun?: boolean;
           includeSecrets?: boolean;
           watchOnly?: boolean;
+          showSecret?: boolean;
           output?: string;
           json?: boolean;
         },
@@ -587,7 +592,7 @@ async function accountRemove(names: string[], opts: { output?: string; json?: bo
 
 async function accountInspect(
   input: string | undefined,
-  opts: { prefix?: string; output?: string },
+  opts: { prefix?: string; showSecret?: boolean; output?: string; json?: boolean },
 ) {
   if (!input) {
     console.error("Input is required.\n");
@@ -604,12 +609,14 @@ async function accountInspect(
   let name: string | undefined;
   let publicKeyHex: string;
   let bandersnatch: Record<string, string> | undefined;
+  let hasSecret = false;
 
   // 1. Dev account name
   if (isDevAccount(input)) {
     name = input.charAt(0).toUpperCase() + input.slice(1).toLowerCase();
     const devAddr = getDevAddress(input);
     publicKeyHex = publicKeyToHex(fromSs58(devAddr));
+    hasSecret = true;
   }
   // 2. Stored account name
   else {
@@ -618,6 +625,7 @@ async function accountInspect(
     if (account) {
       name = account.name;
       bandersnatch = account.bandersnatch;
+      hasSecret = account.secret !== undefined;
       if (account.publicKey) {
         publicKeyHex = account.publicKey;
       } else if (account.secret !== undefined && isEnvSecret(account.secret)) {
@@ -655,10 +663,31 @@ async function accountInspect(
 
   const ss58 = toSs58(publicKeyHex!, prefix);
 
+  let privateKeyHex: string | undefined;
+  if (opts.showSecret) {
+    if (!name) {
+      console.error(
+        "--show-secret requires an account name; raw addresses and hex keys have no secret to reveal.",
+      );
+      process.exit(1);
+    }
+    if (!hasSecret) {
+      console.error(`Account "${name}" is watch-only (no secret). Cannot reveal private key.`);
+      process.exit(1);
+    }
+    try {
+      privateKeyHex = bytesToHex(await resolveAccountExpandedSecret(input));
+    } catch (err) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
+  }
+
   if (isJsonOutput(opts)) {
     const result: Record<string, unknown> = { publicKey: publicKeyHex!, ss58, prefix };
     if (name) result.name = name;
     if (bandersnatch && Object.keys(bandersnatch).length > 0) result.bandersnatch = bandersnatch;
+    if (privateKeyHex) result.privateKey = privateKeyHex;
     console.log(formatJson(result));
   } else {
     printHeading("Account Info");
@@ -678,6 +707,10 @@ async function accountInspect(
       }
     }
     console.log(`  ${BOLD}Prefix:${RESET}      ${prefix}`);
+    if (privateKeyHex) {
+      console.log(`  ${BOLD}Private Key:${RESET} ${privateKeyHex}`);
+      console.log(`               ${YELLOW}(sr25519 expanded, 64 bytes — never share)${RESET}`);
+    }
     console.log();
   }
 }

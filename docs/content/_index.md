@@ -555,6 +555,17 @@ dot account inspect alice --json
 # {"publicKey":"0xd435...a27d","ss58":"5Grw...utQY","prefix":42,"name":"Alice"}
 ```
 
+### Reveal the sr25519 private key
+
+Add `--show-secret` to print the **64-byte sr25519 expanded secret** as `0x`-prefixed hex — useful for provisioning another signer (e.g. a server that expects a raw hex private key in an env var):
+
+```
+dot account inspect dave --show-secret
+# Private Key: 0x<128 hex chars>   (sr25519 expanded, 64 bytes — never share)
+```
+
+Works for dev accounts (derived on-the-fly from the standard dev mnemonic) and for stored accounts that have a secret (mnemonic or hex seed). Refuses on watch-only accounts, bare SS58 addresses, or hex public keys. The hex is the final secret after any derivation path is applied, so it can be fed directly to signers that don't accept a mnemonic+path. Combine with `--json` to include it under the `privateKey` field.
+
 ## Chain Prefix
 
 Prefix the dot-path with a chain name to target a specific chain instead of using the `--chain` flag. The prefix becomes the first segment of the dot-path:

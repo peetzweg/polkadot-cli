@@ -8,6 +8,7 @@ import {
   ss58Decode,
   validateMnemonic,
 } from "@polkadot-labs/hdkd-helpers";
+import { HDKD, secretFromSeed } from "@scure/sr25519";
 import type { PolkadotSigner } from "polkadot-api/signer";
 import { getPolkadotSigner } from "polkadot-api/signer";
 import { findAccount, loadAccounts } from "../config/accounts-store.ts";
@@ -50,6 +51,69 @@ function deriveFromHexSeed(
 function getDevKeypair(name: string) {
   const path = devDerivationPath(name);
   return deriveFromMnemonic(DEV_PHRASE, path);
+}
+
+// Mirrors @polkadot-labs/hdkd-helpers internals (parseDerivations.ts, createChainCode.ts)
+// which are not re-exported from its barrel.
+const DERIVATION_RE = /(\/{1,2})([^/]+)/g;
+
+function parseDerivations(path: string): Array<["hard" | "soft", string]> {
+  const out: Array<["hard" | "soft", string]> = [];
+  for (const [, type, code] of path.matchAll(DERIVATION_RE)) {
+    out.push([type === "//" ? "hard" : "soft", code!]);
+  }
+  return out;
+}
+
+function createChainCode(code: string): Uint8Array {
+  const chainCode = new Uint8Array(32);
+  const asNumber = +code;
+  if (Number.isNaN(asNumber)) {
+    // SCALE str.enc: compact length prefix + UTF-8 bytes. For length < 64 (all realistic
+    // junction names) the compact prefix is a single byte of (length << 2).
+    const bytes = new TextEncoder().encode(code);
+    if (bytes.length >= 32) {
+      throw new Error(`Derivation component "${code}" is too long (max 31 bytes)`);
+    }
+    chainCode[0] = bytes.length << 2;
+    chainCode.set(bytes, 1);
+  } else {
+    // SCALE u32.enc: little-endian 4 bytes
+    const n = asNumber >>> 0;
+    chainCode[0] = n & 0xff;
+    chainCode[1] = (n >>> 8) & 0xff;
+    chainCode[2] = (n >>> 16) & 0xff;
+    chainCode[3] = (n >>> 24) & 0xff;
+  }
+  return chainCode;
+}
+
+export function deriveExpandedSecret(miniSecret: Uint8Array, path: string): Uint8Array {
+  return parseDerivations(path).reduce(
+    (sk, [type, code]) =>
+      type === "hard"
+        ? HDKD.secretHard(sk, createChainCode(code))
+        : HDKD.secretSoft(sk, createChainCode(code)),
+    secretFromSeed(miniSecret),
+  );
+}
+
+export function miniSecretFromSecret(secret: string): Uint8Array {
+  const isHexSeed = /^0x[0-9a-fA-F]{64}$/.test(secret);
+  if (isHexSeed) {
+    const clean = secret.slice(2);
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < clean.length; i += 2) {
+      bytes[i / 2] = parseInt(clean.substring(i, i + 2), 16);
+    }
+    return bytes;
+  }
+  if (!validateMnemonic(secret)) {
+    throw new Error(
+      "Invalid secret. Expected a 0x-prefixed 32-byte hex seed or a valid BIP39 mnemonic.",
+    );
+  }
+  return entropyToMiniSecret(mnemonicToEntropy(secret));
 }
 
 export function getDevAddress(name: string, prefix = 42): string {
@@ -176,4 +240,41 @@ export async function resolveAccountKeypair(
 export async function resolveAccountSigner(name: string): Promise<PolkadotSigner> {
   const keypair = await resolveAccountKeypair(name);
   return getPolkadotSigner(keypair.publicKey, "Sr25519", keypair.sign);
+}
+
+export async function resolveAccountExpandedSecret(name: string): Promise<Uint8Array> {
+  if (isDevAccount(name)) {
+    const miniSecret = entropyToMiniSecret(mnemonicToEntropy(DEV_PHRASE));
+    return deriveExpandedSecret(miniSecret, devDerivationPath(name));
+  }
+
+  const accountsFile = await loadAccounts();
+  const account = findAccount(accountsFile, name);
+  if (!account) {
+    const available = [...DEV_NAMES, ...accountsFile.accounts.map((a) => a.name)].sort((a, b) =>
+      a.localeCompare(b),
+    );
+    const suggestions = findClosest(name, available);
+    const hint = suggestions.length > 0 ? `\n  Did you mean: ${suggestions.join(", ")}?` : "";
+    const list = available.map((a) => `\n    - ${a}`).join("");
+    throw new Error(`Unknown account "${name}".${hint}\n  Available accounts:${list}`);
+  }
+
+  if (account.secret === undefined) {
+    throw new Error(
+      `Account "${name}" is watch-only (no secret). Cannot derive private key. Import with --secret or --env.`,
+    );
+  }
+
+  const miniSecret = miniSecretFromSecret(resolveSecret(account.secret));
+  return deriveExpandedSecret(miniSecret, account.derivationPath);
+}
+
+export function bytesToHex(bytes: Uint8Array): string {
+  return (
+    "0x" +
+    Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+  );
 }

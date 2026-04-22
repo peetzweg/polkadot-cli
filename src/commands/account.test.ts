@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { StoredAccount } from "../config/accounts-types.ts";
+import { importAccount, publicKeyToHex } from "../core/accounts.ts";
 import { runCli, TEST_MNEMONIC } from "./__fixtures__/run-cli.ts";
 
 const STORED_ACCOUNT: StoredAccount = {
@@ -800,6 +801,113 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(parsed.publicKey).toMatch(/^0x/);
     expect(parsed.ss58).toBeDefined();
     expect(parsed.prefix).toBe(42);
+  });
+
+  // --show-secret tests
+  test("inspect dev account --show-secret prints 64-byte hex", async () => {
+    const { stdout, exitCode } = await runCli(["account", "inspect", "dave", "--show-secret"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Private Key:");
+    expect(stdout).toContain("sr25519 expanded, 64 bytes");
+    const match = stdout.match(/Private Key:\s+(0x[0-9a-f]+)/);
+    expect(match?.[1]).toMatch(/^0x[0-9a-f]{128}$/);
+  });
+
+  test("inspect --show-secret --json surfaces privateKey field", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "inspect",
+      "alice",
+      "--show-secret",
+      "--json",
+    ]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.privateKey).toMatch(/^0x[0-9a-f]{128}$/);
+  });
+
+  test("inspect --show-secret on stored account with mnemonic", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "inspect", "my-account", "--show-secret"],
+      { accounts: [STORED_ACCOUNT] },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/Private Key:\s+0x[0-9a-f]{128}/);
+  });
+
+  test("inspect --show-secret on stored account with hex-seed secret and soft path", async () => {
+    const hexSeed = `0x${"11".repeat(32)}`;
+    const softPath = "/soft";
+    const hexAcct: StoredAccount = {
+      name: "hex-acct",
+      secret: hexSeed,
+      publicKey: publicKeyToHex(importAccount(hexSeed, softPath).publicKey),
+      derivationPath: softPath,
+    };
+    const { stdout, exitCode } = await runCli(
+      ["account", "inspect", "hex-acct", "--show-secret", "--json"],
+      { accounts: [hexAcct] },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.privateKey).toMatch(/^0x[0-9a-f]{128}$/);
+  });
+
+  test("inspect --show-secret exercises numeric //0 derivation", async () => {
+    const numericPath = "//0";
+    const hexAcct: StoredAccount = {
+      name: "numeric-acct",
+      secret: TEST_MNEMONIC,
+      publicKey: publicKeyToHex(importAccount(TEST_MNEMONIC, numericPath).publicKey),
+      derivationPath: numericPath,
+    };
+    const { stdout, exitCode } = await runCli(
+      ["account", "inspect", "numeric-acct", "--show-secret", "--json"],
+      { accounts: [hexAcct] },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.privateKey).toMatch(/^0x[0-9a-f]{128}$/);
+  });
+
+  test("inspect --show-secret on watch-only account errors", async () => {
+    const watchOnly: StoredAccount = {
+      name: "treasury",
+      publicKey: "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+      derivationPath: "",
+    };
+    const { stderr, exitCode } = await runCli(["account", "inspect", "treasury", "--show-secret"], {
+      accounts: [watchOnly],
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("watch-only");
+  });
+
+  test("inspect --show-secret on raw SS58 address errors", async () => {
+    const { stderr, exitCode } = await runCli([
+      "account",
+      "inspect",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "--show-secret",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("--show-secret requires an account name");
+  });
+
+  test("inspect --show-secret on env-backed account uses resolved env", async () => {
+    const envAcct: StoredAccount = {
+      name: "env-acct",
+      secret: { env: "MY_SECRET" },
+      publicKey: "",
+      derivationPath: "",
+    };
+    const { stdout, exitCode } = await runCli(
+      ["account", "inspect", "env-acct", "--show-secret", "--json"],
+      { accounts: [envAcct], env: { MY_SECRET: TEST_MNEMONIC } },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.privateKey).toMatch(/^0x[0-9a-f]{128}$/);
   });
 
   test("remove --json returns removed names", async () => {
