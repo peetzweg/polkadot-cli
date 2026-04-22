@@ -102,7 +102,7 @@ export async function runCli(
 
   try {
     const spawnOpts: Parameters<typeof Bun.spawn>[1] = {
-      env: { ...process.env, HOME: tmpHome, ...options?.env },
+      env: { ...process.env, HOME: tmpHome, DOT_HOME: dotDir, ...options?.env },
       stdout: "pipe",
       stderr: "pipe",
     };

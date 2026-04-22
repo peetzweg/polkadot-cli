@@ -184,3 +184,14 @@ describe("loadConfig merge behavior", () => {
     expect(merged.chains["polkadot-asset-hub"]!.rpc).toBe("wss://custom.example");
   });
 });
+
+// DOT_HOME env var behavior is exercised end-to-end by every subprocess
+// test via the runCli fixture (src/commands/__fixtures__/run-cli.ts), which
+// sets DOT_HOME to a per-test tmpdir. In-process mutation of
+// process.env.DOT_HOME races against other tests under `bun test
+// --concurrent` (other tests in the suite read DOT_HOME via getConfigDir
+// from real production code paths), so we verify the behavior via
+// subprocess tests rather than in-process env mutation.
+//
+// A dedicated subprocess-based DOT_HOME test lives in
+// src/config/dot-home.test.ts.

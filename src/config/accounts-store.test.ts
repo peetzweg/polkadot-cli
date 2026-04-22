@@ -25,3 +25,9 @@ describe("findAccount", () => {
     expect(result).toBeUndefined();
   });
 });
+
+// DOT_HOME save/load is covered end-to-end by every subprocess test that
+// goes through the runCli fixture (src/commands/__fixtures__/run-cli.ts)
+// — that fixture sets DOT_HOME on each spawn so writes land in a per-test
+// tmpdir. In-process mutation of process.env.DOT_HOME races against other
+// concurrent tests (bun test --concurrent), so we don't do it here.

@@ -1410,7 +1410,7 @@ The notification is automatically suppressed when:
 
 ## Configuration
 
-Config and metadata caches live in `~/.polkadot/`:
+Config and metadata caches live in `~/.polkadot/` by default:
 
 ```
 ~/.polkadot/
@@ -1423,6 +1423,29 @@ Config and metadata caches live in `~/.polkadot/`:
 ```
 
 > **Warning:** `accounts.json` stores secrets (mnemonics and seeds) in **plain text**. Encrypted-at-rest storage is planned but not yet implemented. Keep appropriate file permissions (`chmod 600 ~/.polkadot/accounts.json`) and do not use this for high-value mainnet accounts.
+
+### `DOT_HOME` — redirect the config directory
+
+Set the `DOT_HOME` environment variable to point at a different directory. When set, the CLI reads and writes **everything** (config, accounts, metadata, update cache) under that path — no `.polkadot` suffix is appended.
+
+```bash
+# Use a scratch directory for experimentation
+DOT_HOME=/tmp/dot-scratch dot account create throwaway
+
+# Isolated per-project state (e.g. in a repo-local shell)
+export DOT_HOME="$PWD/.dot"
+dot chain add local --rpc ws://localhost:9944
+
+# Unset or empty DOT_HOME falls back to $HOME/.polkadot
+```
+
+Typical uses:
+
+- **Run throwaway commands without touching your real accounts.** Point `DOT_HOME` at a tmpdir so `dot account create`, `dot chain add`, and similar never modify `~/.polkadot/`.
+- **CI and test harnesses.** Give each job its own `DOT_HOME` so parallel runs don't share state. The project's own test fixture (`runCli`) uses this mechanism.
+- **Multiple profiles on one machine.** Switch between environments (e.g. a mainnet profile and a local-dev profile) by changing `DOT_HOME`.
+
+Empty-string `DOT_HOME=""` is treated as unset and falls back to `$HOME/.polkadot` — so a shell-quoting slip can't accidentally send writes to `/`.
 
 ## Environment compatibility
 

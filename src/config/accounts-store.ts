@@ -3,7 +3,9 @@ import { join } from "node:path";
 import type { AccountsFile, StoredAccount } from "./accounts-types.ts";
 import { getConfigDir } from "./store.ts";
 
-const ACCOUNTS_PATH = join(getConfigDir(), "accounts.json");
+export function getAccountsPath(): string {
+  return join(getConfigDir(), "accounts.json");
+}
 
 async function ensureDir(dir: string): Promise<void> {
   await mkdir(dir, { recursive: true });
@@ -20,8 +22,9 @@ async function fileExists(path: string): Promise<boolean> {
 
 export async function loadAccounts(): Promise<AccountsFile> {
   await ensureDir(getConfigDir());
-  if (await fileExists(ACCOUNTS_PATH)) {
-    const data = await readFile(ACCOUNTS_PATH, "utf-8");
+  const path = getAccountsPath();
+  if (await fileExists(path)) {
+    const data = await readFile(path, "utf-8");
     return JSON.parse(data) as AccountsFile;
   }
   return { accounts: [] };
@@ -29,7 +32,7 @@ export async function loadAccounts(): Promise<AccountsFile> {
 
 export async function saveAccounts(file: AccountsFile): Promise<void> {
   await ensureDir(getConfigDir());
-  await writeFile(ACCOUNTS_PATH, `${JSON.stringify(file, null, 2)}\n`);
+  await writeFile(getAccountsPath(), `${JSON.stringify(file, null, 2)}\n`);
 }
 
 export function findAccount(file: AccountsFile, name: string): StoredAccount | undefined {
