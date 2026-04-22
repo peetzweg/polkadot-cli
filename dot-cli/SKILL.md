@@ -51,7 +51,7 @@ dot inspect --chain polkadot --rpc wss://kusama-rpc.polkadot.io
 
 # CORRECT
 dot chain add my-ah --rpc wss://example.com/asset-hub
-dot my-ah.inspect
+dot inspect --chain my-ah
 ```
 
 ## Querying Storage
@@ -63,6 +63,8 @@ dot chain.query.AssetConversion.Pools --dump               # all map entries
 dot chain.query.Assets.Metadata '{"parents":1,...}'        # complex key (JSON)
 dot chain.query.System.Number --json                       # JSON output
 ```
+
+Queries always read the latest finalized head — **historical state reads are not supported**. `--at <block>` is a tx-submission flag, not a query flag.
 
 ### Handling `undefined` — Critical for Scripting
 
@@ -120,11 +122,42 @@ dot chain.apis.Core.version --json
 
 Call without args to see the method signature.
 
-## Inspect / Explore
+### Complex Arguments (Location, enums)
+
+Enum-shaped args — including XCM `Location` / `VersionedLocation` and most pallet enums — are passed as JSON with `{type, value}` shape. `type` names the variant; `value` is the inner data (may be another `{type, value}`, an array, or a primitive):
 
 ```bash
-dot chain.inspect     # list all pallets with storage/call/event/error counts
+# Location for a local asset on Asset Hub (PalletInstance 50 = Assets, GeneralIndex = asset id)
+LOC_A='{"parents":1,"interior":{"type":"Here"}}'
+LOC_B='{"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"1984"}]}}'
+dot polkadot-asset-hub.apis.AssetConversionApi.get_reserves "$LOC_A" "$LOC_B" --json
 ```
+
+Tips for discovering the exact shape a runtime expects:
+
+- Run `--dump` on a related storage map that uses the same type and read back an existing entry.
+- `dot inspect <Pallet>.<Item> --chain <name>` prints the full type for a storage item.
+
+See [references/scripting-patterns.md](references/scripting-patterns.md) for more Location examples and the bash string-escaping pattern (`'"$VAR"'`).
+
+## Inspect / Explore
+
+`inspect` is a top-level command, **not** a dotpath category. `dot <chain>.inspect...` does not parse. Two valid forms:
+
+```bash
+# --chain flag with an optional positional target
+dot inspect --chain polkadot                      # list all pallets (with storage/call/event/error counts)
+dot inspect System --chain polkadot               # list items in one pallet
+dot inspect System.Account --chain polkadot       # show one storage item's type
+
+# Chain prefix on the inspect target (two or three dot-separated segments, chain first)
+dot inspect polkadot.System
+dot inspect polkadot.System.Account
+```
+
+A single positional arg is always treated as a pallet name, so `dot inspect polkadot` does **not** list pallets on the `polkadot` chain — use `--chain polkadot` for that.
+
+Useful for discovering enum variants: when a method signature shows `enum(N variants)`, run `dot inspect <Pallet>.<Item> --chain <name>` on a storage item that uses the same type, or `--dump` a storage map and read back the shape from a real entry.
 
 ## Account Management
 
@@ -159,7 +192,21 @@ dot tx.System.remark 0xdead --to-yaml                   # encode call → YAML
 | `--dry-run` | tx | Estimate fees without submitting |
 | `--dump` | query | Dump all entries of a storage map |
 | `--ext <json>` | tx | Custom signed extension values |
+| `--at <block>` | tx | Submit at a specific block hash (32-byte `0x…`); defaults to finalized. Not supported on queries. |
+
+## Common Errors
+
+- **`Incompatible runtime entry RuntimeCall(...)`** — usually a runtime API arg shape mismatch: wrong enum `{type, value}`, or a sized-binary `[u8; N]` passed as something other than `0x`-hex. Re-check the signature by calling `dot <chain>.apis.<Api>.<method>` with no args.
+- **`Unknown account or address "X"`** / account has no public key resolved yet — the `--from` name isn't registered. Check `dot account list`, or import with `dot account import <name> ...`.
+- **`undefined` piped into `jq`** — the literal string `undefined` is not JSON. Guard with `[ "$X" == "undefined" ]` before piping.
+- **Decode errors after a runtime upgrade** — metadata cache is keyed by chain name; register a fresh `dot chain add` alias for the upgraded chain rather than reusing the old one.
 
 ## Scripting Patterns
 
-For idempotent bash scripting patterns, big number handling, multi-environment config, and XCM composition, see [references/scripting-patterns.md](references/scripting-patterns.md).
+Highlights from [references/scripting-patterns.md](references/scripting-patterns.md):
+
+- `undefined`-guarded check-then-act for idempotent scripts.
+- XCM `Location` JSON shape and the bash escaping gotcha (`'"$VAR"'` breaks out of single-quoted JSON to interpolate).
+- FixedU128 rate math and u128 arithmetic via `python3` when bash overflows past 2^63.
+
+See the full reference for multi-environment config loaders and batch/sudo composition patterns.

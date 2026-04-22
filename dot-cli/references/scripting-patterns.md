@@ -202,7 +202,7 @@ dot chain.apis.AssetConversionApi.get_reserves "$NATIVE" "$ASSET" --json
 
 2. **`--rpc` uses wrong metadata.** Always register chains with `dot chain add`, never rely on `--rpc` alone. Metadata cache is keyed by chain name, not RPC URL, so `--rpc` can pick up stale metadata from a previous chain with the same alias.
 
-3. **Every command needs an explicit chain.** No default chain — use a `<chain>.` dotpath prefix (`dot polkadot.inspect`) or `--chain <name>`. Commands without either error out.
+3. **Every command needs an explicit chain.** No default chain — use a `<chain>.` dotpath prefix (`dot polkadot.query.System.Number`) or `--chain <name>`. Commands without either error out. Note `inspect` is a top-level command; only `--chain` works for it.
 
 4. **u128 returned as quoted strings.** `"1000000000000"` not `1000000000000`. Strip quotes for comparison: `tr -d '"'`
 
