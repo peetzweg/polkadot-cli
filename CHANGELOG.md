@@ -1,5 +1,157 @@
 # polkadot-cli
 
+## 1.15.0
+
+### Minor Changes
+
+- ba2c356: Ship a Claude Code skill for the `dot` CLI, installable as a plugin marketplace directly from this repo.
+
+  **New: `dot-cli` Claude Code skill**
+
+  The repo now ships a Claude Code skill that teaches agents how to drive the `dot` CLI — query patterns, tx encoding, runtime API calls, XCM locations, and bash scripting gotchas (like the `undefined` sentinel for missing storage keys and u128 quoted-string handling). The skill auto-triggers when Claude is asked about `dot`, polkadot-cli, Substrate storage, extrinsic submission, runtime APIs, or XCM.
+
+  Install:
+
+  ```
+  /plugin marketplace add peetzweg/polkadot-cli
+  /plugin install dot-cli@polkadot-cli
+  ```
+
+  Update later:
+
+  ```
+  /plugin marketplace update polkadot-cli
+  ```
+
+  Layout mirrors the [paritytech/product-skills](https://github.com/paritytech/product-skills) marketplace — `.claude-plugin/marketplace.json` with a single `strict: false` plugin entry pointing at `./dot-cli`. The skill folder itself is drop-in compatible with `product-skills`, so later consolidation is a straight copy.
+
+- d363ae8: Add `DOT_HOME` environment variable to redirect the CLI's config directory.
+
+  When `DOT_HOME` is set, the CLI reads and writes all state — `config.json`,
+  `accounts.json`, `update-check.json`, and `chains/*/metadata.bin` — under that
+  directory instead of the default `$HOME/.polkadot`. No `.polkadot` suffix is
+  appended to the override.
+
+  This lets you run experiments, CI jobs, or secondary profiles without touching
+  your real config directory:
+
+  ```bash
+  DOT_HOME=/tmp/dot-scratch dot account create throwaway
+  ```
+
+  Empty-string `DOT_HOME=""` is treated as unset and falls back to
+  `$HOME/.polkadot`, so a shell-quoting slip cannot accidentally target `/`.
+
+  The project's own `runCli` test fixture now sets `DOT_HOME` to an isolated
+  tmpdir for every subprocess it spawns.
+
+- 57ca4a0: Improve `dot chain import` and `dot account import` UX.
+
+  **Readable output.** Both commands now print one line per chain/account with
+  status glyphs — `✓` added, `⟳` overwritten, `-` skipped — followed by a terse
+  count summary. The old single-line comma-joined `Added: a, b, c, …` summary
+  could span hundreds of characters for realistic imports; per-item lines are
+  much easier to scan.
+
+  ```
+    ✓ preview
+    ✓ preview-people
+    ⟳ polkadot (overwritten)
+    - paseo (skipped)
+
+  2 added, 1 overwritten, 1 skipped
+  ```
+
+  **No more hangs on bare invocation.** `dot chain import` and
+  `dot account import` with no file argument used to block forever reading
+  from stdin. They now print the subcommand help when invoked in a terminal,
+  while piped stdin (`cat file | dot chain import` or `dot chain import -`)
+  still works.
+
+  **Auto-metadata after chain import.** `dot chain import` now fetches metadata
+  for newly imported or overwritten chains automatically, so tab completion,
+  `dot chain.query.*`, and other metadata-dependent features start working
+  immediately — no manual `dot chain update --all` step required. Pass
+  `--no-metadata` to skip the fetch (useful for offline/CI bootstrapping).
+
+  **`dot account import` is now file-only.** The single-account import form
+  `dot account import <name> --secret "..."` / `--env VAR` has been removed to
+  make the command a clean analog to `dot chain import`. The canonical
+  single-account path is and remains `dot account add <name> --secret "..."`
+  (`add --secret` / `add --env` have always been supported). Batch file import
+  no longer requires the `--file` flag — just pass the path:
+
+  ```bash
+  # Before
+  dot account import treasury --secret "word1 word2 ..."    # no longer works
+  dot account import --file accounts.json                    # still works
+
+  # After
+  dot account add treasury --secret "word1 word2 ..."        # canonical single
+  dot account import accounts.json                           # positional file
+  dot account import accounts.json --overwrite --dry-run
+  dot account import -                                       # stdin
+  ```
+
+- a1433f0: Add `dot extensions` to inspect a chain's transaction (signed) extensions.
+
+  **New: `extensions` category**
+
+  Users can now discover which transaction extensions a chain exposes, which ones
+  polkadot-api fills in automatically, and which ones must be provided via
+  `--ext` when building a transaction. This closes issue #169.
+
+  ```bash
+  # List every transaction extension on a chain
+  dot extensions --chain polkadot
+
+  # Detail view for a single extension — shows value type, additionalSigned type,
+  # and a usage hint for non-builtin extensions
+  dot extensions.CheckMortality --chain polkadot
+
+  # Chain-prefix form
+  dot polkadot.extensions.ChargeTransactionPayment
+
+  # Structured output for scripts and agents
+  dot extensions --chain polkadot --json
+  ```
+
+  Aliases: `extension`, `ext`. Typos produce suggestion-style errors. Shell
+  completion proposes identifiers after `dot extensions.`.
+
+  Each entry is tagged `[builtin]` (handled internally by polkadot-api) or
+  `[custom]` (requires `--ext '{"<Identifier>":{"value":...}}'` when signing).
+
+- 4854b23: Add `--show-secret` to `dot account inspect`.
+
+  Prints the **64-byte sr25519 expanded secret key** as `0x`-prefixed hex
+  alongside the public key and SS58 address. Works for dev accounts
+  (Alice/Bob/Charlie/Dave/Eve/Ferdie, derived on-the-fly) and for stored
+  accounts that have a resolvable secret (mnemonic or hex seed). Refuses on
+  watch-only accounts, bare SS58 addresses, or hex public keys.
+
+  The emitted hex is the final secret after any derivation path is applied, so
+  it can be pasted directly into signers that don't accept a mnemonic+path
+  combination (e.g. services that expect a raw `PRIVATE_KEY` env var). In
+  `--json` mode the value is surfaced under the `privateKey` field.
+
+### Patch Changes
+
+- 2dbdb4d: Fix `extensions` help and docs that assumed the removed default chain.
+
+  After the default-chain removal every chain-consuming command requires
+  `--chain <name>` or a `<chain>.` dotpath prefix. A few surfaces introduced
+  alongside `dot extensions` were still suggesting commands without either:
+
+  - The custom-extension detail view's `--ext` Usage hint now includes the
+    resolved chain (`dot <chain>.tx.<Pallet>.<Call> --from <acc> --ext ...`).
+  - The "transaction extensions have no sub-items" error now preserves the
+    chain the user supplied — prefix form when they used a `<chain>.` prefix,
+    `--chain <name>` when they used the flag, and a `<chain>` placeholder
+    when neither was set.
+  - The top-of-file feature bullet in `README.md` and `docs/content/_index.md`
+    reads `dot <chain>.extensions` instead of `dot extensions`.
+
 ## 1.14.2
 
 ### Patch Changes
