@@ -1157,7 +1157,11 @@ function normalizeValue(lookup: Lookup, entry: any, value: unknown): unknown {
         innerResolved.value === "u8" &&
         typeof value === "string"
       ) {
-        if (/^0x[0-9a-fA-F]*$/.test(value)) return Binary.fromHex(value as `0x${string}`);
+        const isHex = /^0x[0-9a-fA-F]*$/.test(value);
+        // Sized [u8; N]: PAPI's codec expects a hex string, not a Binary —
+        // passing Binary silently miscompiles to zero-length bytes.
+        if (resolved.type === "array" && isHex) return value;
+        if (isHex) return Binary.fromHex(value as `0x${string}`);
         return Binary.fromText(value);
       }
 

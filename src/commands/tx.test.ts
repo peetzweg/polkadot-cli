@@ -539,9 +539,13 @@ describe("parseTypedArg", () => {
       },
     };
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
-    const result = (await parseTypedArg(meta, enumEntry, `AccountId32({"id":"${hex}"})`)) as any;
+    const result = (await parseTypedArg(meta, enumEntry, `AccountId32({"id":"${hex}"})`)) as {
+      type: string;
+      value: { id: string };
+    };
     expect(result.type).toBe("AccountId32");
-    expect(result.value.id).toBeInstanceOf(Uint8Array);
+    // Sized [u8; 32] stays as a hex string so PAPI's codec encodes it correctly.
+    expect(result.value.id).toBe(hex);
   });
 
   test("enum shorthand does not break SS58 auto-wrap", async () => {
@@ -973,7 +977,9 @@ describe("normalizeValue", () => {
     expect(result).toEqual({ type: "X1", value: 7 });
   });
 
-  test("converts hex string to Binary for [u8; N] byte arrays", () => {
+  test("passes through hex string for sized [u8; N] byte arrays", () => {
+    // Sized arrays must stay as hex strings — PAPI's codec silently
+    // miscompiles Binary/Uint8Array for [u8; N] to zero-length bytes.
     const mockEntry = {
       type: "array",
       value: { type: "primitive", value: "u8" },
@@ -981,8 +987,7 @@ describe("normalizeValue", () => {
     };
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
     const result = normalizeValue(meta.lookup, mockEntry, hex);
-    expect(result).toBeInstanceOf(Uint8Array);
-    expect(Binary.toHex(result as Uint8Array)).toBe(hex);
+    expect(result).toBe(hex);
   });
 
   test("converts text string to Binary for Vec<u8> byte sequences", () => {
@@ -995,18 +1000,17 @@ describe("normalizeValue", () => {
     expect(Binary.toText(result as Uint8Array)).toBe("hello");
   });
 
-  test("converts hex string to Binary for [u8; N] through lookupEntry indirection", () => {
+  test("passes through hex string for [u8; N] through lookupEntry indirection", () => {
     const mockEntry = {
       type: "array",
       value: { type: "lookupEntry", value: { type: "primitive", value: "u8" } },
       len: 4,
     };
     const result = normalizeValue(meta.lookup, mockEntry, "0xdeadbeef");
-    expect(result).toBeInstanceOf(Uint8Array);
-    expect(Binary.toHex(result as Uint8Array)).toBe("0xdeadbeef");
+    expect(result).toBe("0xdeadbeef");
   });
 
-  test("converts nested byte arrays inside structs", () => {
+  test("passes through nested byte arrays inside structs as hex strings", () => {
     const mockEntry = {
       type: "struct",
       value: {
@@ -1014,12 +1018,11 @@ describe("normalizeValue", () => {
       },
     };
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
-    const result = normalizeValue(meta.lookup, mockEntry, { id: hex }) as any;
-    expect(result.id).toBeInstanceOf(Uint8Array);
-    expect(Binary.toHex(result.id as Uint8Array)).toBe(hex);
+    const result = normalizeValue(meta.lookup, mockEntry, { id: hex }) as { id: string };
+    expect(result.id).toBe(hex);
   });
 
-  test("converts nested byte arrays inside enum variants", () => {
+  test("passes through nested byte arrays inside enum variants as hex strings", () => {
     const mockEntry = {
       type: "enum",
       value: {
@@ -1033,9 +1036,23 @@ describe("normalizeValue", () => {
     };
     const hex = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
     const input = { type: "AccountId32", value: { id: hex } };
-    const result = normalizeValue(meta.lookup, mockEntry, input) as any;
-    expect(result.value.id).toBeInstanceOf(Uint8Array);
-    expect(Binary.toHex(result.value.id as Uint8Array)).toBe(hex);
+    const result = normalizeValue(meta.lookup, mockEntry, input) as {
+      value: { id: string };
+    };
+    expect(result.value.id).toBe(hex);
+  });
+
+  test("wraps hex string in Binary for unsized Vec<u8> sequences", () => {
+    // Unsized byte sequences (Vec<u8>, e.g. System.remark) DO use Binary —
+    // the codec treats sized vs unsized u8 arrays differently.
+    const mockEntry = {
+      type: "sequence",
+      value: { type: "primitive", value: "u8" },
+    };
+    const hex = "0xdeadbeef";
+    const result = normalizeValue(meta.lookup, mockEntry, hex);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(Binary.toHex(result as Uint8Array)).toBe(hex);
   });
 
   test("converts string to bigint for u128 primitives in JSON", () => {
@@ -1824,6 +1841,32 @@ describe("dot tx CLI integration", () => {
     expect(stderr).toBe("");
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/^0x[0-9a-f]+$/);
+  });
+
+  test("XcmPallet.teleport_assets round-trips nested AccountId32.id bytes", async () => {
+    // Regression: normalizeValue used to wrap sized [u8; N] fields (e.g.
+    // AccountId32.id) in Binary, which PAPI's codec silently miscompiles to
+    // zero-length bytes. Verify the encoded call round-trips back with the
+    // original id intact.
+    const ID_HEX = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+    const dest =
+      '{"type":"V5","value":{"parents":0,"interior":{"type":"X1","value":[{"type":"Parachain","value":1000}]}}}';
+    const beneficiary = `{"type":"V5","value":{"parents":0,"interior":{"type":"X1","value":[{"type":"AccountId32","value":{"network":null,"id":"${ID_HEX}"}}]}}}`;
+    const assets =
+      '{"type":"V5","value":[{"id":{"parents":0,"interior":{"type":"Here"}},"fun":{"type":"Fungible","value":1000000000000}}]}';
+
+    const callData = await parseCallArgs(meta, "XcmPallet", "teleport_assets", [
+      dest,
+      beneficiary,
+      assets,
+      "0",
+    ]);
+    const { codec } = meta.builder.buildCall("XcmPallet", "teleport_assets");
+    const encoded = codec.enc(callData);
+    const decoded = codec.dec(encoded) as {
+      beneficiary: { value: { interior: { value: { value: { id: string } } } } };
+    };
+    expect(decoded.beneficiary.value.interior.value.value.id).toBe(ID_HEX);
   });
 
   test("--encode XcmPallet.teleport_assets with quoted large Fungible value", async () => {
