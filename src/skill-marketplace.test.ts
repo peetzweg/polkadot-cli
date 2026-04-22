@@ -91,4 +91,24 @@ describe("Claude Code skill marketplace", () => {
       expect(existsSync(join(base, link))).toBe(true);
     }
   });
+
+  test("SKILL.md does not document the invalid `<chain>.inspect` dotpath form", () => {
+    // Regression: `inspect` is a top-level command, not a dotpath category.
+    // `dot polkadot.inspect` / `dot my-chain.inspect` do not parse.
+    const md = readFileSync(join(ROOT, "dot-cli/SKILL.md"), "utf-8");
+    // Match any word followed by ".inspect" at a word boundary, but allow the
+    // phrase `<chain>.inspect` when used to *describe* the invalid form.
+    const bareMatches = [...md.matchAll(/\b([a-z][a-z0-9-]+)\.inspect\b/g)]
+      .map((m) => m[0])
+      .filter((s) => !s.includes("<"));
+    expect(bareMatches).toEqual([]);
+  });
+
+  test("SKILL.md covers the post-feedback content areas", () => {
+    const md = readFileSync(join(ROOT, "dot-cli/SKILL.md"), "utf-8");
+    expect(md).toContain("## Common Errors");
+    expect(md).toContain("Complex Arguments");
+    expect(md).toMatch(/--at\s*<block>/);
+    expect(md).toContain("historical state reads are not supported");
+  });
 });
