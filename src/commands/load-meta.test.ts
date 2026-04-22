@@ -1,19 +1,16 @@
 import { describe, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { loadMeta } from "./focused-inspect.ts";
 
 // ---------------------------------------------------------------------------
-// Load fixture metadata and actual metadata functions before mocking.
-// We only mock fetchMetadataFromChain and createChainClient — everything
-// else (parseMetadata, getOrFetchMetadata, etc.) uses real implementations.
+// Use dependency injection to substitute createChainClient and
+// fetchMetadataFromChain in isolation — avoids mock.module, which replaces
+// modules globally for the whole `bun test` process and breaks other tests.
 // ---------------------------------------------------------------------------
 const FIXTURE_METADATA = new Uint8Array(
   readFileSync(join(import.meta.dir, "__fixtures__/polkadot-metadata.bin")),
 );
-
-// Import actual metadata module BEFORE mock.module so we can re-export
-// real implementations alongside the mock.
-const actualMetadata = await import("../core/metadata.ts");
 
 const mockDestroy = mock(() => {});
 const mockCreateChainClient = mock(async () => ({
@@ -22,28 +19,10 @@ const mockCreateChainClient = mock(async () => ({
 }));
 const mockFetchMetadataFromChain = mock(async () => FIXTURE_METADATA);
 
-mock.module("../core/client.ts", () => ({
-  createChainClient: mockCreateChainClient,
-}));
-
-mock.module("../core/metadata.ts", () => ({
-  describeCallArgs: actualMetadata.describeCallArgs,
-  describeEventFields: actualMetadata.describeEventFields,
-  describeRuntimeApiMethodArgs: actualMetadata.describeRuntimeApiMethodArgs,
-  describeType: actualMetadata.describeType,
-  fetchMetadataFromChain: mockFetchMetadataFromChain,
-  findPallet: actualMetadata.findPallet,
-  findRuntimeApi: actualMetadata.findRuntimeApi,
-  getOrFetchMetadata: actualMetadata.getOrFetchMetadata,
-  getPalletNames: actualMetadata.getPalletNames,
-  getRuntimeApiNames: actualMetadata.getRuntimeApiNames,
-  listPallets: actualMetadata.listPallets,
-  listRuntimeApis: actualMetadata.listRuntimeApis,
-  parseMetadata: actualMetadata.parseMetadata,
-}));
-
-// Import loadMeta AFTER mocks are set up
-const { loadMeta } = await import("./focused-inspect.ts");
+const deps = {
+  createChainClient: mockCreateChainClient as any,
+  fetchMetadataFromChain: mockFetchMetadataFromChain as any,
+};
 
 // ---------------------------------------------------------------------------
 // loadMeta — --rpc override bypasses metadata cache
@@ -56,7 +35,7 @@ describe("loadMeta", () => {
     mockFetchMetadataFromChain.mockClear();
     mockDestroy.mockClear();
 
-    const meta = await loadMeta("polkadot", chainConfig, "wss://override.example.com");
+    const meta = await loadMeta("polkadot", chainConfig, "wss://override.example.com", deps);
 
     expect(meta).toBeDefined();
     expect(meta.unified).toBeDefined();
@@ -70,7 +49,7 @@ describe("loadMeta", () => {
   test("destroys client handle after fetching with rpcOverride", async () => {
     mockDestroy.mockClear();
 
-    await loadMeta("polkadot", chainConfig, "wss://override.example.com");
+    await loadMeta("polkadot", chainConfig, "wss://override.example.com", deps);
 
     expect(mockDestroy).toHaveBeenCalledTimes(1);
   });
@@ -82,7 +61,7 @@ describe("loadMeta", () => {
     // Without rpcOverride, loadMeta calls getOrFetchMetadata(chainName) which
     // reads from cache. The real getOrFetchMetadata calls the real loadMetadata
     // from store.ts — if cached metadata exists on disk, no client is created.
-    const meta = await loadMeta("polkadot", chainConfig);
+    const meta = await loadMeta("polkadot", chainConfig, undefined, deps);
 
     expect(meta).toBeDefined();
     expect(meta.unified).toBeDefined();

@@ -1,8 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { ChainConfig } from "../config/types.ts";
 import { ConnectionError } from "../utils/errors.ts";
+import { createChainClient } from "./client.ts";
 
-// Capture calls to getWsProvider so we can inspect the config it receives
+// Inject fakes via the `deps` argument so we don't replace the real
+// polkadot-api module (which other tests depend on for `Binary`, etc.).
 const mockGetWsProvider = mock((_endpoints: any, _config?: any) => (() => {}) as any);
 const mockCreateClient = mock(
   () =>
@@ -10,16 +12,10 @@ const mockCreateClient = mock(
       destroy: () => {},
     }) as any,
 );
-
-mock.module("polkadot-api/ws", () => ({
-  getWsProvider: mockGetWsProvider,
-}));
-mock.module("polkadot-api", () => ({
-  createClient: mockCreateClient,
-}));
-
-// Import after mocking so the mocks take effect
-const { createChainClient } = await import("./client.ts");
+const deps = {
+  getWsProvider: mockGetWsProvider as any,
+  createClient: mockCreateClient as any,
+};
 
 describe("createChainClient", () => {
   test("passes timeout config to getWsProvider", async () => {
@@ -29,6 +25,7 @@ describe("createChainClient", () => {
       "test-chain",
       { rpc: "wss://example.com" },
       "wss://example.com",
+      deps,
     );
 
     expect(mockGetWsProvider).toHaveBeenCalledTimes(1);
@@ -46,6 +43,7 @@ describe("createChainClient", () => {
       "test-chain",
       { rpc: "wss://example.com" },
       "wss://example.com",
+      deps,
     );
 
     const [, config] = mockGetWsProvider.mock.calls[0]!;
@@ -61,6 +59,7 @@ describe("createChainClient", () => {
       "test-chain",
       { rpc: "wss://example.com" },
       "wss://example.com",
+      deps,
     );
 
     // createClient should receive the raw provider, not a compat-wrapped one
@@ -76,7 +75,7 @@ describe("createChainClient", () => {
     mockGetWsProvider.mockClear();
 
     const rpcs = ["wss://a.example.com", "wss://b.example.com"];
-    const handle = await createChainClient("test-chain", { rpc: rpcs[0]! }, rpcs);
+    const handle = await createChainClient("test-chain", { rpc: rpcs[0]! }, rpcs, deps);
 
     const [endpoints] = mockGetWsProvider.mock.calls[0]!;
     expect(endpoints).toEqual(rpcs);
@@ -87,9 +86,12 @@ describe("createChainClient", () => {
   test("uses chainConfig.rpc when no rpcOverride is given", async () => {
     mockGetWsProvider.mockClear();
 
-    const handle = await createChainClient("test-chain", {
-      rpc: "wss://config.example.com",
-    });
+    const handle = await createChainClient(
+      "test-chain",
+      { rpc: "wss://config.example.com" },
+      undefined,
+      deps,
+    );
 
     const [endpoints] = mockGetWsProvider.mock.calls[0]!;
     expect(endpoints).toBe("wss://config.example.com");
@@ -99,12 +101,14 @@ describe("createChainClient", () => {
 
   test("throws ConnectionError when no RPC is configured", async () => {
     const noRpc = {} as ChainConfig;
-    expect(createChainClient("unknown-chain", noRpc)).rejects.toThrow(ConnectionError);
+    expect(createChainClient("unknown-chain", noRpc, undefined, deps)).rejects.toThrow(
+      ConnectionError,
+    );
   });
 
   test("throws ConnectionError with helpful message", async () => {
     const noRpc = {} as ChainConfig;
-    expect(createChainClient("my-chain", noRpc)).rejects.toThrow(
+    expect(createChainClient("my-chain", noRpc, undefined, deps)).rejects.toThrow(
       /No RPC endpoint configured.*"my-chain"/,
     );
   });
@@ -115,7 +119,7 @@ describe("createChainClient", () => {
     // Old configs may have lightClient: true — the field is no longer in the
     // ChainConfig interface but could still exist in user config files on disk.
     const legacyConfig = { rpc: "wss://example.com", lightClient: true } as ChainConfig;
-    const handle = await createChainClient("polkadot", legacyConfig);
+    const handle = await createChainClient("polkadot", legacyConfig, undefined, deps);
 
     expect(mockGetWsProvider).toHaveBeenCalledTimes(1);
     const [endpoints] = mockGetWsProvider.mock.calls[0]!;
@@ -137,6 +141,7 @@ describe("createChainClient", () => {
       "test-chain",
       { rpc: "wss://example.com" },
       "wss://example.com",
+      deps,
     );
 
     expect(destroySpy).not.toHaveBeenCalled();

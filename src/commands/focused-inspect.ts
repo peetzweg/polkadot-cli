@@ -34,16 +34,24 @@ import {
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import type { DotCategory } from "../utils/parse-dot-path.ts";
 
+export interface LoadMetaDeps {
+  createChainClient?: typeof createChainClient;
+  fetchMetadataFromChain?: typeof fetchMetadataFromChain;
+}
+
 export async function loadMeta(
   chainName: string,
   chainConfig: any,
   rpcOverride?: string,
+  deps: LoadMetaDeps = {},
 ): Promise<MetadataBundle> {
+  const _createChainClient = deps.createChainClient ?? createChainClient;
+  const _fetchMetadataFromChain = deps.fetchMetadataFromChain ?? fetchMetadataFromChain;
   if (rpcOverride) {
     process.stderr.write(`Fetching metadata from ${chainName}...\n`);
-    const clientHandle = await createChainClient(chainName, chainConfig, rpcOverride);
+    const clientHandle = await _createChainClient(chainName, chainConfig, rpcOverride);
     try {
-      const raw = await fetchMetadataFromChain(clientHandle, chainName);
+      const raw = await _fetchMetadataFromChain(clientHandle, chainName);
       return parseMetadata(raw);
     } finally {
       clientHandle.destroy();
@@ -53,7 +61,7 @@ export async function loadMeta(
     return await getOrFetchMetadata(chainName);
   } catch {
     process.stderr.write(`Fetching metadata from ${chainName}...\n`);
-    const clientHandle = await createChainClient(chainName, chainConfig);
+    const clientHandle = await _createChainClient(chainName, chainConfig);
     try {
       return await getOrFetchMetadata(chainName, clientHandle);
     } finally {

@@ -9,6 +9,11 @@ export interface ClientHandle {
   destroy: () => void;
 }
 
+export interface CreateChainClientDeps {
+  createClient?: typeof createClient;
+  getWsProvider?: typeof getWsProvider;
+}
+
 // Suppress noisy retry/teardown logs from polkadot-api internals.
 // The WS provider logs "Unable to connect" via console.error, and the
 // observable-client logs "ChainHead … request failed" via console.warn
@@ -34,7 +39,10 @@ export async function createChainClient(
   chainName: string,
   chainConfig: ChainConfig,
   rpcOverride?: string | string[],
+  deps: CreateChainClientDeps = {},
 ): Promise<ClientHandle> {
+  const _createClient = deps.createClient ?? createClient;
+  const _getWsProvider = deps.getWsProvider ?? getWsProvider;
   const restoreConsole = suppressProviderNoise();
 
   const rpc = rpcOverride ?? chainConfig.rpc;
@@ -44,9 +52,9 @@ export async function createChainClient(
       `No RPC endpoint configured for chain "${chainName}". Use --rpc or configure one with: dot chain add ${chainName} --rpc <url>`,
     );
   }
-  const provider = getWsProvider(rpc, { timeout: 10_000 });
+  const provider = _getWsProvider(rpc, { timeout: 10_000 });
 
-  const client = createClient(provider, {
+  const client = _createClient(provider, {
     getMetadata: async () => loadMetadata(chainName),
     setMetadata: async (_codeHash, metadata) => {
       await saveMetadata(chainName, metadata);
