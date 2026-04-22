@@ -2077,7 +2077,7 @@ The CLI works in Node.js (v22+), Bun, and sandboxed runtimes (e.g. LLM tool-use 
 
 ## Configuration
 
-Config and metadata caches live in `~/.polkadot/`:
+Config and metadata caches live in `~/.polkadot/` by default:
 
 ```
 ~/.polkadot/
@@ -2088,3 +2088,20 @@ Config and metadata caches live in `~/.polkadot/`:
     └── polkadot/
         └── metadata.bin # cached SCALE-encoded metadata
 ```
+
+### `DOT_HOME` — redirect the config directory
+
+Set the `DOT_HOME` environment variable to point at a different directory. When set, the CLI reads and writes **everything** (config, accounts, metadata, update cache) under that path — no `.polkadot` suffix is appended.
+
+```bash
+# Scratch directory for experimentation — never touches ~/.polkadot
+DOT_HOME=/tmp/dot-scratch dot account create throwaway
+
+# Repo-local state
+export DOT_HOME="$PWD/.dot"
+dot chain add local --rpc ws://localhost:9944
+```
+
+Typical uses: throwaway commands that shouldn't touch real accounts, CI jobs that need isolated state, and switching between profiles (mainnet vs. local-dev) by changing one env var. The project's own test fixture (`runCli`) uses this mechanism.
+
+Empty-string `DOT_HOME=""` is treated as unset and falls back to `$HOME/.polkadot` — a shell-quoting slip can't send writes to `/`.

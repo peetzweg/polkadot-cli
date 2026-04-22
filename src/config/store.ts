@@ -5,24 +5,25 @@ import { CliError } from "../utils/errors.ts";
 import type { ChainConfig, Config } from "./types.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
 
-const DOT_DIR = join(homedir(), ".polkadot");
-const CONFIG_PATH = join(DOT_DIR, "config.json");
-const CHAINS_DIR = join(DOT_DIR, "chains");
-
 export function getConfigDir(): string {
-  return DOT_DIR;
+  const override = process.env.DOT_HOME;
+  return override && override.length > 0 ? override : join(homedir(), ".polkadot");
 }
 
 export function getChainsDir(): string {
-  return CHAINS_DIR;
+  return join(getConfigDir(), "chains");
 }
 
 export function getChainDir(chainName: string): string {
-  return join(CHAINS_DIR, chainName);
+  return join(getChainsDir(), chainName);
 }
 
 export function getMetadataPath(chainName: string): string {
-  return join(CHAINS_DIR, chainName, "metadata.bin");
+  return join(getChainDir(chainName), "metadata.bin");
+}
+
+function getConfigPath(): string {
+  return join(getConfigDir(), "config.json");
 }
 
 async function ensureDir(dir: string): Promise<void> {
@@ -39,9 +40,10 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 export async function loadConfig(): Promise<Config> {
-  await ensureDir(DOT_DIR);
-  if (await fileExists(CONFIG_PATH)) {
-    const saved = JSON.parse(await readFile(CONFIG_PATH, "utf-8")) as Config;
+  await ensureDir(getConfigDir());
+  const configPath = getConfigPath();
+  if (await fileExists(configPath)) {
+    const saved = JSON.parse(await readFile(configPath, "utf-8")) as Config;
     const chains: Record<string, ChainConfig> = {};
     for (const [name, defaultConfig] of Object.entries(DEFAULT_CONFIG.chains)) {
       chains[name] = saved.chains[name]
@@ -60,8 +62,8 @@ export async function loadConfig(): Promise<Config> {
 }
 
 export async function saveConfig(config: Config): Promise<void> {
-  await ensureDir(DOT_DIR);
-  await writeFile(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
+  await ensureDir(getConfigDir());
+  await writeFile(getConfigPath(), `${JSON.stringify(config, null, 2)}\n`);
 }
 
 export async function loadMetadata(chainName: string): Promise<Uint8Array | null> {
