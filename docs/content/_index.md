@@ -23,6 +23,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Message signing — sign arbitrary bytes with account keypairs for use as `MultiSignature` arguments
 - ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
 - ✅ Export/import — portable chain and account configuration for backup, sharing, and CI bootstrapping
+- ✅ Claude Code skill — `dot-cli` skill installable as a plugin marketplace, teaches agents how to drive the CLI
 
 ## Install
 
@@ -33,6 +34,47 @@ npm install -g polkadot-cli@latest
 ```
 
 This installs the `dot` command globally. Ships with Polkadot and all system parachains preconfigured with multiple fallback RPC endpoints. Add any Substrate-based chain by pointing to its RPC endpoint(s).
+
+## Claude Code skill
+
+This repo ships a [Claude Code](https://claude.com/claude-code) skill — a piece of context Claude can load on-demand that teaches it how to drive the `dot` CLI correctly: query patterns, tx encoding, runtime API calls, and the bash scripting gotchas that trip up agents (missing-key `undefined` sentinel, u128 values returned as quoted strings, XCM `Location` JSON shapes, etc.).
+
+### Install
+
+Register this repo as a plugin marketplace in Claude Code, then install the skill:
+
+```
+/plugin marketplace add peetzweg/polkadot-cli
+/plugin install dot-cli@polkadot-cli
+```
+
+The skill auto-triggers when you ask Claude about `dot`, polkadot-cli, Substrate storage queries, extrinsic submission, runtime APIs, or XCM. You can also invoke it directly with `/dot-cli`.
+
+### Update
+
+To pull the latest skill content after the repo publishes a new version:
+
+```
+/plugin marketplace update polkadot-cli
+```
+
+If auto-update is enabled on this marketplace in Claude Code, the skill refreshes on startup.
+
+### Layout
+
+The skill lives alongside the CLI source so it can be kept in lockstep with the commands it documents:
+
+```
+polkadot-cli/
+├── .claude-plugin/
+│   └── marketplace.json     # single plugin entry pointing at ./dot-cli
+└── dot-cli/
+    ├── SKILL.md             # entry point — loaded when the skill triggers
+    └── references/
+        └── scripting-patterns.md
+```
+
+The layout mirrors [paritytech/product-skills](https://github.com/paritytech/product-skills), Parity's Polkadot-stack skills marketplace, so the `dot-cli` folder can migrate there as a drop-in later.
 
 ## Chains
 

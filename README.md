@@ -29,6 +29,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Non-native fee payment — pay tx fees in any asset the chain accepts via `--asset` (asset-hub-style chains)
 - ✅ Bandersnatch member keys — derive Ring VRF member keys from mnemonics for on-chain member sets
 - ✅ Export/import — portable chain and account configuration for backup, sharing, and CI bootstrapping
+- ✅ Claude Code skill — `dot-cli` skill installable as a plugin marketplace, teaches agents how to drive the CLI
 
 ### Preconfigured chains
 
@@ -56,6 +57,25 @@ npm install -g polkadot-cli@latest
 ```
 
 This installs the `dot` command globally.
+
+## Claude Code skill
+
+This repo ships a [Claude Code](https://claude.com/claude-code) skill that teaches Claude how to drive the `dot` CLI — query patterns, tx encoding, runtime API calls, and bash scripting gotchas.
+
+Register the marketplace and install the skill:
+
+```
+/plugin marketplace add peetzweg/polkadot-cli
+/plugin install dot-cli@polkadot-cli
+```
+
+The skill auto-triggers when you ask Claude about `dot`, Substrate storage queries, extrinsic submission, runtime APIs, or XCM. You can also invoke it directly with `/dot-cli`.
+
+To pull the latest skill updates:
+
+```
+/plugin marketplace update polkadot-cli
+```
 
 ## Usage
 
