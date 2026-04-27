@@ -19,6 +19,7 @@ import {
   getSignedExtensions,
   listPallets,
   PAPI_BUILTIN_EXTENSIONS,
+  withStalenessSuggestion,
 } from "../core/metadata.ts";
 import {
   BOLD,
@@ -38,7 +39,7 @@ import {
 } from "../core/output.ts";
 import { resolveAccountAddress } from "../core/resolve-address.ts";
 import { binaryToDisplay } from "../utils/binary-display.ts";
-import { CliError } from "../utils/errors.ts";
+import { CliError, formatRuntimeError } from "../utils/errors.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseValue } from "../utils/parse-value.ts";
 import { loadMeta, resolvePallet, showItemHelp } from "./focused-inspect.ts";
@@ -446,10 +447,15 @@ export async function handleTx(
       const signerAddress = toSs58(signer!.publicKey);
 
       let estimatedFees: string | undefined;
+      let estimationError: string | undefined;
       try {
-        estimatedFees = String(await tx.getEstimatedFees(signer?.publicKey, txOptions));
-      } catch {
-        estimatedFees = undefined;
+        estimatedFees = String(
+          await withStalenessSuggestion(chainName, clientHandle!, () =>
+            tx.getEstimatedFees(signer?.publicKey, txOptions),
+          ),
+        );
+      } catch (err) {
+        estimationError = err instanceof Error ? err.message : String(err);
       }
 
       if (isJsonOutput(opts)) {
@@ -460,6 +466,7 @@ export async function handleTx(
           decoded: decodedStr,
           estimatedFees,
         };
+        if (estimationError !== undefined) result.estimationError = estimationError;
         if (nonce !== undefined) result.nonce = nonce;
         if (tip !== undefined) result.tip = String(tip);
         if (asset !== undefined) result.asset = asset;
@@ -487,6 +494,11 @@ export async function handleTx(
         console.log(`  ${BOLD}Estimated fees:${RESET} ${estimatedFees}`);
       } else {
         console.log(`  ${BOLD}Estimated fees:${RESET} ${YELLOW}unable to estimate${RESET}`);
+        if (estimationError) {
+          const formatted = formatRuntimeError(estimationError).replace(/\n/g, `\n  `);
+          console.log(`  ${YELLOW}⚠${RESET} ${formatted}`);
+          console.log(`  ${DIM}Submitting this transaction is likely to fail.${RESET}`);
+        }
       }
       return;
     }
@@ -515,7 +527,9 @@ export async function handleTx(
       ) as import("rxjs").Observable<TxEvent>;
 
       if (isJsonOutput(opts)) {
-        const result = await watchTransactionJson(observable, waitLevel, { unsigned: true });
+        const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
+          watchTransactionJson(observable, waitLevel, { unsigned: true }),
+        );
         const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc);
         if (result.type === "broadcasted") {
           printJsonLine({ event: "broadcasted", txHash: result.txHash });
@@ -550,7 +564,9 @@ export async function handleTx(
         return;
       }
 
-      const result = await watchTransaction(observable, waitLevel, { unsigned: true });
+      const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
+        watchTransaction(observable, waitLevel, { unsigned: true }),
+      );
 
       console.log();
       console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
@@ -612,9 +628,8 @@ export async function handleTx(
 
     // JSON output: NDJSON stream
     if (isJsonOutput(opts)) {
-      const result = await watchTransactionJson(
-        tx.signSubmitAndWatch(signer, txOptions),
-        waitLevel,
+      const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
+        watchTransactionJson(tx.signSubmitAndWatch(signer, txOptions), waitLevel),
       );
       const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc);
       if (result.type === "broadcasted") {
@@ -650,7 +665,9 @@ export async function handleTx(
       return;
     }
 
-    const result = await watchTransaction(tx.signSubmitAndWatch(signer, txOptions), waitLevel);
+    const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
+      watchTransaction(tx.signSubmitAndWatch(signer, txOptions), waitLevel),
+    );
 
     console.log();
     console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);

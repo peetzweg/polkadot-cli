@@ -2,6 +2,7 @@ import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { CliError } from "../utils/errors.ts";
+import { isRuntimeFingerprint, type RuntimeFingerprint } from "../utils/runtime-fingerprint.ts";
 import type { ChainConfig, Config } from "./types.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
 
@@ -20,6 +21,10 @@ export function getChainDir(chainName: string): string {
 
 export function getMetadataPath(chainName: string): string {
   return join(getChainDir(chainName), "metadata.bin");
+}
+
+export function getMetadataFingerprintPath(chainName: string): string {
+  return join(getChainDir(chainName), "metadata.fingerprint.json");
 }
 
 function getConfigPath(): string {
@@ -74,10 +79,33 @@ export async function loadMetadata(chainName: string): Promise<Uint8Array | null
   return null;
 }
 
-export async function saveMetadata(chainName: string, data: Uint8Array): Promise<void> {
+export async function saveMetadata(
+  chainName: string,
+  data: Uint8Array,
+  fingerprint?: RuntimeFingerprint,
+): Promise<void> {
   const dir = getChainDir(chainName);
   await ensureDir(dir);
   await writeFile(getMetadataPath(chainName), data);
+  if (fingerprint) {
+    await writeFile(
+      getMetadataFingerprintPath(chainName),
+      `${JSON.stringify(fingerprint, null, 2)}\n`,
+    );
+  }
+}
+
+export async function loadMetadataFingerprint(
+  chainName: string,
+): Promise<RuntimeFingerprint | null> {
+  const path = getMetadataFingerprintPath(chainName);
+  if (!(await fileExists(path))) return null;
+  try {
+    const parsed = JSON.parse(await readFile(path, "utf-8"));
+    return isRuntimeFingerprint(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function removeChainData(chainName: string): Promise<void> {
