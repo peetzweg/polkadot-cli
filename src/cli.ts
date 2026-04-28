@@ -333,6 +333,9 @@ if (process.argv[2] === "__complete") {
     console.log("  dot polkadot.events.Balances                        List events in Balances");
     console.log("  dot polkadot.apis.Core.version                      Call a runtime API");
     console.log(
+      "  dot metadata polkadot                               Dump runtime metadata as JSON",
+    );
+    console.log(
       "  dot polkadot.extensions                             List transaction extensions",
     );
     console.log("  dot polkadot.extensions.CheckMortality              Inspect one extension");
@@ -348,6 +351,7 @@ if (process.argv[2] === "__complete") {
     console.log();
     console.log("Commands:");
     console.log("  inspect [target]   Inspect chain metadata (alias: explore)");
+    console.log("  metadata <chain>   Dump runtime metadata as JSON (--raw for SCALE hex)");
     console.log("  chain              Manage chain configurations");
     console.log("  account            Manage accounts");
     console.log("  hash               Hash utilities");

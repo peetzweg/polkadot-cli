@@ -75,17 +75,18 @@ describe("withStalenessSuggestion", () => {
     const client = makeMockClient(() => {
       throw new Error("RPC should not be called when env opt-out is set");
     });
-    process.env.DOT_TRUST_CACHED_METADATA = "1";
     try {
       await expect(
-        withDotHome(home, () =>
-          withStalenessSuggestion("polkadot", client as unknown as ClientHandle, async () => {
-            throw STALE_WASM_TRAP;
-          }),
+        withDotHome(
+          home,
+          () =>
+            withStalenessSuggestion("polkadot", client as unknown as ClientHandle, async () => {
+              throw STALE_WASM_TRAP;
+            }),
+          { DOT_TRUST_CACHED_METADATA: "1" },
         ),
       ).rejects.toThrow(/wasm.*unreachable/);
     } finally {
-      delete process.env.DOT_TRUST_CACHED_METADATA;
       rmSync(home, { recursive: true, force: true });
     }
   });
