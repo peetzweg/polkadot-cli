@@ -74,13 +74,25 @@ export async function handleMetadata(chain: string, opts: MetadataCommandOpts): 
   }
 
   if (opts.raw) {
-    console.log(`0x${Buffer.from(rawBytes).toString("hex")}`);
+    await writeStdout(`0x${Buffer.from(rawBytes).toString("hex")}\n`);
     return;
   }
 
   const meta = parseMetadata(rawBytes);
   const fingerprint = await loadMetadataFingerprint(chainName);
-  console.log(formatJson(buildMetadataPayload(chainName, meta, fingerprint)));
+  await writeStdout(`${formatJson(buildMetadataPayload(chainName, meta, fingerprint))}\n`);
+}
+
+// Awaitable write to process.stdout — multi-MB JSON via console.log gets
+// truncated when piped on Linux because process.exit() doesn't wait for the
+// stream's userspace buffer to drain. The write-callback form fires after
+// the chunk has been handed to the OS, so awaiting it before the command
+// returns ensures the full payload reaches the reader. EPIPE is swallowed
+// — that's the reader closing early (e.g. `… | head -c 50`).
+function writeStdout(text: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    process.stdout.write(text, () => resolve());
+  });
 }
 
 export function registerMetadataCommand(cli: CAC) {

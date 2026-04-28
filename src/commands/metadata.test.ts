@@ -183,10 +183,19 @@ describe("handleMetadata --cached", () => {
   });
 });
 
+// handleMetadata writes via process.stdout.write directly (callback form,
+// to ensure pipe drain before exit) — not console.log — so we patch the
+// stream's write to capture output without going through stdout.
 function patchConsoleLog(capture: (msg: string) => void): () => void {
-  const original = console.log;
-  console.log = (msg?: unknown) => capture(typeof msg === "string" ? msg : String(msg));
+  const original = process.stdout.write.bind(process.stdout);
+  process.stdout.write = ((chunk: unknown, ...rest: unknown[]) => {
+    const text = typeof chunk === "string" ? chunk : String(chunk);
+    capture(text.endsWith("\n") ? text.slice(0, -1) : text);
+    const cb = rest.find((a) => typeof a === "function") as ((err?: Error) => void) | undefined;
+    cb?.();
+    return true;
+  }) as typeof process.stdout.write;
   return () => {
-    console.log = original;
+    process.stdout.write = original;
   };
 }
