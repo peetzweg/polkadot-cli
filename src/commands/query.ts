@@ -7,6 +7,7 @@ import {
   getOrFetchMetadata,
   getPalletNames,
   listPallets,
+  withStalenessSuggestion,
 } from "../core/metadata.ts";
 import {
   CYAN,
@@ -173,8 +174,10 @@ export async function handleQuery(
         return;
       }
       // Fetch entries with partial (or no) keys
-      const entries: Array<{ keyArgs: any; value: any }> = await storageApi.getEntries(
-        ...parsedKeys,
+      const entries: Array<{ keyArgs: any; value: any }> = await withStalenessSuggestion(
+        chainName,
+        clientHandle,
+        () => storageApi.getEntries(...parsedKeys),
       );
 
       printResult(
@@ -186,7 +189,9 @@ export async function handleQuery(
       );
     } else {
       // Full key → single value lookup
-      const result = await storageApi.getValue(...parsedKeys);
+      const result = await withStalenessSuggestion(chainName, clientHandle, () =>
+        storageApi.getValue(...parsedKeys),
+      );
       printResult(result, format);
     }
   } finally {

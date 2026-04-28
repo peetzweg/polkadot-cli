@@ -15,6 +15,8 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
 - ✅ Named address resolution across all commands
 - ✅ Runtime API calls — `dot polkadot.apis.Core.version`
+- ✅ Full-metadata dump — `dot metadata <chain>` emits one JSON blob with pallets, runtime APIs, and transaction extensions (or raw SCALE bytes via `--raw`)
+- ✅ Stale-metadata detection — when a tx or query fails because the runtime upgraded, the CLI tells you exactly which `dot chain update` to run
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
 - ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
@@ -891,6 +893,32 @@ dot polkadot.const.Balances                        # list constants (offline onc
 dot polkadot.const.Balances.ExistentialDeposit     # look up value (connects to chain)
 ```
 
+### Dump full metadata
+
+`dot metadata <chain>` fetches the chain's runtime metadata and prints **everything** as one JSON blob — pallets (with calls, events, errors, storage, constants), runtime APIs, and transaction extensions, headed by a runtime fingerprint (`specVersion`, `transactionVersion`, `codeHash`, etc.). Useful for feeding LLM agents or pipelines that want a single source of truth instead of walking `dot inspect` piecemeal.
+
+```bash
+# Decoded JSON — fetches fresh from the chain
+dot metadata polkadot
+
+# SCALE-encoded metadata bytes as a single 0x… hex line (for tools that re-parse)
+dot metadata polkadot --raw
+
+# Skip the network round-trip and use cached metadata
+dot metadata polkadot --cached
+
+# Override the RPC endpoint
+dot metadata polkadot --rpc wss://rpc.example.com
+
+# Slice with jq — list call names in a pallet
+dot metadata polkadot | jq '.pallets[] | select(.name=="Balances") | .calls[].name'
+
+# All transaction extension identifiers
+dot metadata polkadot | jq '.transactionExtensions[].identifier'
+```
+
+The decoded JSON is structured-only (no colorization), so it's safe to redirect to a file or pipe into other tools. The default fetches fresh from the RPC and atomically updates the local metadata cache and runtime-fingerprint sidecar — so subsequent commands benefit from the freshest possible metadata.
+
 ### Runtime APIs
 
 Browse and call Substrate runtime APIs. Unlike pallets, runtime APIs are top-level named interfaces (e.g. `Core`, `AccountNonceApi`, `TransactionPaymentApi`) that expose methods callable via `dot <chain>.apis.ApiName.method`.
@@ -1170,6 +1198,22 @@ echo $?  # 1
 ```
 
 This makes it easy to detect on-chain failures in scripts and CI pipelines.
+
+### Stale metadata detection
+
+When a `tx`, `--dry-run`, or `query` fails with an error that smells like stale metadata — a runtime wasm trap, a SCALE codec/decode error, or a fee-estimation panic — the CLI compares your locally cached metadata's runtime fingerprint against the live chain. If it has changed, the CLI appends a one-line suggestion telling you exactly which command to run:
+
+```
+Error: The runtime rejected this transaction in the runtime's validate_transaction step.
+  Cause: a runtime invariant failed — typically the call's arguments are out of range, …
+
+⚠ Local metadata for "paseo-people-next" is out of date (spec 1018 → 1020).
+   Run: dot chain update paseo-people-next
+```
+
+The fingerprint includes the runtime code hash, so the check also catches local-node restarts where the wasm changed but `specVersion` was kept the same. No automatic refetch happens — the original error still propagates with a non-zero exit code, you just get an actionable suggestion.
+
+The check only fires on suspected-stale errors, so the happy path pays no extra RPC. Set `DOT_TRUST_CACHED_METADATA=1` to disable the check entirely (e.g. for CI loops where you've just refreshed manually).
 
 ### Argument parsing errors
 
@@ -2086,8 +2130,13 @@ Config and metadata caches live in `~/.polkadot/` by default:
 ├── update-check.json    # cached update check result
 └── chains/
     └── polkadot/
-        └── metadata.bin # cached SCALE-encoded metadata
+        ├── metadata.bin              # cached SCALE-encoded metadata
+        └── metadata.fingerprint.json # runtime fingerprint (specVersion, codeHash, …) for stale-metadata detection
 ```
+
+### `DOT_TRUST_CACHED_METADATA` — skip the staleness check
+
+Set `DOT_TRUST_CACHED_METADATA=1` to disable the post-failure stale-metadata check on `dot tx`, `dot tx --dry-run`, and `dot query`. When set, errors propagate exactly as the runtime / RPC reported them, with no extra `state_getRuntimeVersion` / `state_getStorageHash` round-trip. Useful in CI loops where you've just refreshed metadata manually and don't want the overhead.
 
 ### `DOT_HOME` — redirect the config directory
 

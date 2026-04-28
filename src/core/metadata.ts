@@ -7,8 +7,15 @@ import {
   unifyMetadata,
 } from "@polkadot-api/substrate-bindings";
 import { toHex } from "@polkadot-api/utils";
-import { loadMetadata, saveMetadata } from "../config/store.ts";
-import { ConnectionError, MetadataError } from "../utils/errors.ts";
+import { loadMetadata, loadMetadataFingerprint, saveMetadata } from "../config/store.ts";
+import {
+  CliError,
+  ConnectionError,
+  formatRuntimeError,
+  isLikelyStaleMetadataError,
+  MetadataError,
+} from "../utils/errors.ts";
+import { fingerprintsMatch, type RuntimeFingerprint } from "../utils/runtime-fingerprint.ts";
 import type { ClientHandle } from "./client.ts";
 
 const METADATA_TIMEOUT_MS = 15_000;
@@ -77,11 +84,43 @@ export function parseMetadata(raw: Uint8Array): MetadataBundle {
   return { unified, lookup, builder, version };
 }
 
+interface RuntimeVersionRpc {
+  specName: string;
+  specVersion: number;
+  transactionVersion: number;
+  implName: string;
+  implVersion: number;
+  authoringVersion: number;
+}
+
+export async function getRuntimeFingerprint(
+  clientHandle: ClientHandle,
+  chainName: string,
+): Promise<RuntimeFingerprint> {
+  const { client } = clientHandle;
+  const [version, codeHash] = await Promise.all([
+    withTimeout(client._request<RuntimeVersionRpc>("state_getRuntimeVersion", []), chainName),
+    withTimeout(client._request<string>("state_getStorageHash", ["0x3a636f6465"]), chainName),
+  ]);
+  return {
+    specName: version.specName,
+    specVersion: version.specVersion,
+    transactionVersion: version.transactionVersion,
+    implName: version.implName,
+    implVersion: version.implVersion,
+    authoringVersion: version.authoringVersion,
+    codeHash,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 export async function fetchMetadataFromChain(
   clientHandle: ClientHandle,
   chainName: string,
 ): Promise<Uint8Array> {
   const { client } = clientHandle;
+
+  let bytes: Uint8Array | undefined;
 
   // Try v15 metadata first (includes runtime API info)
   try {
@@ -92,27 +131,37 @@ export async function fetchMetadataFromChain(
     const raw = hexToBytes(hex);
     const decoded = optionalOpaqueBytes.dec(raw);
     if (decoded !== undefined) {
-      const bytes = new Uint8Array(decoded);
-      await saveMetadata(chainName, bytes);
-      return bytes;
+      bytes = new Uint8Array(decoded);
     }
   } catch {
     // v15 not available, fall through to v14
   }
 
-  // Fall back to state_getMetadata (v14)
-  try {
-    const hex = await withTimeout(client._request<string>("state_getMetadata", []), chainName);
-    const bytes = hexToBytes(hex);
-    await saveMetadata(chainName, bytes);
-    return bytes;
-  } catch (err) {
-    if (err instanceof ConnectionError) throw err;
-    throw new ConnectionError(
-      `Failed to fetch metadata for "${chainName}": ${err instanceof Error ? err.message : err}. ` +
-        "Check that the RPC endpoint is correct and reachable.",
-    );
+  if (!bytes) {
+    // Fall back to state_getMetadata (v14)
+    try {
+      const hex = await withTimeout(client._request<string>("state_getMetadata", []), chainName);
+      bytes = hexToBytes(hex);
+    } catch (err) {
+      if (err instanceof ConnectionError) throw err;
+      throw new ConnectionError(
+        `Failed to fetch metadata for "${chainName}": ${err instanceof Error ? err.message : err}. ` +
+          "Check that the RPC endpoint is correct and reachable.",
+      );
+    }
   }
+
+  // Best-effort: alongside the metadata, persist a runtime fingerprint so we
+  // can detect stale local metadata after a future failure. Don't fail the
+  // metadata fetch if the fingerprint RPCs are unavailable on this endpoint.
+  let fingerprint: RuntimeFingerprint | undefined;
+  try {
+    fingerprint = await getRuntimeFingerprint(clientHandle, chainName);
+  } catch {
+    fingerprint = undefined;
+  }
+  await saveMetadata(chainName, bytes, fingerprint);
+  return bytes;
 }
 
 function withTimeout<T>(promise: Promise<T>, chainName: string): Promise<T> {
@@ -131,6 +180,44 @@ function withTimeout<T>(promise: Promise<T>, chainName: string): Promise<T> {
       ),
     ),
   ]);
+}
+
+// Run `task` and, if it fails with an error that smells like stale metadata,
+// verify by comparing the cached runtime fingerprint against the live chain.
+// If they differ, re-throw with a CliError that wraps the original error and
+// suggests `dot chain update <chain>`. Never refreshes metadata automatically.
+export async function withStalenessSuggestion<T>(
+  chainName: string,
+  clientHandle: ClientHandle,
+  task: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await task();
+  } catch (err) {
+    if (process.env.DOT_TRUST_CACHED_METADATA === "1") throw err;
+    if (!isLikelyStaleMetadataError(err)) throw err;
+
+    let live: RuntimeFingerprint;
+    try {
+      live = await getRuntimeFingerprint(clientHandle, chainName);
+    } catch {
+      throw err;
+    }
+    const cached = await loadMetadataFingerprint(chainName);
+    if (!cached) throw err;
+    if (fingerprintsMatch(cached, live)) throw err;
+
+    const original = err instanceof Error ? formatRuntimeError(err) : String(err);
+    const versionNote =
+      cached.specVersion !== live.specVersion
+        ? `spec ${cached.specVersion} → ${live.specVersion}`
+        : `runtime code hash changed (same spec ${live.specVersion}; likely a node restart with new wasm)`;
+    throw new CliError(
+      `${original}\n\n` +
+        `⚠ Local metadata for "${chainName}" is out of date (${versionNote}).\n` +
+        `   Run: dot chain update ${chainName}`,
+    );
+  }
 }
 
 export async function getOrFetchMetadata(

@@ -14,6 +14,7 @@ import {
 } from "./commands/focused-inspect.ts";
 import { registerHashCommand } from "./commands/hash.ts";
 import { registerInspectCommand } from "./commands/inspect.ts";
+import { registerMetadataCommand } from "./commands/metadata.ts";
 import { registerParachainCommand } from "./commands/parachain.ts";
 import { handleQuery } from "./commands/query.ts";
 import { registerSignCommand } from "./commands/sign.ts";
@@ -26,7 +27,7 @@ import {
   startBackgroundCheck,
   waitForPendingCheck,
 } from "./core/update-notifier.ts";
-import { CliError } from "./utils/errors.ts";
+import { CliError, formatRuntimeError, isPapiCleanupError } from "./utils/errors.ts";
 import { parseDotPath } from "./utils/parse-dot-path.ts";
 
 // Early exit for shell completion — avoid loading update checker or heavy imports
@@ -61,6 +62,7 @@ if (process.argv[2] === "__complete") {
 
   registerChainCommands(cli);
   registerInspectCommand(cli);
+  registerMetadataCommand(cli);
   registerAccountCommands(cli);
   registerHashCommand(cli);
   registerSignCommand(cli);
@@ -331,6 +333,9 @@ if (process.argv[2] === "__complete") {
     console.log("  dot polkadot.events.Balances                        List events in Balances");
     console.log("  dot polkadot.apis.Core.version                      Call a runtime API");
     console.log(
+      "  dot metadata polkadot                               Dump runtime metadata as JSON",
+    );
+    console.log(
       "  dot polkadot.extensions                             List transaction extensions",
     );
     console.log("  dot polkadot.extensions.CheckMortality              Inspect one extension");
@@ -346,6 +351,7 @@ if (process.argv[2] === "__complete") {
     console.log();
     console.log("Commands:");
     console.log("  inspect [target]   Inspect chain metadata (alias: explore)");
+    console.log("  metadata <chain>   Dump runtime metadata as JSON (--raw for SCALE hex)");
     console.log("  chain              Manage chain configurations");
     console.log("  account            Manage accounts");
     console.log("  hash               Hash utilities");
@@ -374,13 +380,22 @@ if (process.argv[2] === "__complete") {
     if (err instanceof CliError) {
       console.error(`Error: ${err.message}`);
     } else if (err instanceof Error) {
-      // CACError for missing args, etc. — show just the message
-      console.error(`Error: ${err.message}`);
+      // CACError for missing args, polkadot-api errors, etc.
+      console.error(`Error: ${formatRuntimeError(err)}`);
     } else {
       console.error("An unexpected error occurred:", err);
     }
     return showUpdateAndExit(1);
   }
+
+  // papi schedules timers inside chainHead follow streams that can fire after
+  // client.destroy() — those rejections are benign cleanup races and would
+  // otherwise crash the process (e.g. after `dot chain update --all`).
+  process.on("unhandledRejection", (reason) => {
+    if (isPapiCleanupError(reason)) return;
+    console.error(`Error: ${formatRuntimeError(reason)}`);
+    process.exit(1);
+  });
 
   async function main() {
     try {

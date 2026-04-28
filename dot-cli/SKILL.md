@@ -18,7 +18,9 @@ Unified CLI for Polkadot/Substrate chains. Install: `npm install -g polkadot-cli
 dot [chain.]<category>[.Pallet[.Item]] [args] [options]
 ```
 
-Categories: `query`, `tx`, `apis`, `const`, `events`, `errors`
+Categories: `query`, `tx`, `apis`, `const`, `events`, `errors`, `extensions`
+
+Top-level commands: `dot inspect`, `dot metadata`, `dot chain`, `dot account`, `dot parachain`, `dot sign`, `dot hash`.
 
 Omit deeper levels to discover what's available:
 ```bash
@@ -140,6 +142,28 @@ Tips for discovering the exact shape a runtime expects:
 
 See [references/scripting-patterns.md](references/scripting-patterns.md) for more Location examples and the bash string-escaping pattern (`'"$VAR"'`).
 
+## Full Metadata Dump
+
+`dot metadata <chain>` prints the chain's runtime metadata as one structured JSON blob — pallets (with calls, events, errors, storage, constants), runtime APIs, transaction extensions, and a runtime fingerprint header. Use this when you (or an agent) want a single source of truth for what's available on a chain instead of walking `dot inspect` piecemeal.
+
+```bash
+# Decoded JSON — fetches fresh from the chain (also refreshes the local cache)
+dot metadata polkadot
+
+# SCALE-encoded metadata bytes as a single 0x… hex line (for re-decoding tools)
+dot metadata polkadot --raw
+
+# Use cached metadata only — no network round-trip (offline / CI)
+dot metadata polkadot --cached
+
+# Slice with jq
+dot metadata polkadot | jq '.pallets[] | select(.name=="Balances") | .calls[].name'
+dot metadata polkadot | jq '.transactionExtensions[].identifier'
+dot metadata polkadot | jq '.runtime'   # specVersion, transactionVersion, codeHash, …
+```
+
+The default fetch always hits the chain and updates the local fingerprint sidecar. Pair with `--raw` if you want the canonical SCALE bytes; the JSON form is decoded and includes docs.
+
 ## Inspect / Explore
 
 `inspect` is a top-level command, **not** a dotpath category. `dot <chain>.inspect...` does not parse. Two valid forms:
@@ -200,6 +224,7 @@ dot tx.System.remark 0xdead --to-yaml                   # encode call → YAML
 - **`Unknown account or address "X"`** / account has no public key resolved yet — the `--from` name isn't registered. Check `dot account list`, or import with `dot account import <name> ...`.
 - **`undefined` piped into `jq`** — the literal string `undefined` is not JSON. Guard with `[ "$X" == "undefined" ]` before piping.
 - **Decode errors after a runtime upgrade** — metadata cache is keyed by chain name; register a fresh `dot chain add` alias for the upgraded chain rather than reusing the old one.
+- **Wasm trap / "validate_transaction" panic on submit** — almost always stale local metadata. The CLI now prints a `⚠ Local metadata for "<chain>" is out of date … Run: dot chain update <chain>` line right after such errors. Run that command and retry. The check uses both `specVersion` and the runtime code hash, so it also catches local-node restarts where the wasm changed but `specVersion` was kept the same. Set `DOT_TRUST_CACHED_METADATA=1` to suppress the check entirely.
 
 ## Scripting Patterns
 
