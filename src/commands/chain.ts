@@ -3,6 +3,7 @@ import type { CAC } from "cac";
 import {
   findChainName,
   loadConfig,
+  loadMetadataFingerprint,
   removeChainData,
   resolveChain,
   saveConfig,
@@ -37,6 +38,8 @@ ${BOLD}Usage:${RESET}
   $ dot chain update <name>             Re-fetch metadata for a chain
   $ dot chain update --all              Re-fetch metadata for all configured chains
   $ dot chain list                      List configured chains
+  $ dot chain info <name>               Show details for a single chain
+  $ dot chain <name>                    Shortcut for \`chain info <name>\`
   $ dot chain export [names...]         Export chain configuration to stdout
   $ dot chain import <file>             Import chain configuration from a file
 
@@ -46,6 +49,9 @@ ${BOLD}Examples:${RESET}
   $ dot chain add my-para --rpc wss://rpc.example.com --relay polkadot
   $ dot chain add my-para --rpc wss://rpc.example.com --relay polkadot --parachain-id 2000
   $ dot chain list
+  $ dot chains -v
+  $ dot chain info polkadot
+  $ dot chain polkadot
   $ dot chain update kusama
   $ dot chain update --all
   $ dot chain remove kusama
@@ -72,6 +78,7 @@ export function registerChainCommands(cli: CAC) {
     .option("--overwrite", "Overwrite existing chains on import")
     .option("--dry-run", "Preview import without applying changes")
     .option("--no-metadata", "Skip automatic metadata fetch after import")
+    .option("-v, --verbose", "Show RPC endpoints in `chains` list output")
     .action(
       async (
         action: string | undefined,
@@ -85,6 +92,7 @@ export function registerChainCommands(cli: CAC) {
           overwrite?: boolean;
           dryRun?: boolean;
           metadata?: boolean;
+          verbose?: boolean;
           output?: string;
           json?: boolean;
         },
@@ -101,16 +109,23 @@ export function registerChainCommands(cli: CAC) {
             return chainRemove(names[0], opts);
           case "list":
             return chainList(opts);
+          case "info":
+            return chainInfo(names[0], opts);
           case "update":
             return chainUpdate(names[0], opts);
           case "export":
             return chainExport(names, opts);
           case "import":
             return chainImport(names[0], opts);
-          default:
+          default: {
+            const config = await loadConfig();
+            if (findChainName(config, action)) {
+              return chainInfo(action, opts);
+            }
             console.error(`Unknown action "${action}".\n`);
             console.log(CHAIN_HELP);
             process.exit(1);
+          }
         }
       },
     );
@@ -239,7 +254,7 @@ async function chainRemove(
   }
 }
 
-async function chainList(opts: { output?: string; json?: boolean } = {}) {
+async function chainList(opts: { output?: string; json?: boolean; verbose?: boolean } = {}) {
   const config = await loadConfig();
 
   if (isJsonOutput(opts)) {
@@ -252,6 +267,8 @@ async function chainList(opts: { output?: string; json?: boolean } = {}) {
     console.log(formatJson({ chains }));
     return;
   }
+
+  const verbose = opts.verbose === true;
 
   printHeading("Configured Chains");
 
@@ -277,7 +294,7 @@ async function chainList(opts: { output?: string; json?: boolean } = {}) {
   for (const relayName of relayNames) {
     const relayConfig = config.chains[relayName];
     if (relayConfig) {
-      printChainLine("  ", relayName, relayConfig);
+      printChainLine("  ", relayName, relayConfig, "", verbose);
     }
 
     const paras = parachainsByRelay.get(relayName) ?? [];
@@ -287,23 +304,101 @@ async function chainList(opts: { output?: string; json?: boolean } = {}) {
       const prefix = isLast ? "  └─ " : "  ├─ ";
       const idSuffix =
         chainConfig.parachainId != null ? ` ${DIM}[${chainConfig.parachainId}]${RESET}` : "";
-      printChainLine(prefix, name, chainConfig, idSuffix);
+      printChainLine(prefix, name, chainConfig, idSuffix, verbose);
     }
     console.log();
   }
 
   for (const [name, chainConfig] of standalone) {
-    printChainLine("  ", name, chainConfig);
+    printChainLine("  ", name, chainConfig, "", verbose);
   }
   if (standalone.length > 0) console.log();
 }
 
-function printChainLine(prefix: string, name: string, chainConfig: ChainConfig, suffix = "") {
+function printChainLine(
+  prefix: string,
+  name: string,
+  chainConfig: ChainConfig,
+  suffix = "",
+  verbose = false,
+) {
+  if (!verbose) {
+    console.log(`${prefix}${CYAN}${name}${RESET}${suffix}`);
+    return;
+  }
   const rpcs = Array.isArray(chainConfig.rpc) ? chainConfig.rpc : [chainConfig.rpc];
   console.log(`${prefix}${CYAN}${name}${RESET}${suffix}  ${DIM}${rpcs[0]}${RESET}`);
   const indent = prefix.replace(/[^\s]/g, " ");
   for (let i = 1; i < rpcs.length; i++) {
     console.log(`${indent}  ${DIM}${rpcs[i]}${RESET}`);
+  }
+}
+
+async function chainInfo(name: string | undefined, opts: { output?: string; json?: boolean } = {}) {
+  if (!name) {
+    console.error("Usage: dot chain info <name>");
+    process.exit(1);
+  }
+
+  const config = await loadConfig();
+  const { name: resolved, chain } = resolveChain(config, name);
+
+  const rpcs = Array.isArray(chain.rpc) ? chain.rpc : [chain.rpc];
+  const parachains = Object.entries(config.chains)
+    .filter(([, c]) => c.relay === resolved)
+    .map(([n, c]) => ({ name: n, parachainId: c.parachainId }));
+
+  const fingerprint = await loadMetadataFingerprint(resolved);
+
+  if (isJsonOutput(opts)) {
+    console.log(
+      formatJson({
+        name: resolved,
+        rpc: rpcs,
+        ...(chain.relay && { relay: chain.relay }),
+        ...(chain.parachainId != null && { parachainId: chain.parachainId }),
+        ...(parachains.length > 0 && { parachains }),
+        metadata: fingerprint
+          ? {
+              specName: fingerprint.specName,
+              specVersion: fingerprint.specVersion,
+              fetchedAt: fingerprint.fetchedAt,
+            }
+          : null,
+      }),
+    );
+    return;
+  }
+
+  printHeading(resolved);
+
+  console.log(`  ${CYAN}rpc:${RESET}`);
+  for (const rpc of rpcs) {
+    console.log(`    ${DIM}${rpc}${RESET}`);
+  }
+
+  if (chain.relay) {
+    console.log(`  ${CYAN}relay:${RESET}        ${chain.relay}`);
+  }
+  if (chain.parachainId != null) {
+    console.log(`  ${CYAN}parachain id:${RESET} ${chain.parachainId}`);
+  }
+
+  if (parachains.length > 0) {
+    console.log(`  ${CYAN}parachains:${RESET}`);
+    for (const p of parachains) {
+      const idSuffix = p.parachainId != null ? ` ${DIM}[${p.parachainId}]${RESET}` : "";
+      console.log(`    ${p.name}${idSuffix}`);
+    }
+  }
+
+  console.log(`  ${CYAN}metadata:${RESET}`);
+  if (fingerprint) {
+    console.log(
+      `    ${fingerprint.specName} v${fingerprint.specVersion} ${DIM}(cached ${fingerprint.fetchedAt})${RESET}`,
+    );
+  } else {
+    console.log(`    ${DIM}not cached — run \`dot chain update ${resolved}\`${RESET}`);
   }
 }
 

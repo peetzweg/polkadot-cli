@@ -36,7 +36,8 @@ describe("dot chain", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain("polkadot");
     expect(stdout).not.toContain("(default)");
-    expect(stdout).toContain("rpc.polkadot.io");
+    // Default list output no longer includes RPC URLs; use --verbose for that.
+    expect(stdout).not.toContain("rpc.polkadot.io");
     expect(stdout).toContain("paseo");
     // Polkadot system parachains
     expect(stdout).toContain("polkadot-asset-hub");
@@ -67,8 +68,8 @@ describe("dot chain", () => {
     expect(stdout).toContain("westend");
   });
 
-  test("list with multi-RPC chain shows all endpoints", async () => {
-    const { stdout, exitCode } = await runCli(["chain", "list"], {
+  test("list -v with multi-RPC chain shows all endpoints", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list", "-v"], {
       config: {
         chains: {
           kusama: { rpc: ["wss://kusama-rpc.polkadot.io", "wss://kusama-rpc.dwellir.com"] },
@@ -82,7 +83,7 @@ describe("dot chain", () => {
   });
 
   test("list with single-string rpc still works (backward compat)", async () => {
-    const { stdout, exitCode } = await runCli(["chain", "list"], {
+    const { stdout, exitCode } = await runCli(["chain", "list", "-v"], {
       config: {
         chains: {
           kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
@@ -94,8 +95,8 @@ describe("dot chain", () => {
     expect(stdout).toContain("kusama-rpc.polkadot.io");
   });
 
-  test("list shows built-in chains with multiple RPCs", async () => {
-    const { stdout, exitCode } = await runCli(["chain", "list"]);
+  test("list -v shows built-in chains with multiple RPCs", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list", "-v"]);
     expect(exitCode).toBe(0);
     // polkadot should show primary + fallback RPCs
     expect(stdout).toContain("polkadot.ibp.network");
@@ -104,7 +105,7 @@ describe("dot chain", () => {
   });
 
   test("list with single-element array rpc", async () => {
-    const { stdout, exitCode } = await runCli(["chain", "list"], {
+    const { stdout, exitCode } = await runCli(["chain", "list", "-v"], {
       config: {
         chains: {
           kusama: { rpc: ["wss://kusama-rpc.polkadot.io"] },
@@ -113,6 +114,32 @@ describe("dot chain", () => {
     });
     expect(exitCode).toBe(0);
     expect(stdout).toContain("kusama");
+    expect(stdout).toContain("kusama-rpc.polkadot.io");
+  });
+
+  test("list default (no -v) hides RPC URLs", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "list"], {
+      config: {
+        chains: {
+          kusama: { rpc: ["wss://kusama-rpc.polkadot.io", "wss://kusama-rpc.dwellir.com"] },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("kusama");
+    expect(stdout).not.toContain("kusama-rpc.polkadot.io");
+    expect(stdout).not.toContain("kusama-rpc.dwellir.com");
+  });
+
+  test("chains --verbose hides nothing (alias of -v)", async () => {
+    const { stdout, exitCode } = await runCli(["chains", "--verbose"], {
+      config: {
+        chains: {
+          kusama: { rpc: "wss://kusama-rpc.polkadot.io" },
+        },
+      },
+    });
+    expect(exitCode).toBe(0);
     expect(stdout).toContain("kusama-rpc.polkadot.io");
   });
 
@@ -138,7 +165,7 @@ describe("dot chain", () => {
     expect(stderr).not.toContain("--light-client");
   });
 
-  test("list shows RPC for all chains (no light-client display)", async () => {
+  test("list does not mention light-client", async () => {
     const { stdout, exitCode } = await runCli(["chain", "list"]);
     expect(exitCode).toBe(0);
     expect(stdout).not.toContain("light-client");
@@ -279,7 +306,7 @@ describe("dot chain", () => {
   });
 
   test("list shows standalone chains separately", async () => {
-    const { stdout, exitCode } = await runCli(["chain", "list"], {
+    const { stdout, exitCode } = await runCli(["chain", "list", "-v"], {
       config: {
         chains: {
           "my-solo": { rpc: "wss://solo.example" },
@@ -833,5 +860,137 @@ describe("dot chain", () => {
     );
     expect(exitCode).toBe(0);
     expect(stdout).toContain("No chains imported");
+  });
+
+  // chain info / bare shortcut
+  test("info polkadot shows rpc, parachains, metadata block", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "info", "polkadot"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("polkadot");
+    expect(stdout).toContain("rpc:");
+    expect(stdout).toContain("rpc.polkadot.io");
+    expect(stdout).toContain("parachains:");
+    expect(stdout).toContain("polkadot-asset-hub");
+    expect(stdout).toContain("metadata:");
+  });
+
+  test("info on parachain shows relay and parachain id", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "info", "polkadot-asset-hub"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("relay:");
+    expect(stdout).toContain("polkadot");
+    expect(stdout).toContain("parachain id:");
+    expect(stdout).toContain("1000");
+    expect(stdout).not.toContain("parachains:");
+  });
+
+  test("info on cached chain shows specName, version, and fetchedAt", async () => {
+    const fingerprint = {
+      specName: "polkadot",
+      specVersion: 1003000,
+      transactionVersion: 26,
+      implName: "parity-polkadot",
+      implVersion: 0,
+      authoringVersion: 0,
+      codeHash: `0x${"ab".repeat(32)}`,
+      fetchedAt: "2026-04-29T12:34:56.000Z",
+    };
+    const { stdout, exitCode } = await runCli(["chain", "info", "polkadot"], {
+      files: {
+        ".polkadot/chains/polkadot/metadata.fingerprint.json": JSON.stringify(fingerprint),
+      },
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("metadata:");
+    expect(stdout).toContain("polkadot v1003000");
+    expect(stdout).toContain("2026-04-29T12:34:56.000Z");
+    expect(stdout).not.toContain("not cached");
+  });
+
+  test("info --json on cached chain emits structured metadata block", async () => {
+    const fingerprint = {
+      specName: "polkadot",
+      specVersion: 1003000,
+      transactionVersion: 26,
+      implName: "parity-polkadot",
+      implVersion: 0,
+      authoringVersion: 0,
+      codeHash: `0x${"ab".repeat(32)}`,
+      fetchedAt: "2026-04-29T12:34:56.000Z",
+    };
+    const { stdout, exitCode } = await runCli(["chain", "info", "polkadot", "--json"], {
+      files: {
+        ".polkadot/chains/polkadot/metadata.fingerprint.json": JSON.stringify(fingerprint),
+      },
+    });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.metadata).toEqual({
+      specName: "polkadot",
+      specVersion: 1003000,
+      fetchedAt: "2026-04-29T12:34:56.000Z",
+    });
+  });
+
+  test("info on uncached chain shows `not cached` hint", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "info", "polkadot"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("metadata:");
+    expect(stdout).toContain("not cached");
+    expect(stdout).toContain("dot chain update polkadot");
+  });
+
+  test("info --json returns structured object with metadata: null when not cached", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "info", "polkadot", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.name).toBe("polkadot");
+    expect(Array.isArray(parsed.rpc)).toBe(true);
+    expect(parsed.metadata).toBeNull();
+    expect(Array.isArray(parsed.parachains)).toBe(true);
+    expect(parsed.parachains.find((p: any) => p.name === "polkadot-asset-hub")).toBeDefined();
+  });
+
+  test("info --json on parachain includes relay + parachainId, omits parachains", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "info", "polkadot-asset-hub", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.relay).toBe("polkadot");
+    expect(parsed.parachainId).toBe(1000);
+    expect(parsed.parachains).toBeUndefined();
+  });
+
+  test("bare `dot chain <name>` is a shortcut for `chain info <name>`", async () => {
+    const direct = await runCli(["chain", "info", "polkadot", "--json"]);
+    const shortcut = await runCli(["chain", "polkadot", "--json"]);
+    expect(direct.exitCode).toBe(0);
+    expect(shortcut.exitCode).toBe(0);
+    expect(shortcut.stdout).toBe(direct.stdout);
+  });
+
+  test("info nonexistent chain errors with available list", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "info", "nonexistent-chain"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("nonexistent-chain");
+  });
+
+  test("info (no name) errors with usage", async () => {
+    const { stderr, exitCode } = await runCli(["chain", "info"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Usage: dot chain info");
+  });
+
+  test("info case-insensitive name resolution", async () => {
+    const { stdout, exitCode } = await runCli(["chain", "info", "Polkadot", "--json"]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.name).toBe("polkadot");
+  });
+
+  test("help text mentions info action and shortcut", async () => {
+    const { stdout, exitCode } = await runCli(["chain"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("dot chain info <name>");
+    expect(stdout).toContain("dot chain <name>");
   });
 });
