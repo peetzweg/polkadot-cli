@@ -22,27 +22,39 @@ Categories: `query`, `tx`, `apis`, `const`, `events`, `errors`, `extensions`
 
 Top-level commands: `dot inspect`, `dot metadata`, `dot chain`, `dot account`, `dot parachain`, `dot sign`, `dot hash`.
 
-Omit deeper levels to discover what's available:
+Omit deeper levels to discover what's available. Always include the chain prefix:
+
 ```bash
-dot query                          # list pallets with storage
-dot query.Balances                 # list storage items
-dot query.Balances.Account <addr>  # query specific item
-dot apis                           # list runtime APIs
-dot apis.XcmPaymentApi             # list methods
+dot polkadot.query                # list pallets with storage
+dot polkadot.query.Balances       # list storage items in Balances
+dot polkadot.apis                 # list runtime APIs
+dot polkadot.apis.Core            # list methods in an API
 ```
 
 ## Chain Management
 
+Polkadot, Paseo, and all system parachains ship preconfigured. Add custom chains by RPC:
+
 ```bash
-dot chain add my-chain --rpc wss://rpc.example.com
-dot chain list
+dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
+# Output:
+# ✓ Added kusama
+# Updating metadata for kusama...
+# ✓ kusama
 ```
 
-Once registered, every command needs an explicit chain — either a `<chain>.` dotpath prefix or `--chain <name>`. There is no default chain.
+Every chain-consuming command needs an explicit chain — prefer the dotpath prefix:
 
 ```bash
-dot my-chain.query.System.Number       # dotpath prefix
-dot query.System.Number --chain my-chain  # --chain flag
+# Recommended — chain prefix
+dot polkadot.query.System.Number
+# Output:
+# 31014744
+
+# Equivalent — --chain flag
+dot query.System.Number --chain polkadot
+# Output:
+# 31014744
 ```
 
 **Critical gotcha:** Don't combine `--chain <name>` with `--rpc <url>` pointing at a different chain. The metadata cache is keyed by chain name, not RPC URL, so the CLI will decode against stale metadata and silently produce wrong results. Register a fresh alias instead:
@@ -51,19 +63,48 @@ dot query.System.Number --chain my-chain  # --chain flag
 # WRONG — polkadot metadata decoded against a Kusama RPC
 dot inspect --chain polkadot --rpc wss://kusama-rpc.polkadot.io
 
-# CORRECT
+# CORRECT — register, then use the prefix
 dot chain add my-ah --rpc wss://example.com/asset-hub
-dot inspect --chain my-ah
+dot inspect my-ah
 ```
 
 ## Querying Storage
 
 ```bash
-dot chain.query.System.Number                              # plain value
-dot chain.query.System.Account <address>                   # map lookup
-dot chain.query.AssetConversion.Pools --dump               # all map entries
-dot chain.query.Assets.Metadata '{"parents":1,...}'        # complex key (JSON)
-dot chain.query.System.Number --json                       # JSON output
+# Plain storage value
+dot polkadot.query.System.Number
+# Output:
+# 31014744
+
+# Map lookup — Alice's balance on Polkadot
+dot polkadot.query.System.Account 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+# Output:
+# {
+#   "nonce": 0,
+#   "consumers": 0,
+#   "providers": 0,
+#   "sufficients": 0,
+#   "data": { "free": "0", "reserved": "0", "frozen": "0", "flags": "..." }
+# }
+
+# Asset metadata — numeric key on Asset Hub
+dot polkadot-asset-hub.query.Assets.Metadata 1984
+# Output:
+# {
+#   "deposit": "2008200000",
+#   "name": "Tether USD",
+#   "symbol": "USDt",
+#   "decimals": 6,
+#   "is_frozen": false
+# }
+
+# Dump all entries of a map
+dot paseo-asset-hub.query.AssetConversion.Pools --dump
+
+# JSON output (pipe-safe)
+dot polkadot.query.System.Number --json
+# Output:
+# 31014744
 ```
 
 Queries always read the latest finalized head — **historical state reads are not supported**. `--at <block>` is a tx-submission flag, not a query flag.
@@ -73,10 +114,13 @@ Queries always read the latest finalized head — **historical state reads are n
 Queries return the literal string `undefined` (not valid JSON) when a key doesn't exist. Always guard before piping to `jq`:
 
 ```bash
-RESULT=$(dot chain.query.Assets.Asset "$ID")
+ID=999999999  # an asset id we know doesn't exist
+RESULT=$(dot polkadot-asset-hub.query.Assets.Asset "$ID")
 if [ "$RESULT" == "undefined" ]; then
   echo "not found"
 fi
+# Output:
+# not found
 ```
 
 Three-way semantics:
@@ -92,8 +136,17 @@ Three-way semantics:
 ## Submitting Transactions
 
 ```bash
-dot chain.tx.Balances.transfer_keep_alive <dest> <amount> --from alice
-dot chain.tx.System.remark 0xdead --from alice --dry-run   # fee estimate only
+# Dry-run a transfer — no broadcast, just estimate fees
+dot polkadot.tx.Balances.transfer_keep_alive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000 --from alice --dry-run
+# Output:
+#   Chain:  polkadot
+#   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
+#   Call:   0x050300...02286bee
+#   Decode: Balances.transfer_keep_alive { dest: Id(5FHneW46...), value: 1000000000 }
+#   Estimated fees: 158403157
+
+# Submit (omit --dry-run). Method names are snake_case as defined in the runtime.
+dot polkadot.tx.Balances.transfer_keep_alive bob 1000000000 --from alice
 ```
 
 ### Encoding Calls (for Sudo, XCM, Batch)
@@ -101,82 +154,122 @@ dot chain.tx.System.remark 0xdead --from alice --dry-run   # fee estimate only
 `--encode` returns raw call hex without signing — use for wrapping:
 
 ```bash
-CALL=$(dot --encode chain.tx.AssetRate.create "$ASSET_ID" "$RATE")
-dot chain.tx.Sudo.sudo "$CALL" --from alice
+# Encode an inner call, then wrap with Sudo
+CALL=$(dot paseo-asset-hub.tx.System.remark 0xdeadbeef --encode)
+echo "$CALL"
+# Output:
+# 0x000010deadbeef
+
+dot paseo-asset-hub.tx.Sudo.sudo "$CALL" --from alice --dry-run
+# Output:
+#   Chain:  paseo-asset-hub
+#   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
+#   Call:   0xfb00000010deadbeef
+#   Decode: Sudo.sudo { call: System(remark( { remark: 0xdeadbeef })) }
+#   Estimated fees: 7424769
 ```
 
-### Signed Extensions
+### Tipping and Other Transaction Options
+
+Use `--tip` to set a priority tip in plancks. `--nonce`, `--mortality`, and `--at` are also available; see the README's "Transaction options" section.
 
 ```bash
-dot chain.tx.Balances.transfer_keep_alive <dest> <amount> \
-  --from alice --ext '{"tip": "1000000"}'
+dot polkadot.tx.System.remark 0xdead --from alice --tip 1000000 --dry-run
 ```
+
+For non-standard signed extensions, override with `--ext '{"<Identifier>":{"value":<v>}}'`. List the chain's extensions with `dot <chain>.extensions`.
 
 ## Runtime APIs
 
 First-class access to runtime APIs — most Substrate CLIs don't expose these:
 
 ```bash
-dot chain.apis.XcmPaymentApi.query_acceptable_payment_assets 5 --json
-dot chain.apis.AssetConversionApi.get_reserves "$TOKEN_A" "$TOKEN_B" --json
-dot chain.apis.Core.version --json
+# Runtime version on Polkadot
+dot polkadot.apis.Core.version --json
+# Output:
+# {
+#   "spec_name": "polkadot",
+#   "impl_name": "parity-polkadot",
+#   "spec_version": 2002001,
+#   "transaction_version": 26,
+#   ...
+# }
+
+# Pool reserves on Asset Hub: native (DOT) ↔ USDt (asset id 1984)
+dot polkadot-asset-hub.apis.AssetConversionApi.get_reserves \
+  '{"parents":1,"interior":{"type":"Here"}}' \
+  '{"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"1984"}]}}' \
+  --json
+# Output (live; reserves change with each swap):
+# [
+#   "801299477230750",
+#   "99382392973"
+# ]
 ```
 
-Call without args to see the method signature.
+Call a method without args to see its signature, or use `--help`.
 
 ### Complex Arguments (Location, enums)
 
-Enum-shaped args — including XCM `Location` / `VersionedLocation` and most pallet enums — are passed as JSON with `{type, value}` shape. `type` names the variant; `value` is the inner data (may be another `{type, value}`, an array, or a primitive):
-
-```bash
-# Location for a local asset on Asset Hub (PalletInstance 50 = Assets, GeneralIndex = asset id)
-LOC_A='{"parents":1,"interior":{"type":"Here"}}'
-LOC_B='{"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"1984"}]}}'
-dot polkadot-asset-hub.apis.AssetConversionApi.get_reserves "$LOC_A" "$LOC_B" --json
-```
+Enum-shaped args — including XCM `Location` / `VersionedLocation` and most pallet enums — are passed as JSON with `{type, value}` shape. `type` names the variant; `value` is the inner data (may be another `{type, value}`, an array, or a primitive). See [references/scripting-patterns.md](references/scripting-patterns.md) for the bash-quoting pattern when interpolating variables into Location JSON.
 
 Tips for discovering the exact shape a runtime expects:
 
 - Run `--dump` on a related storage map that uses the same type and read back an existing entry.
-- `dot inspect <Pallet>.<Item> --chain <name>` prints the full type for a storage item.
-
-See [references/scripting-patterns.md](references/scripting-patterns.md) for more Location examples and the bash string-escaping pattern (`'"$VAR"'`).
+- `dot inspect <chain>.<Pallet>.<Item>` prints the full type for a storage item.
 
 ## Full Metadata Dump
 
 `dot metadata <chain>` prints the chain's runtime metadata as one structured JSON blob — pallets (with calls, events, errors, storage, constants), runtime APIs, transaction extensions, and a runtime fingerprint header. Use this when you (or an agent) want a single source of truth for what's available on a chain instead of walking `dot inspect` piecemeal.
 
+`metadata` is a top-level command — there is no chain-prefix form. Pass the chain name as a positional argument.
+
 ```bash
-# Decoded JSON — fetches fresh from the chain (also refreshes the local cache)
-dot metadata polkadot
+# Slice with jq — list all Balances call names
+dot metadata polkadot | jq -r '.pallets[] | select(.name=="Balances") | .calls[].name'
+# Output:
+# burn
+# force_adjust_total_issuance
+# force_set_balance
+# ...
+# transfer_keep_alive
+# upgrade_accounts
 
-# SCALE-encoded metadata bytes as a single 0x… hex line (for re-decoding tools)
-dot metadata polkadot --raw
-
-# Use cached metadata only — no network round-trip (offline / CI)
-dot metadata polkadot --cached
-
-# Slice with jq
-dot metadata polkadot | jq '.pallets[] | select(.name=="Balances") | .calls[].name'
-dot metadata polkadot | jq '.transactionExtensions[].identifier'
-dot metadata polkadot | jq '.runtime'   # specVersion, transactionVersion, codeHash, …
+# Other useful flags
+dot metadata polkadot --raw      # SCALE-encoded bytes as 0x… hex
+dot metadata polkadot --cached   # use cached metadata, no network round-trip
 ```
 
 The default fetch always hits the chain and updates the local fingerprint sidecar. Pair with `--raw` if you want the canonical SCALE bytes; the JSON form is decoded and includes docs.
 
 ## Inspect / Explore
 
-`inspect` is a top-level command, **not** a dotpath category. `dot <chain>.inspect...` does not parse. Two valid forms:
+`inspect` is a top-level command, **not** a dotpath category. `dot <chain>.inspect...` does not parse. The recommended form puts the chain on the *target*:
 
 ```bash
-# --chain flag with an optional positional target
-dot inspect --chain polkadot                      # list all pallets (with storage/call/event/error counts)
-dot inspect System --chain polkadot               # list items in one pallet
-dot inspect System.Account --chain polkadot       # show one storage item's type
-
-# Chain prefix on the inspect target (two or three dot-separated segments, chain first)
+# Pallet detail — list storage, constants, calls, events, errors
 dot inspect polkadot.System
+# Output:
+# System Pallet
+#
+#   Storage Items:
+#     Account: AccountId32 → { nonce: u32, ... }    [map]
+#         The full account information for a particular account ID.
+#     ...
+
+# Storage item detail
 dot inspect polkadot.System.Account
+# Output:
+# System.Account (Storage)
+#
+#   Type: map
+#   Value: { nonce: u32, consumers: u32, ... }
+#   Key: AccountId32
+#
+#   The full account information for a particular account ID.
+
+# To list all pallets on a chain, use --chain (a single positional is read as a pallet name)
+dot inspect --chain polkadot
 ```
 
 A single positional arg is always treated as a pallet name, so `dot inspect polkadot` does **not** list pallets on the `polkadot` chain — use `--chain polkadot` for that.
@@ -186,11 +279,36 @@ Useful for discovering enum variants: when a method signature shows `enum(N vari
 ## Account Management
 
 ```bash
-dot account list                                        # includes built-in dev accounts
-dot account add treasury <ss58_address>                 # watch-only
-dot account import signer --secret "word1 word2 ..."    # from mnemonic
-dot account import ci --env SECRET_VAR                  # mnemonic from env var
-dot account create new-key                              # generate new
+# List dev + stored accounts
+dot account list
+# Output:
+# Dev Accounts
+#
+#   Alice  5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+#   Bob    5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
+#   ...
+#
+# Stored Accounts
+#
+#   (none)
+
+# Watch-only — no secret, just a named address
+dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+
+# Keyed account from a BIP39 mnemonic (use --secret, or --env to keep it off disk)
+dot account add signer --secret "word1 word2 ... word12"
+dot account add ci --env SECRET_VAR
+
+# Generate a new account
+dot account create new-key
+# Output:
+# Account Created
+#
+#   Name:          new-key
+#   Address:       5HQPcHZ2gUKdJM3JbgFvY8t5PfdkpooH2u2LQrAHZ61dZ57M
+#   Mnemonic:      defy ginger general follow use try ...
+#
+#   Save this mnemonic phrase! It is the only way to recover this account.
 ```
 
 Built-in dev accounts: `alice`, `bob`, `charlie`, `dave`, `eve`, `ferdie`
@@ -198,12 +316,40 @@ Built-in dev accounts: `alice`, `bob`, `charlie`, `dave`, `eve`, `ferdie`
 ## Other Commands
 
 ```bash
-dot parachain 1000                                      # derive sovereign accounts
-dot parachain 1000 --type sibling --output json
-dot sign "hello" --from alice                           # sign a message
-dot hash blake2b256 0xdeadbeef                          # hash data
-dot ./transfer.yaml --from alice                        # execute from YAML/JSON file
-dot tx.System.remark 0xdead --to-yaml                   # encode call → YAML
+# Derive a parachain's sovereign accounts (no chain connection)
+dot parachain 1000
+# Output:
+# Parachain 1000 — Sovereign Accounts
+#
+#   Child:
+#     SS58:  5Ec4AhPZk8STuex8Wsi9TwDtJQxKqzPJRCH7348Xtcs9vZLJ
+#   Sibling:
+#     SS58:  5Eg2fntNprdN3FgH4sfEaaZhYtddZQSQUqvYJ1f2mLtinVhV
+
+# Sign arbitrary bytes with an account keypair (output is a MultiSignature value)
+dot sign "hello world" --from alice
+# Output:
+#   Type:       Sr25519
+#   Message:    0x68656c6c6f20776f726c64
+#   Signature:  0x4283a3bbae463c39264ca193b1bcce61702794e54e482bc2e46202c85ef6a544...
+#   Enum:       Sr25519(0x4283a3bbae463c39264ca193b1bcce61702794e54e482bc2e46202c8...)
+
+# Compute a hash
+dot hash blake2b256 0xdeadbeef
+# Output:
+# 0xf3e925002fed7cc0ded46842569eb5c90c910c091d8d04a1bdf96e0db719fd91
+
+# Execute from a YAML/JSON file
+dot ./transfer.yaml --from alice
+
+# Encode a call to YAML (compatible with file-based input)
+dot polkadot.tx.System.remark 0xdeadbeef --to-yaml
+# Output:
+# chain: polkadot
+# tx:
+#   System:
+#     remark:
+#       remark: "0xdeadbeef"
 ```
 
 ## Key Flags
@@ -221,7 +367,7 @@ dot tx.System.remark 0xdead --to-yaml                   # encode call → YAML
 ## Common Errors
 
 - **`Incompatible runtime entry RuntimeCall(...)`** — usually a runtime API arg shape mismatch: wrong enum `{type, value}`, or a sized-binary `[u8; N]` passed as something other than `0x`-hex. Re-check the signature by calling `dot <chain>.apis.<Api>.<method>` with no args.
-- **`Unknown account or address "X"`** / account has no public key resolved yet — the `--from` name isn't registered. Check `dot account list`, or import with `dot account import <name> ...`.
+- **`Unknown account or address "X"`** / account has no public key resolved yet — the `--from` name isn't registered. Check `dot account list`, or add it with `dot account add <name> --secret "..."` / `dot account add <name> --env VAR`.
 - **`undefined` piped into `jq`** — the literal string `undefined` is not JSON. Guard with `[ "$X" == "undefined" ]` before piping.
 - **Decode errors after a runtime upgrade** — metadata cache is keyed by chain name; register a fresh `dot chain add` alias for the upgraded chain rather than reusing the old one.
 - **Wasm trap / "validate_transaction" panic on submit** — almost always stale local metadata. The CLI now prints a `⚠ Local metadata for "<chain>" is out of date … Run: dot chain update <chain>` line right after such errors. Run that command and retry. The check uses both `specVersion` and the runtime code hash, so it also catches local-node restarts where the wasm changed but `specVersion` was kept the same. Set `DOT_TRUST_CACHED_METADATA=1` to suppress the check entirely.

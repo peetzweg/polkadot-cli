@@ -21,25 +21,35 @@ Query on-chain state before acting. The `undefined` check is the core pattern:
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Check if asset exists
-ASSET=$(dot my-chain.query.Assets.Asset "$ASSET_ID")
+ASSET_ID=999999999  # an asset id we want to ensure exists
+
+# Check if the asset already exists on Paseo Asset Hub
+ASSET=$(dot paseo-asset-hub.query.Assets.Asset "$ASSET_ID")
 if [ "$ASSET" == "undefined" ]; then
   echo "Asset not found, creating"
-  CALL=$(dot --encode my-chain.tx.Assets.force_create "$ASSET_ID" "$OWNER" true 10)
-  dot my-chain.tx.Sudo.sudo "$CALL" --from "$SIGNER"
+  CALL=$(dot paseo-asset-hub.tx.Assets.force_create "$ASSET_ID" alice true 10 --encode)
+  dot paseo-asset-hub.tx.Sudo.sudo "$CALL" --from alice
 else
   echo "Asset already exists"
 fi
+# Output (first run):
+# Asset not found, creating
+#
+# Output (second run):
+# Asset already exists
 ```
 
-For values that need comparison (not just existence), strip quotes:
+For values that need comparison (not just existence), strip quotes off u128 strings:
 
 ```bash
-CURRENT_RATE=$(dot chain.query.AssetRate.ConversionRateToNative "$ASSET_ID" | tr -d '"')
+ASSET_ID=1984
+EXPECTED_RATE="250000000000000000000000"
+
+CURRENT_RATE=$(dot paseo-asset-hub.query.AssetRate.ConversionRateToNative "$ASSET_ID" | tr -d '"')
 if [ "$CURRENT_RATE" == "undefined" ]; then
-  # create
+  echo "Rate missing — create it"
 elif [ "$CURRENT_RATE" != "$EXPECTED_RATE" ]; then
-  # update
+  echo "Rate is $CURRENT_RATE, want $EXPECTED_RATE — update"
 else
   echo "Already correct"
 fi
@@ -75,42 +85,98 @@ Loader registers chain aliases so scripts use generic names:
 source config-base.env
 source "config-${ENV}.env"
 dot chain add people --rpc "$RPC_PEOPLE" 2>/dev/null || true
+# Output (first run):
+# ✓ Added people
+# Updating metadata for people...
+# ✓ people
+#
+# Output (subsequent runs): empty (already exists, error suppressed)
 ```
 
 Scripts then use `dot people.query...` regardless of environment.
 
 ## XCM Locations (JSON Arguments)
 
-Many pallets use XCM `Location` types as keys. These are JSON objects:
+Many pallets use XCM `Location` types as keys. These are JSON objects passed as a single arg:
 
 ```bash
-# Native token (relay chain asset, from parachain perspective)
+# Native token (relay chain asset, from a parachain's perspective)
 NATIVE='{"parents":1,"interior":{"type":"Here"}}'
 
-# Local asset on Asset Hub (PalletInstance 50 = Assets pallet)
-LOCAL_ASSET='{"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"'"$ASSET_ID"'"}]}}'
+# Local asset on Asset Hub: PalletInstance 50 = Assets pallet, GeneralIndex = asset id
+ASSET_ID=1984
+LOCAL_ASSET='{
+  "parents": 0,
+  "interior": {
+    "type": "X2",
+    "value": [
+      {"type": "PalletInstance", "value": 50},
+      {"type": "GeneralIndex", "value": "'"$ASSET_ID"'"}
+    ]
+  }
+}'
 
-# Foreign asset on People chain (points to Asset Hub's asset)
-FOREIGN_ASSET='{"parents":1,"interior":{"type":"X3","value":[{"type":"Parachain","value":1000},{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"'"$ASSET_ID"'"}]}}'
+# Foreign asset on a sibling parachain: Parachain 1000 = Asset Hub
+FOREIGN_ASSET='{
+  "parents": 1,
+  "interior": {
+    "type": "X3",
+    "value": [
+      {"type": "Parachain", "value": 1000},
+      {"type": "PalletInstance", "value": 50},
+      {"type": "GeneralIndex", "value": "'"$ASSET_ID"'"}
+    ]
+  }
+}'
 ```
 
-Note the bash string escaping: `'"$VAR"'` breaks out of single-quote JSON to interpolate the variable.
+Note the bash string escaping: `'"$VAR"'` breaks out of single-quoted JSON to interpolate `$VAR`, then re-enters the single-quoted region. Without it, single quotes would suppress variable expansion.
+
+Use the result with a runtime API:
+
+```bash
+dot polkadot-asset-hub.apis.AssetConversionApi.get_reserves "$NATIVE" "$LOCAL_ASSET" --json
+# Output (live; reserves change with each swap):
+# [
+#   "801299477230750",
+#   "99382392973"
+# ]
+```
 
 ## Encoding Calls for Sudo
 
-Privileged calls (force_create, AssetRate.create, etc.) need root origin. Wrap in Sudo:
+Privileged calls (`force_create`, `AssetRate.create`, etc.) need root origin. Wrap in Sudo:
 
 ```bash
-INNER_CALL=$(dot --encode chain.tx.AssetRate.create "$ASSET_ID" "$RATE")
-dot chain.tx.Sudo.sudo "$INNER_CALL" --from "$SIGNER_SUDO"
+ASSET_ID=1984
+RATE=250000000000000000000000
+
+INNER_CALL=$(dot paseo-asset-hub.tx.AssetRate.create "$ASSET_ID" "$RATE" --encode)
+echo "$INNER_CALL"
+# Output:
+# 0x3500...
+
+dot paseo-asset-hub.tx.Sudo.sudo "$INNER_CALL" --from alice --dry-run
+# Output:
+#   Chain:  paseo-asset-hub
+#   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
+#   Call:   0xfb35...
+#   Decode: Sudo.sudo { call: AssetRate(create(...)) }
+#   Estimated fees: ...
 ```
 
-For batch operations:
+For batch operations, comma-join the encoded calls:
 
 ```bash
-CALL_A=$(dot --encode chain.tx.Assets.force_create ...)
-CALL_B=$(dot --encode chain.tx.Assets.set_metadata ...)
-dot chain.tx.Utility.batch_all "[$CALL_A, $CALL_B]" --from "$SIGNER"
+A=$(dot paseo-asset-hub.tx.System.remark 0xdeadbeef --encode)
+B=$(dot paseo-asset-hub.tx.System.remark 0xcafe --encode)
+dot paseo-asset-hub.tx.Utility.batch_all "$A,$B" --from alice --dry-run
+# Output:
+#   Chain:  paseo-asset-hub
+#   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
+#   Call:   0x...
+#   Decode: Utility.batch_all { calls: [System(remark(...)), System(remark(...))] }
+#   Estimated fees: ...
 ```
 
 ## Big Number Arithmetic
@@ -118,14 +184,25 @@ dot chain.tx.Utility.batch_all "[$CALL_A, $CALL_B]" --from "$SIGNER"
 Substrate uses u128 for balances. Bash handles up to 2^63 (~9.2 * 10^18). For amounts within this range, bash arithmetic works:
 
 ```bash
+NATIVE_DECIMALS=12
+
 # 1000 tokens with 12 decimals = 10^15 (fits in bash)
 amount=$(( 1000 * 10**$NATIVE_DECIMALS ))
+echo "$amount"
+# Output:
+# 1000000000000000
 ```
 
 For values exceeding 10^18 (e.g., FixedU128 rates, total supplies), use python3:
 
 ```bash
+NATIVE_DECIMALS=12
+PUSD_DECIMALS=6
+
 BIG_VALUE=$(python3 -c "print(10**18 * 10**$NATIVE_DECIMALS // (4 * 10**$PUSD_DECIMALS))")
+echo "$BIG_VALUE"
+# Output:
+# 250000000000000000000000
 ```
 
 ## FixedU128 Rate Calculation
@@ -141,50 +218,73 @@ stored_value = (smallest_unit_of_asset_in_native) * 10^18
 Example — pUSD to DOT at 1:4 (1 DOT = 4 pUSD, so 1 pUSD = 0.25 DOT):
 
 ```bash
+NATIVE_DECIMALS=12
+PUSD_DECIMALS=6
+
 # Formula: rate = 10^18 * 10^NATIVE_DEC / (RATIO * 10^PUSD_DEC)
 # where RATIO = 4 (how many pUSD per 1 native)
 RATE=$(python3 -c "print(10**18 * 10**$NATIVE_DECIMALS // (4 * 10**$PUSD_DECIMALS))")
-
-# preview (native=12, pusd=6):  250000000000000000000000  (2.5 * 10^23)
-# next    (native=10, pusd=18): 2500000000               (2.5 * 10^9)
+echo "$RATE"
+# Output (preview, native=12, pusd=6):
+# 250000000000000000000000      (2.5 * 10^23)
+#
+# Same formula with native=10, pusd=18:
+# 2500000000                    (2.5 * 10^9)
 ```
 
 ## Checking Runtime Capabilities
 
+The CLI emits structured JSON with `--json`, so `jq` covers most introspection needs without dropping into Python.
+
 ### List pallets
 
 ```bash
-dot chain.query --json | python3 -c "
-import sys, json
-for p in json.load(sys.stdin)['pallets']:
-    print(p['name'])
-"
+dot polkadot.query --json | jq -r '.pallets[].name'
+# Output:
+# AssetRate
+# Auctions
+# AuthorityDiscovery
+# Authorship
+# Babe
+# ...
 ```
 
 ### Check if a pallet exists
 
 ```bash
-dot chain.query --json | python3 -c "
-import sys, json
-pallets = [p['name'] for p in json.load(sys.stdin)['pallets']]
-print('AssetConversion' in pallets)
-"
+dot paseo-asset-hub.query --json | jq '.pallets | map(.name) | contains(["AssetConversion"])'
+# Output:
+# true
+
+dot polkadot.query --json | jq '.pallets | map(.name) | contains(["AssetConversion"])'
+# Output:
+# false
 ```
 
 ### List runtime APIs
 
 ```bash
-dot chain.apis --json | python3 -c "
-import sys, json
-for a in json.load(sys.stdin)['apis']:
-    print(a['name'])
-"
+dot polkadot.apis --json | jq -r '.apis[].name'
+# Output:
+# AccountNonceApi
+# AssetHubMigrationApi
+# AuthorityDiscoveryApi
+# BabeApi
+# ...
 ```
 
 ### Check which assets are accepted for fee payment
 
 ```bash
-dot chain.apis.XcmPaymentApi.query_acceptable_payment_assets 5 --json
+dot polkadot-asset-hub.apis.XcmPaymentApi.query_acceptable_payment_assets 5 --json
+# Output:
+# {
+#   "success": true,
+#   "value": [
+#     { "type": "V5", "value": { "parents": 1, "interior": { "type": "Here" } } },
+#     ...
+#   ]
+# }
 ```
 
 This is a runtime API — the accepted assets are derived by the runtime (e.g., from existing AMM pools on Asset Hub), not set manually.
@@ -192,8 +292,15 @@ This is a runtime API — the accepted assets are derived by the runtime (e.g., 
 ### Check pool reserves
 
 ```bash
-dot chain.apis.AssetConversionApi.get_reserves "$NATIVE" "$ASSET" --json
-# Returns: [native_reserve, asset_reserve] or null/undefined if no pool
+NATIVE='{"parents":1,"interior":{"type":"Here"}}'
+ASSET='{"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"1984"}]}}'
+
+dot polkadot-asset-hub.apis.AssetConversionApi.get_reserves "$NATIVE" "$ASSET" --json
+# Output (live; or `null`/`undefined` if no pool exists):
+# [
+#   "801299477230750",
+#   "99382392973"
+# ]
 ```
 
 ## Common Gotchas
@@ -202,10 +309,12 @@ dot chain.apis.AssetConversionApi.get_reserves "$NATIVE" "$ASSET" --json
 
 2. **`--rpc` uses wrong metadata.** Always register chains with `dot chain add`, never rely on `--rpc` alone. Metadata cache is keyed by chain name, not RPC URL, so `--rpc` can pick up stale metadata from a previous chain with the same alias.
 
-3. **Every command needs an explicit chain.** No default chain — use a `<chain>.` dotpath prefix (`dot polkadot.query.System.Number`) or `--chain <name>`. Commands without either error out. Note `inspect` is a top-level command; only `--chain` works for it.
+3. **Every command needs an explicit chain.** No default chain — prefer the chain-prefix dotpath form (`dot polkadot.query.System.Number`). `--chain <name>` is supported as an alternative. Commands without either error out. Note `inspect` is a top-level command that takes the chain on its target (`dot inspect polkadot.System`) or via `--chain`.
 
 4. **u128 returned as quoted strings.** `"1000000000000"` not `1000000000000`. Strip quotes for comparison: `tr -d '"'`
 
 5. **`--json` doesn't guarantee JSON.** Errors and `undefined` are not valid JSON even with `--json`.
 
-6. **`--dump` required for keyless map queries.** `dot query.Map` without a key or `--dump` shows usage help, not results.
+6. **`--dump` required for keyless map queries.** `dot polkadot.query.System.Account` without a key or `--dump` shows usage help, not results.
+
+7. **Method names are snake_case.** Calls like `Balances.transfer_keep_alive` use the runtime's `snake_case` identifiers. CamelCase variants don't resolve — the fuzzy matcher will suggest the right name.
