@@ -43,6 +43,24 @@ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 # ✓ kusama
 ```
 
+List configured chains; the default output is a compact tree with relay/parachain structure only. Pass `-v` to also print RPC endpoints, or use `dot chain info <name>` for full per-chain detail:
+
+```bash
+dot chains                        # compact tree of names + parachain IDs
+dot chains -v                     # same tree + RPC endpoints inline
+dot chain info polkadot           # rpc, parachains, metadata cache status
+dot chain polkadot                # bare-noun shortcut for `chain info polkadot`
+dot chain info polkadot --json    # structured object; metadata: null when not cached
+```
+
+`dot chain <name>` falls through to `chain info` when `<name>` isn't a known action verb (`add`/`remove`/`update`/`list`/`export`/`import`/`info`). Use this to check whether metadata is cached before scripted queries:
+
+```bash
+dot chain info polkadot --json | jq -r '.metadata.specVersion // "uncached"'
+# Output (after `dot chain update polkadot`):
+# 1003000
+```
+
 Every chain-consuming command needs an explicit chain — prefer the dotpath prefix:
 
 ```bash

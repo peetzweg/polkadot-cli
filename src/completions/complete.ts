@@ -32,7 +32,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
 
 const NAMED_COMMANDS = ["chain", "account", "inspect", "hash", "sign", "parachain", "completions"];
 
-const CHAIN_SUBCOMMANDS = ["add", "remove", "update", "list"];
+const CHAIN_SUBCOMMANDS = ["add", "info", "list", "remove", "update"];
 const ACCOUNT_SUBCOMMANDS = [
   "add",
   "create",

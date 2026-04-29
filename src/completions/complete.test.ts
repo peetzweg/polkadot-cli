@@ -203,6 +203,7 @@ describe("named subcommand completion", () => {
     expect(l).toContain("remove");
     expect(l).toContain("update");
     expect(l).toContain("list");
+    expect(l).toContain("info");
     expect(l).not.toContain("default");
   });
 

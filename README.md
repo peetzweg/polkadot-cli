@@ -102,6 +102,12 @@ dot chain add my-para --rpc wss://rpc.example.com --relay polkadot --parachain-i
 
 # List configured chains (shows relay/parachain hierarchy)
 dot chain list
+dot chains                  # shorthand
+dot chains -v               # include RPC endpoints in the list
+
+# Inspect a single chain (rpc, parachains, metadata cache status)
+dot chain info polkadot
+dot chain polkadot          # bare-noun shortcut, same as `chain info polkadot`
 
 # Re-fetch metadata after a runtime upgrade
 dot chain update polkadot   # updates a specific chain
@@ -118,19 +124,52 @@ dot chain remove kusama
 ```
 Configured Chains
 
-  polkadot  wss://polkadot.ibp.network
-  ├─ polkadot-asset-hub [1000]  wss://...
-  ├─ polkadot-bridge-hub [1002]  wss://...
-  ├─ polkadot-collectives [1001]  wss://...
-  ├─ polkadot-coretime [1005]  wss://...
-  └─ polkadot-people [1004]  wss://...
+  polkadot
+  ├─ polkadot-asset-hub [1000]
+  ├─ polkadot-bridge-hub [1002]
+  ├─ polkadot-collectives [1001]
+  ├─ polkadot-coretime [1005]
+  └─ polkadot-people [1004]
 
-  paseo  wss://paseo.ibp.network
-  ├─ paseo-asset-hub [1000]  wss://...
-  └─ paseo-people [1004]  wss://...
+  paseo
+  ├─ paseo-asset-hub [1000]
+  └─ paseo-people [1004]
 
-  my-solo-chain  wss://...
+  my-solo-chain
 ```
+
+The default list is intentionally compact — names + relay tree + parachain IDs. Pass `-v` / `--verbose` to also print every RPC endpoint inline (à la `git remote -v`):
+
+```
+Configured Chains
+
+  polkadot  wss://polkadot.ibp.network
+       wss://polkadot-rpc.n.dwellir.com
+       wss://rpc.polkadot.io
+  ├─ polkadot-asset-hub [1000]  wss://polkadot-asset-hub-rpc.polkadot.io
+       ...
+```
+
+For the full set of fields for one chain (RPCs, parent relay, child parachains, metadata cache status), use `dot chain info <name>`:
+
+```
+dot chain info polkadot
+
+# polkadot
+#
+#   rpc:
+#     wss://polkadot.ibp.network
+#     wss://rpc.polkadot.io
+#     ...
+#   parachains:
+#     polkadot-asset-hub [1000]
+#     polkadot-bridge-hub [1002]
+#     ...
+#   metadata:
+#     not cached — run `dot chain update polkadot`
+```
+
+After a successful `dot chain update <name>`, the `metadata:` row shows the cached `specName`, `specVersion`, and `fetchedAt` timestamp instead of the `not cached` hint. `dot chain info <name> --json` emits the same data as a structured object (with `metadata: null` when no fingerprint is cached). Names resolve case-insensitively. The bare-noun form `dot chain <name>` is a shortcut for `dot chain info <name>` — known action verbs (`add`, `remove`, `update`, `list`, `export`, `import`, `info`) take precedence over chain names if there's ever a clash.
 
 All built-in system parachains are preconfigured with their relay chain and parachain ID. When adding a custom parachain with `--relay`, the CLI auto-detects the parachain ID from on-chain `ParachainInfo` storage. Use `--parachain-id` to set it explicitly if auto-detection is not available.
 
@@ -1625,6 +1664,7 @@ Every command supports `--json` for machine-readable output. This works on data 
 dot inspect polkadot --json                           # All pallets as JSON
 dot inspect polkadot.Balances --json                  # Pallet detail with storage, constants, calls, events, errors
 dot chain list --json                                 # Configured chains
+dot chain info polkadot --json                        # Full detail for one chain (rpc, parachains, metadata status)
 dot account list --json                               # Dev and stored accounts
 dot account create my-key --json                      # New account details (mnemonic warning on stderr)
 dot polkadot.tx.System.remark 0xdead --encode --json  # Encoded call hex wrapped in JSON

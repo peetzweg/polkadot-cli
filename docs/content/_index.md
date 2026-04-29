@@ -101,7 +101,7 @@ The following chains are available out of the box — no `dot chain add` needed:
 | | `paseo-coretime` |
 | | `paseo-people` |
 
-Each chain ships with multiple RPC endpoints from decentralized infrastructure providers (IBP, Dotters, Dwellir, and others). The CLI automatically falls back to the next endpoint if the primary is unreachable. Use `dot chain list` to see all endpoints for each chain.
+Each chain ships with multiple RPC endpoints from decentralized infrastructure providers (IBP, Dotters, Dwellir, and others). The CLI automatically falls back to the next endpoint if the primary is unreachable. Use `dot chain info <name>` (or `dot chains -v`) to see all endpoints for a chain.
 
 ### Add a chain
 
@@ -137,7 +137,7 @@ Validation rules:
 
 ### List chains
 
-Show all configured chains and which one is the default:
+Show all configured chains:
 
 ```
 dot chains
@@ -148,26 +148,88 @@ Both forms are equivalent. `dot chains` is a shorthand that skips the `list` sub
 
 #### Chain topology
 
-`dot chain list` displays chains as a tree, grouping parachains under their parent relay chain. Parachain IDs are shown in brackets:
+The default `dot chain list` is intentionally compact — names + relay tree + parachain IDs only:
+
+```
+Configured Chains
+
+  polkadot
+  ├─ polkadot-asset-hub [1000]
+  ├─ polkadot-bridge-hub [1002]
+  ├─ polkadot-collectives [1001]
+  ├─ polkadot-coretime [1005]
+  └─ polkadot-people [1004]
+
+  paseo
+  ├─ paseo-asset-hub [1000]
+  └─ paseo-people [1004]
+
+  my-solo-chain
+```
+
+Standalone chains (no `relay` field, not referenced as a relay by other chains) are listed at the bottom. `dot chain list --json` includes `relay` and `parachainId` fields for parachain entries.
+
+Pass `-v` / `--verbose` to also print every RPC endpoint inline (à la `git remote -v`):
+
+```
+dot chains -v
+dot chain list --verbose
+```
 
 ```
 Configured Chains
 
   polkadot  wss://polkadot.ibp.network
-  ├─ polkadot-asset-hub [1000]  wss://...
-  ├─ polkadot-bridge-hub [1002]  wss://...
-  ├─ polkadot-collectives [1001]  wss://...
-  ├─ polkadot-coretime [1005]  wss://...
-  └─ polkadot-people [1004]  wss://...
-
-  paseo  wss://paseo.ibp.network
-  ├─ paseo-asset-hub [1000]  wss://...
-  └─ paseo-people [1004]  wss://...
-
-  my-solo-chain  wss://...
+       wss://polkadot-rpc.n.dwellir.com
+       wss://rpc.polkadot.io
+  ├─ polkadot-asset-hub [1000]  wss://polkadot-asset-hub-rpc.polkadot.io
+       ...
 ```
 
-Standalone chains (no `relay` field, not referenced as a relay by other chains) are listed at the bottom. `dot chain list --json` includes `relay` and `parachainId` fields for parachain entries.
+### Show chain detail
+
+For everything about a single chain — RPC endpoints, parent relay, child parachains, and metadata cache status — use `dot chain info <name>`:
+
+```
+dot chain info polkadot
+```
+
+```
+polkadot
+
+  rpc:
+    wss://polkadot.ibp.network
+    wss://rpc.polkadot.io
+    ...
+  parachains:
+    polkadot-asset-hub [1000]
+    polkadot-bridge-hub [1002]
+    polkadot-collectives [1001]
+    polkadot-coretime [1005]
+    polkadot-people [1004]
+  metadata:
+    not cached — run `dot chain update polkadot`
+```
+
+After `dot chain update <name>` has run, the `metadata:` row reads `<specName> v<specVersion> (cached <fetchedAt>)`. Inspecting a parachain shows its parent relay and parachain id instead of the `parachains:` row:
+
+```
+dot chain info polkadot-asset-hub
+```
+
+```
+polkadot-asset-hub
+
+  rpc:
+    wss://polkadot-asset-hub-rpc.polkadot.io
+    ...
+  relay:        polkadot
+  parachain id: 1000
+  metadata:
+    not cached — run `dot chain update polkadot-asset-hub`
+```
+
+`dot chain <name>` is a bare-noun shortcut for `dot chain info <name>`. Known action verbs (`add`, `remove`, `update`, `list`, `export`, `import`, `info`) take precedence over chain names if there's ever a clash. Names resolve case-insensitively. `dot chain info <name> --json` emits the same data as a structured object — `metadata` is `null` when no fingerprint is cached.
 
 ### Update metadata
 
@@ -2260,6 +2322,7 @@ Every command supports `--json` for machine-readable output. This works on data 
 dot inspect polkadot --json                           # All pallets as JSON
 dot inspect polkadot.Balances --json                  # Pallet detail with storage, constants, calls, events, errors
 dot chain list --json                                 # Configured chains
+dot chain info polkadot --json                        # Full detail for one chain (rpc, parachains, metadata status)
 dot account list --json                               # Dev and stored accounts
 dot account create my-key --json                      # New account details (mnemonic warning on stderr)
 dot polkadot.tx.System.remark 0xdead --encode --json  # Encoded call hex wrapped in JSON
