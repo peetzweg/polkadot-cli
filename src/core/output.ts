@@ -50,6 +50,19 @@ export function isJsonOutput(opts: { json?: boolean; output?: string }): boolean
   return opts.json === true || opts.output === "json";
 }
 
+// Awaitable write to process.stdout — multi-MB output via console.log gets
+// truncated when piped on Linux because process.exit() doesn't wait for the
+// stream's userspace buffer to drain. The write-callback form fires after
+// the chunk has been handed to the OS, so awaiting it before the command
+// returns ensures the full payload reaches the reader. Use this for any
+// command whose output can plausibly exceed ~64 KiB (the Linux pipe buffer);
+// short interactive output via console.log is fine.
+export function writeStdout(text: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    process.stdout.write(text, () => resolve());
+  });
+}
+
 export function printJsonLine(data: unknown): void {
   console.log(JSON.stringify(data, replacer));
 }

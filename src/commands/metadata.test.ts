@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../config/types.ts";
 import { parseMetadata } from "../core/metadata.ts";
+import { patchStdout } from "../test-helpers/patch-stdout.ts";
 import { withDotHome } from "../test-helpers/with-dot-home.ts";
 import { runCli } from "./__fixtures__/run-cli.ts";
 import { buildMetadataPayload, handleMetadata } from "./metadata.ts";
@@ -123,7 +124,7 @@ describe("handleMetadata --cached", () => {
     const captured: string[] = [];
     try {
       await withDotHome(home, async () => {
-        const restore = patchConsoleLog((msg) => captured.push(msg));
+        const restore = patchStdout((msg) => captured.push(msg));
         try {
           await handleMetadata("polkadot", { cached: true });
         } finally {
@@ -146,7 +147,7 @@ describe("handleMetadata --cached", () => {
     const captured: string[] = [];
     try {
       await withDotHome(home, async () => {
-        const restore = patchConsoleLog((msg) => captured.push(msg));
+        const restore = patchStdout((msg) => captured.push(msg));
         try {
           await handleMetadata("polkadot", { cached: true, raw: true });
         } finally {
@@ -182,20 +183,3 @@ describe("handleMetadata --cached", () => {
     }
   });
 });
-
-// handleMetadata writes via process.stdout.write directly (callback form,
-// to ensure pipe drain before exit) — not console.log — so we patch the
-// stream's write to capture output without going through stdout.
-function patchConsoleLog(capture: (msg: string) => void): () => void {
-  const original = process.stdout.write.bind(process.stdout);
-  process.stdout.write = ((chunk: unknown, ...rest: unknown[]) => {
-    const text = typeof chunk === "string" ? chunk : String(chunk);
-    capture(text.endsWith("\n") ? text.slice(0, -1) : text);
-    const cb = rest.find((a) => typeof a === "function") as ((err?: Error) => void) | undefined;
-    cb?.();
-    return true;
-  }) as typeof process.stdout.write;
-  return () => {
-    process.stdout.write = original;
-  };
-}

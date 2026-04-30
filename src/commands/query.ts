@@ -14,11 +14,12 @@ import {
   DIM,
   firstSentence,
   formatJson,
+  formatPretty,
   isJsonOutput,
   printHeading,
   printItem,
-  printResult,
   RESET,
+  writeStdout,
 } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseValue } from "../utils/parse-value.ts";
@@ -46,11 +47,11 @@ export async function handleQuery(
     const withStorage = pallets.filter((p) => p.storage.length > 0);
 
     if (isJsonOutput(opts)) {
-      console.log(
-        formatJson({
+      await writeStdout(
+        `${formatJson({
           chain: chainName,
           pallets: withStorage.map((p) => ({ name: p.name, storage: p.storage.length })),
-        }),
+        })}\n`,
       );
       return;
     }
@@ -74,7 +75,9 @@ export async function handleQuery(
 
     if (pallet.storage.length === 0) {
       if (isJsonOutput(opts)) {
-        console.log(formatJson({ chain: chainName, pallet: pallet.name, storage: [] }));
+        await writeStdout(
+          `${formatJson({ chain: chainName, pallet: pallet.name, storage: [] })}\n`,
+        );
       } else {
         console.log(`No storage items in ${pallet.name}.`);
       }
@@ -82,8 +85,8 @@ export async function handleQuery(
     }
 
     if (isJsonOutput(opts)) {
-      console.log(
-        formatJson({
+      await writeStdout(
+        `${formatJson({
           chain: chainName,
           pallet: pallet.name,
           storage: pallet.storage.map((s) => {
@@ -92,7 +95,7 @@ export async function handleQuery(
               s.keyTypeId != null ? describeType(meta.lookup, s.keyTypeId) : undefined;
             return { name: s.name, type: s.type, valueType, keyType, docs: firstSentence(s.docs) };
           }),
-        }),
+        })}\n`,
       );
       return;
     }
@@ -180,19 +183,19 @@ export async function handleQuery(
         () => storageApi.getEntries(...parsedKeys),
       );
 
-      printResult(
-        entries.map((e: any) => ({
-          keys: e.keyArgs,
-          value: e.value,
-        })),
-        format,
-      );
+      const rows = entries.map((e: any) => ({
+        keys: e.keyArgs,
+        value: e.value,
+      }));
+      const text = format === "json" ? formatJson(rows) : formatPretty(rows);
+      await writeStdout(`${text}\n`);
     } else {
       // Full key → single value lookup
       const result = await withStalenessSuggestion(chainName, clientHandle, () =>
         storageApi.getValue(...parsedKeys),
       );
-      printResult(result, format);
+      const text = format === "json" ? formatJson(result) : formatPretty(result);
+      await writeStdout(`${text}\n`);
     }
   } finally {
     clientHandle.destroy();

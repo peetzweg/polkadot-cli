@@ -35,6 +35,12 @@ beforeAll(() => {
 
 // @ts-expect-error Bun supports describe(label, options, fn) at runtime
 describe("handleQuery JSON output (in-process coverage)", { timeout: 15_000 }, () => {
+  // These exercise the listing paths' `await writeStdout(...)` calls
+  // end-to-end. We intentionally don't patch process.stdout.write here
+  // because `bun test --concurrent` shares stdout globally and patches
+  // race across tests; the writeStdout primitive itself is verified in
+  // src/core/output.test.ts, and the user-facing JSON shape is covered
+  // by the runCli-based --json tests below.
   test("category-only with json", async () => {
     await handleQuery(undefined, [], { json: true, chain: "polkadot" });
   });
