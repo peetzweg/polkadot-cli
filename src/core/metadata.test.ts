@@ -53,9 +53,12 @@ const smallEnumTypeId = findTypeId(
   meta.lookup,
   (e) => e.type === "enum" && Object.keys(e.value).length > 0 && Object.keys(e.value).length <= 4,
 )!;
+// "Large" enums are summarized when the variant count exceeds the compact
+// threshold (24). Pallet/Event/Error enums on Polkadot easily exceed this.
 const largeEnumTypeId = findTypeId(
   meta.lookup,
-  (e) => e.type === "enum" && Object.keys(e.value).length > 4,
+  (e) => e.type === "enum" && Object.keys(e.value).length > 24,
+  2000,
 )!;
 const sequenceTypeId = findTypeId(meta.lookup, (e) => e.type === "sequence")!;
 const optionTypeId = findTypeId(meta.lookup, (e) => e.type === "option")!;
@@ -183,7 +186,7 @@ describe("describeType", () => {
     expect(result.split(" | ").length).toBeLessThanOrEqual(4);
   });
 
-  test("formats large enum (>4 variants) as enum(N variants)", () => {
+  test("formats very large enum (>24 variants) as enum(N variants) summary", () => {
     expect(largeEnumTypeId).toBeDefined();
     const result = describeType(meta.lookup, largeEnumTypeId);
     expect(result).toMatch(/^enum\(\d+ variants\)$/);

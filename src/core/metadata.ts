@@ -17,6 +17,12 @@ import {
 } from "../utils/errors.ts";
 import { fingerprintsMatch, type RuntimeFingerprint } from "../utils/runtime-fingerprint.ts";
 import type { ClientHandle } from "./client.ts";
+import {
+  _getCallFields,
+  _getEventFields,
+  compactArgsString,
+  compactTypeString,
+} from "./pretty-type.ts";
 
 const METADATA_TIMEOUT_MS = 15_000;
 const optionalOpaqueBytes = Option(Bytes());
@@ -427,43 +433,10 @@ export function describeRuntimeApiMethodArgs(
 export function describeType(lookup: Lookup, typeId: number): string {
   try {
     const entry = lookup(typeId);
-    return formatLookupEntry(entry);
+    if (!entry || typeof (entry as any).type !== "string") return `type(${typeId})`;
+    return compactTypeString(entry);
   } catch {
     return `type(${typeId})`;
-  }
-}
-
-function formatLookupEntry(entry: any): string {
-  switch (entry.type) {
-    case "primitive":
-      return entry.value;
-    case "compact":
-      return `Compact<${formatLookupEntry(entry.isBig ? { type: "primitive", value: "u128" } : { type: "primitive", value: "u64" })}>`;
-    case "AccountId32":
-      return "AccountId32";
-    case "bitSequence":
-      return "BitSequence";
-    case "sequence":
-      return `Vec<${formatLookupEntry(entry.value)}>`;
-    case "array":
-      return `[${formatLookupEntry(entry.value)}; ${entry.len}]`;
-    case "tuple":
-      return `(${entry.value.map(formatLookupEntry).join(", ")})`;
-    case "struct":
-      return `{ ${Object.entries(entry.value)
-        .map(([k, v]) => `${k}: ${formatLookupEntry(v)}`)
-        .join(", ")} }`;
-    case "option":
-      return `Option<${formatLookupEntry(entry.value)}>`;
-    case "result":
-      return `Result<${formatLookupEntry(entry.value.ok)}, ${formatLookupEntry(entry.value.ko)}>`;
-    case "enum": {
-      const variants = Object.keys(entry.value);
-      if (variants.length <= 4) return variants.join(" | ");
-      return `enum(${variants.length} variants)`;
-    }
-    default:
-      return "unknown";
   }
 }
 
@@ -472,46 +445,7 @@ export function describeCallArgs(
   palletName: string,
   callName: string,
 ): string {
-  try {
-    const palletMeta = meta.unified.pallets.find((p) => p.name === palletName);
-    if (!palletMeta?.calls) return "";
-
-    const callsEntry = meta.lookup(palletMeta.calls.type);
-    if (callsEntry.type !== "enum") return "";
-
-    const variant = (callsEntry.value as Record<string, any>)[callName];
-    if (!variant) return "";
-
-    if (variant.type === "void") return "()";
-
-    if (variant.type === "struct") {
-      const fields = Object.entries(variant.value as Record<string, any>)
-        .map(([k, v]) => `${k}: ${formatLookupEntry(v)}`)
-        .join(", ");
-      return `(${fields})`;
-    }
-
-    if (variant.type === "lookupEntry") {
-      const inner = variant.value;
-      if (inner.type === "void") return "()";
-      if (inner.type === "struct") {
-        const fields = Object.entries(inner.value as Record<string, any>)
-          .map(([k, v]) => `${k}: ${formatLookupEntry(v)}`)
-          .join(", ");
-        return `(${fields})`;
-      }
-      return `(${formatLookupEntry(inner)})`;
-    }
-
-    if (variant.type === "tuple") {
-      const types = (variant.value as any[]).map(formatLookupEntry).join(", ");
-      return `(${types})`;
-    }
-
-    return "";
-  } catch {
-    return "";
-  }
+  return compactArgsString(_getCallFields(meta, palletName, callName));
 }
 
 export function describeEventFields(
@@ -519,46 +453,7 @@ export function describeEventFields(
   palletName: string,
   eventName: string,
 ): string {
-  try {
-    const palletMeta = meta.unified.pallets.find((p) => p.name === palletName);
-    if (!palletMeta?.events) return "";
-
-    const eventsEntry = meta.lookup(palletMeta.events.type);
-    if (eventsEntry.type !== "enum") return "";
-
-    const variant = (eventsEntry.value as Record<string, any>)[eventName];
-    if (!variant) return "";
-
-    if (variant.type === "void") return "()";
-
-    if (variant.type === "struct") {
-      const fields = Object.entries(variant.value as Record<string, any>)
-        .map(([k, v]) => `${k}: ${formatLookupEntry(v)}`)
-        .join(", ");
-      return `(${fields})`;
-    }
-
-    if (variant.type === "lookupEntry") {
-      const inner = variant.value;
-      if (inner.type === "void") return "()";
-      if (inner.type === "struct") {
-        const fields = Object.entries(inner.value as Record<string, any>)
-          .map(([k, v]) => `${k}: ${formatLookupEntry(v)}`)
-          .join(", ");
-        return `(${fields})`;
-      }
-      return `(${formatLookupEntry(inner)})`;
-    }
-
-    if (variant.type === "tuple") {
-      const types = (variant.value as any[]).map(formatLookupEntry).join(", ");
-      return `(${types})`;
-    }
-
-    return "";
-  } catch {
-    return "";
-  }
+  return compactArgsString(_getEventFields(meta, palletName, eventName));
 }
 
 function hexToBytes(hex: string): Uint8Array {

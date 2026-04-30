@@ -27,6 +27,7 @@ import {
   DIM,
   firstSentence,
   formatJson,
+  formatPretty,
   GREEN,
   isJsonOutput,
   printHeading,
@@ -37,6 +38,7 @@ import {
   Spinner,
   YELLOW,
 } from "../core/output.ts";
+import { prettyCallArgs } from "../core/pretty-type.ts";
 import { resolveAccountAddress } from "../core/resolve-address.ts";
 import { binaryToDisplay } from "../utils/binary-display.ts";
 import { CliError, formatRuntimeError } from "../utils/errors.ts";
@@ -216,8 +218,11 @@ export async function handleTx(
 
     printHeading(`${pallet.name} Calls`);
     for (const c of pallet.calls) {
-      const callArgs = describeCallArgs(meta, pallet.name, c.name);
-      console.log(`  ${CYAN}${c.name}${RESET}${DIM}${callArgs}${RESET}`);
+      const callArgs = prettyCallArgs(meta, pallet.name, c.name, {
+        indent: 2,
+        prefix: c.name.length,
+      });
+      console.log(`  ${CYAN}${c.name}${RESET}${callArgs}`);
       const summary = firstSentence(c.docs);
       if (summary) {
         console.log(`      ${DIM}${summary}${RESET}`);
@@ -420,6 +425,7 @@ export async function handleTx(
 
     // Decode for display (works for both paths)
     const decodedStr = decodeCall(meta, callHex);
+    const decodedObj = decodeCallObject(meta, callHex);
 
     // --- Unsigned dry-run ---
     if (opts.dryRun && opts.unsigned) {
@@ -438,7 +444,7 @@ export async function handleTx(
       console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
       console.log(`  ${BOLD}Type:${RESET}   unsigned (bare)`);
       console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
-      console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
+      printDecodedCall(decodedObj, decodedStr);
       console.log(`  ${BOLD}Fees:${RESET}   ${DIM}N/A (unsigned transaction)${RESET}`);
       return;
     }
@@ -480,7 +486,7 @@ export async function handleTx(
       console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
       console.log(`  ${BOLD}From:${RESET}   ${opts.from} (${signerAddress})`);
       console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
-      console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
+      printDecodedCall(decodedObj, decodedStr);
       if (nonce !== undefined) console.log(`  ${BOLD}Nonce:${RESET} ${nonce}`);
       if (tip !== undefined) console.log(`  ${BOLD}Tip:${RESET}   ${tip}`);
       if (asset !== undefined) console.log(`  ${BOLD}Asset:${RESET} ${JSON.stringify(asset)}`);
@@ -572,7 +578,7 @@ export async function handleTx(
       console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
       console.log(`  ${BOLD}Type:${RESET}   unsigned (bare)`);
       console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
-      console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
+      printDecodedCall(decodedObj, decodedStr);
       console.log(`  ${BOLD}Tx:${RESET}     ${result.txHash}`);
 
       if (result.type === "broadcasted") {
@@ -672,7 +678,7 @@ export async function handleTx(
     console.log();
     console.log(`  ${BOLD}Chain:${RESET}  ${chainName}`);
     console.log(`  ${BOLD}Call:${RESET}   ${callHex}`);
-    console.log(`  ${BOLD}Decode:${RESET} ${decodedStr}`);
+    printDecodedCall(decodedObj, decodedStr);
     if (nonce !== undefined) console.log(`  ${BOLD}Nonce:${RESET} ${nonce}`);
     if (tip !== undefined) console.log(`  ${BOLD}Tip:${RESET}   ${tip}`);
     if (asset !== undefined) console.log(`  ${BOLD}Asset:${RESET} ${JSON.stringify(asset)}`);
@@ -769,6 +775,52 @@ function decodeCall(meta: MetadataBundle, callHex: string): string {
   } catch {
     return "(unable to decode)";
   }
+}
+
+interface DecodedCallObject {
+  palletName: string;
+  callName: string;
+  args: unknown;
+}
+
+/** Decode a call to a structured object suitable for JSON-style display. */
+function decodeCallObject(meta: MetadataBundle, callHex: string): DecodedCallObject | null {
+  try {
+    const callTypeId = meta.lookup.call;
+    if (callTypeId == null) return null;
+    const codec = meta.builder.buildDefinition(callTypeId);
+    const decoded = codec.dec(Binary.fromHex(callHex as `0x${string}`));
+    return {
+      palletName: decoded.type,
+      callName: decoded.value.type,
+      args: sanitizeForSerialization(decoded.value.value),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Print "Decode: Pallet.call" header followed by indented pretty-JSON args. */
+function printDecodedCall(obj: DecodedCallObject | null, fallback: string): void {
+  if (!obj) {
+    console.log(`  ${BOLD}Decode:${RESET} ${fallback}`);
+    return;
+  }
+  const header = `${CYAN}${obj.palletName}${RESET}.${CYAN}${obj.callName}${RESET}`;
+  const hasArgs =
+    obj.args !== null &&
+    obj.args !== undefined &&
+    !(typeof obj.args === "object" && Object.keys(obj.args).length === 0);
+  if (!hasArgs) {
+    console.log(`  ${BOLD}Decode:${RESET} ${header}`);
+    return;
+  }
+  console.log(`  ${BOLD}Decode:${RESET} ${header}`);
+  const indented = formatPretty(obj.args)
+    .split("\n")
+    .map((l) => `    ${l}`)
+    .join("\n");
+  console.log(indented);
 }
 
 function decodeCallFallback(meta: MetadataBundle, callHex: string): string {

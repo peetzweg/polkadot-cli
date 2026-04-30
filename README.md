@@ -632,6 +632,8 @@ dot polkadot.const.Balances.ExistentialDeposit --json | jq
 
 Works offline from cached metadata after the first fetch. The chain is required. Prefer the chain-prefix-on-target form (`dot inspect polkadot.System`); `--chain` is equivalent. Note that `dot polkadot.inspect.X` does **not** parse — `inspect` is a top-level command, not a dotpath category.
 
+Output is **width-aware**: short type signatures stay on a single line, longer ones expand across multiple lines with field names aligned. Composite struct fields, enum variants, and call arguments are color-coded (cyan field names, yellow primitives, magenta container keywords like `Vec`/`Option`, green enum variants) when stdout is a TTY; piped output stays plain.
+
 ```bash
 # Pallet detail — list storage, constants, calls, events, and errors
 dot inspect polkadot.System
@@ -639,18 +641,32 @@ dot inspect polkadot.System
 # System Pallet
 #
 #   Storage Items:
-#     Account: AccountId32 → { nonce: u32, consumers: u32, ... }    [map]
+#     Account [map]
+#       Key:   AccountId32
+#       Value: {
+#         nonce      : u32,
+#         consumers  : u32,
+#         providers  : u32,
+#         sufficients: u32,
+#         data       : { free: u128, reserved: u128, frozen: u128, flags: u128 },
+#       }
 #         The full account information for a particular account ID.
 #     ...
 
-# Storage item detail — full type and docs
+# Storage item detail — full type and docs (each part on its own line)
 dot inspect polkadot.System.Account
 # Output:
 # System.Account (Storage)
 #
-#   Type: map
-#   Value: { nonce: u32, consumers: u32, providers: u32, sufficients: u32, data: { free: u128, ... } }
-#   Key: AccountId32
+#   Type:  map
+#   Key:   AccountId32
+#   Value: {
+#     nonce      : u32,
+#     consumers  : u32,
+#     providers  : u32,
+#     sufficients: u32,
+#     data       : { free: u128, reserved: u128, frozen: u128, flags: u128 },
+#   }
 #
 #   The full account information for a particular account ID.
 
@@ -678,11 +694,29 @@ All listings — pallets, storage items, constants, calls, events, and errors �
 
 The pallet listing view shows type information inline so you can understand item shapes at a glance:
 
-- **Storage**: key/value types with `[map]` tag for map items (e.g. `Account: AccountId32 → { nonce: u32, ... }    [map]`)
+- **Storage**: name with optional `[map]` tag, followed by indented `Key:` / `Value:` lines (composite values expand to one field per line when wide)
 - **Constants**: the constant's type (e.g. `ExistentialDeposit: u128`)
-- **Calls**: full argument signature (e.g. `transfer_allow_death(dest: enum(5 variants), value: Compact<u128>)`)
-- **Events**: field signature (e.g. `Transfer(from: AccountId32, to: AccountId32, amount: u128)`)
+- **Calls**: argument signature inline if it fits, otherwise one argument per line with names aligned by colon
+- **Events**: field signature inline if it fits, otherwise one field per line
 - **Errors**: name and documentation (e.g. `InsufficientBalance`)
+
+Long call signatures expand automatically:
+
+```bash
+dot inspect polkadot.Referenda
+# Output (excerpt):
+#   cancel(index: u32)
+#       Cancel an ongoing referendum.
+#   ...
+#   submit(
+#     proposal_origin : system | Origins | ParachainsOrigin | XcmPallet,
+#     proposal        : Legacy | Inline | Lookup,
+#     enactment_moment: At | After,
+#   )
+#       Propose a referendum on a privileged action.
+```
+
+Enums up to 24 variants now render as `A | B | C | …` (previously variants were collapsed to `enum(N variants)` for >4); only enums with more than 24 variants are still summarized for readability. So a transaction extension's value type like `Option<AsPersonalAliasWithAccount | AsPersonalAliasWithProof | …>` now spells out the variants you actually need to construct.
 
 Documentation from the runtime metadata is shown on an indented line below each item. The detail view (`dot inspect Balances.transfer_allow_death`) shows the full argument signature and complete documentation text. Use call inspection to discover argument names, types, and docs before constructing `dot tx` commands.
 
@@ -934,13 +968,17 @@ The detail view shows the extension's value type, its `additionalSigned` type, a
 Build, sign, and submit transactions. Pass a `Pallet.Call` with arguments, or a raw SCALE-encoded call hex (e.g. from a multisig proposal or governance). Both forms display a decoded human-readable representation of the call.
 
 ```bash
-# Estimate fees without submitting (no broadcast)
+# Estimate fees without submitting (no broadcast). The Decode block shows
+# the call name on the header line and indented JSON below it.
 dot polkadot.tx.System.remark 0xdeadbeef --from alice --dry-run
 # Output:
 #   Chain:  polkadot
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0x000010deadbeef
-#   Decode: System.remark { remark: 0xdeadbeef }
+#   Decode: System.remark
+#     {
+#       "remark": "0xdeadbeef"
+#     }
 #   Estimated fees: 125598975
 
 # Transfer (amount in plancks). Method names are snake_case.
@@ -952,15 +990,28 @@ dot polkadot.tx.System.remark 0xdeadbeef --from alice
 # Submit a raw SCALE-encoded call (e.g. from a multisig proposal or another tool)
 dot polkadot.tx 0x000010deadbeef --from alice --dry-run
 
-# Batch multiple remarks with Utility.batch_all (comma-separated encoded calls)
+# Batch multiple remarks with Utility.batch_all (comma-separated encoded calls).
+# Complex decoded calls remain readable because each level is indented.
 A=$(dot polkadot.tx.System.remark 0xdeadbeef --encode)
 B=$(dot polkadot.tx.System.remark 0xcafe --encode)
 dot polkadot.tx.Utility.batch_all "$A,$B" --from alice --dry-run
-# Output:
+# Output (excerpt — nested calls each get their own enum {type, value} envelope):
 #   Chain:  polkadot
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0x1a0208000010deadbeef000008cafe
-#   Decode: Utility.batch_all { calls: [System(remark( { remark: 0xdeadbeef })), System(remark( { remark: 0xcafe }))] }
+#   Decode: Utility.batch_all
+#     {
+#       "calls": [
+#         {
+#           "type": "System",
+#           "value": {
+#             "type": "remark",
+#             "value": { "remark": "0xdeadbeef" }
+#           }
+#         },
+#         ...
+#       ]
+#     }
 #   Estimated fees: 133994995
 ```
 
@@ -982,7 +1033,11 @@ dot polkadot.tx.Utility.dispatch_as 'system(Authorized)' $(dot polkadot.tx.Syste
 #   Chain:  polkadot
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0x1a030003000008cafe
-#   Decode: Utility.dispatch_as { as_origin: system(Authorized), call: System(remark( { remark: 0xcafe })) }
+#   Decode: Utility.dispatch_as
+#     {
+#       "as_origin": { "type": "system", "value": { "type": "Authorized" } },
+#       "call":      { "type": "System", "value": { "type": "remark", "value": { "remark": "0xcafe" } } }
+#     }
 #   Estimated fees: 127644270
 
 # Nested enums work too — Signed origin with an account
@@ -1019,7 +1074,10 @@ dot paseo-asset-hub.tx.Sudo.sudo $(dot paseo-asset-hub.tx.System.remark 0xcafe -
 #   Chain:  paseo-asset-hub
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0xfb00000008cafe
-#   Decode: Sudo.sudo { call: System(remark( { remark: 0xcafe })) }
+#   Decode: Sudo.sudo
+#     {
+#       "call": { "type": "System", "value": { "type": "remark", "value": { "remark": "0xcafe" } } }
+#     }
 #   Estimated fees: ...
 ```
 
@@ -1062,20 +1120,19 @@ dot ./remark.yaml --encode                              # chain comes from the f
 
 `--to-yaml` / `--to-json` are mutually exclusive with each other and with `--encode` and `--dry-run`.
 
-Both dry-run and submission display the encoded call hex and a decoded human-readable form:
+Both dry-run and submission display the encoded call hex and a decoded human-readable form. The decoded call is rendered as JSON with two-space indentation under the `Decode:` header so even deeply nested calls (XCM, sudo, batch, dispatch_as) remain easy to scan:
 
 ```
-  Call:   0x0001076465616462656566
-  Decode: System.remark(remark: 0xdeadbeef)
+  Call:   0x000010deadbeef
+  Decode: System.remark
+    {
+      "remark": "0xdeadbeef"
+    }
   Tx:     0xabc123...
   Status: ok
 ```
 
-Complex calls (e.g. XCM teleports) that the primary decoder cannot handle are automatically decoded via a fallback path:
-
-```
-  Decode: PolkadotXcm.limited_teleport_assets { dest: V3 { parents: 1, interior: X1(Parachain(5140)) }, beneficiary: V3 { ... }, assets: V3 [...], fee_asset_item: 0, weight_limit: Unlimited }
-```
+Complex calls (XCM teleports, batched governance proposals) keep the same shape — every nested enum becomes a `{ "type": ..., "value": ... }` block, indented one level deeper, so you can read the structure top-down without it ever wrapping past the terminal width.
 
 #### Exit codes
 

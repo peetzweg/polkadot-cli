@@ -154,13 +154,19 @@ Three-way semantics:
 ## Submitting Transactions
 
 ```bash
-# Dry-run a transfer — no broadcast, just estimate fees
+# Dry-run a transfer — no broadcast, just estimate fees. The Decode block
+# renders the call as indented JSON under the `Pallet.call` header, so even
+# deeply nested calls (Sudo, batch, XCM) stay readable.
 dot polkadot.tx.Balances.transfer_keep_alive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000 --from alice --dry-run
 # Output:
 #   Chain:  polkadot
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0x050300...02286bee
-#   Decode: Balances.transfer_keep_alive { dest: Id(5FHneW46...), value: 1000000000 }
+#   Decode: Balances.transfer_keep_alive
+#     {
+#       "dest": { "type": "Id", "value": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty" },
+#       "value": 1000000000
+#     }
 #   Estimated fees: 158403157
 
 # Submit (omit --dry-run). Method names are snake_case as defined in the runtime.
@@ -183,7 +189,10 @@ dot paseo-asset-hub.tx.Sudo.sudo "$CALL" --from alice --dry-run
 #   Chain:  paseo-asset-hub
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0xfb00000010deadbeef
-#   Decode: Sudo.sudo { call: System(remark( { remark: 0xdeadbeef })) }
+#   Decode: Sudo.sudo
+#     {
+#       "call": { "type": "System", "value": { "type": "remark", "value": { "remark": "0xdeadbeef" } } }
+#     }
 #   Estimated fees: 7424769
 ```
 
@@ -264,6 +273,8 @@ The default fetch always hits the chain and updates the local fingerprint sideca
 
 `inspect` is a top-level command, **not** a dotpath category. `dot <chain>.inspect...` does not parse. The recommended form puts the chain on the *target*:
 
+Output is **width-aware**: short signatures stay on one line, long ones expand across multiple lines with field names aligned by colon. Composite values are color-coded when stdout is a TTY; piped output stays plain.
+
 ```bash
 # Pallet detail — list storage, constants, calls, events, errors
 dot inspect polkadot.System
@@ -271,20 +282,46 @@ dot inspect polkadot.System
 # System Pallet
 #
 #   Storage Items:
-#     Account: AccountId32 → { nonce: u32, ... }    [map]
+#     Account [map]
+#       Key:   AccountId32
+#       Value: {
+#         nonce      : u32,
+#         consumers  : u32,
+#         providers  : u32,
+#         sufficients: u32,
+#         data       : { free: u128, reserved: u128, frozen: u128, flags: u128 },
+#       }
 #         The full account information for a particular account ID.
 #     ...
 
-# Storage item detail
+# Storage item detail — Type/Key/Value on separate lines, composite values expand
 dot inspect polkadot.System.Account
 # Output:
 # System.Account (Storage)
 #
-#   Type: map
-#   Value: { nonce: u32, consumers: u32, ... }
-#   Key: AccountId32
+#   Type:  map
+#   Key:   AccountId32
+#   Value: {
+#     nonce      : u32,
+#     consumers  : u32,
+#     providers  : u32,
+#     sufficients: u32,
+#     data       : { free: u128, reserved: u128, frozen: u128, flags: u128 },
+#   }
 #
 #   The full account information for a particular account ID.
+
+# Long call signatures expand across lines
+dot inspect polkadot.Referenda.submit
+# Output:
+# Referenda.submit (Call)
+#
+#   Args: (
+#     proposal_origin : system | Origins | ParachainsOrigin | XcmPallet,
+#     proposal        : Legacy | Inline | Lookup,
+#     enactment_moment: At | After,
+#   )
+#   ...
 
 # To list all pallets on a chain, use --chain (a single positional is read as a pallet name)
 dot inspect --chain polkadot
@@ -292,7 +329,7 @@ dot inspect --chain polkadot
 
 A single positional arg is always treated as a pallet name, so `dot inspect polkadot` does **not** list pallets on the `polkadot` chain — use `--chain polkadot` for that.
 
-Useful for discovering enum variants: when a method signature shows `enum(N variants)`, run `dot inspect <Pallet>.<Item> --chain <name>` on a storage item that uses the same type, or `--dump` a storage map and read back the shape from a real entry.
+Enum-variant visibility: enums up to **24 variants** now show variant names inline (e.g. `system | Origins | ParachainsOrigin | XcmPallet`). Only enums with more than 24 variants collapse to `enum(N variants)`. When that summary appears, drill into a storage item that uses the same type with `dot inspect <Pallet>.<Item> --chain <name>` (it'll expand the inner type), or `--dump` a real entry to read back the shape.
 
 ## Account Management
 

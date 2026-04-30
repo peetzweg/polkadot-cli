@@ -4,7 +4,6 @@ import type { MetadataBundle, PalletInfo } from "../core/metadata.ts";
 import {
   describeCallArgs,
   describeEventFields,
-  describeRuntimeApiMethodArgs,
   describeSignedExtension,
   describeType,
   fetchMetadataFromChain,
@@ -31,6 +30,12 @@ import {
   printItem,
   RESET,
 } from "../core/output.ts";
+import {
+  prettyCallArgs,
+  prettyEventFields,
+  prettyRuntimeApiArgs,
+  prettyTypeById,
+} from "../core/pretty-type.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import type { DotCategory } from "../utils/parse-dot-path.ts";
 
@@ -137,8 +142,11 @@ export async function handleCalls(
 
     printHeading(`${pallet.name} Calls`);
     for (const c of pallet.calls) {
-      const args = describeCallArgs(meta, pallet.name, c.name);
-      console.log(`  ${CYAN}${c.name}${RESET}${DIM}${args}${RESET}`);
+      const args = prettyCallArgs(meta, pallet.name, c.name, {
+        indent: 2,
+        prefix: c.name.length,
+      });
+      console.log(`  ${CYAN}${c.name}${RESET}${args}`);
       const summary = firstSentence(c.docs);
       if (summary) {
         console.log(`      ${DIM}${summary}${RESET}`);
@@ -169,7 +177,10 @@ export async function handleCalls(
   }
 
   printHeading(`${pallet.name}.${callItem.name} (Call)`);
-  const args = describeCallArgs(meta, pallet.name, callItem.name);
+  const args = prettyCallArgs(meta, pallet.name, callItem.name, {
+    indent: 2,
+    prefix: 6, // "Args: "
+  });
   console.log(`  ${BOLD}Args:${RESET} ${args}`);
   if (callItem.docs.length) {
     console.log();
@@ -244,8 +255,11 @@ export async function handleEvents(
 
     printHeading(`${pallet.name} Events`);
     for (const e of pallet.events) {
-      const fields = describeEventFields(meta, pallet.name, e.name);
-      console.log(`  ${CYAN}${e.name}${RESET}${DIM}${fields}${RESET}`);
+      const fields = prettyEventFields(meta, pallet.name, e.name, {
+        indent: 2,
+        prefix: e.name.length,
+      });
+      console.log(`  ${CYAN}${e.name}${RESET}${fields}`);
       const summary = firstSentence(e.docs);
       if (summary) {
         console.log(`      ${DIM}${summary}${RESET}`);
@@ -276,7 +290,10 @@ export async function handleEvents(
   }
 
   printHeading(`${pallet.name}.${eventItem.name} (Event)`);
-  const fields = describeEventFields(meta, pallet.name, eventItem.name);
+  const fields = prettyEventFields(meta, pallet.name, eventItem.name, {
+    indent: 2,
+    prefix: 8, // "Fields: "
+  });
   console.log(`  ${BOLD}Fields:${RESET} ${fields}`);
   if (eventItem.docs.length) {
     console.log();
@@ -450,15 +467,21 @@ export async function handleStorage(
 
     printHeading(`${pallet.name} Storage`);
     for (const s of pallet.storage) {
-      const valueType = describeType(meta.lookup, s.valueTypeId);
-      let typeSuffix: string;
-      if (s.keyTypeId != null) {
-        const keyType = describeType(meta.lookup, s.keyTypeId);
-        typeSuffix = `: ${keyType} → ${valueType}    [map]`;
-      } else {
-        typeSuffix = `: ${valueType}`;
+      const isMap = s.keyTypeId != null;
+      const tag = isMap ? `${DIM} [map]${RESET}` : "";
+      console.log(`  ${CYAN}${s.name}${RESET}${tag}`);
+      if (isMap) {
+        const keyType = prettyTypeById(meta.lookup, s.keyTypeId!, {
+          indent: 4,
+          prefix: 5, // "Key: "
+        });
+        console.log(`    ${DIM}Key:${RESET}   ${keyType}`);
       }
-      console.log(`  ${CYAN}${s.name}${RESET}${DIM}${typeSuffix}${RESET}`);
+      const valueType = prettyTypeById(meta.lookup, s.valueTypeId, {
+        indent: 4,
+        prefix: 7, // "Value: "
+      });
+      console.log(`    ${DIM}Value:${RESET} ${valueType}`);
       const summary = firstSentence(s.docs);
       if (summary) {
         console.log(`      ${DIM}${summary}${RESET}`);
@@ -494,11 +517,19 @@ export async function handleStorage(
   }
 
   printHeading(`${pallet.name}.${storageItem.name} (Storage)`);
-  console.log(`  ${BOLD}Type:${RESET} ${storageItem.type}`);
-  console.log(`  ${BOLD}Value:${RESET} ${describeType(meta.lookup, storageItem.valueTypeId)}`);
+  console.log(`  ${BOLD}Type:${RESET}  ${storageItem.type}`);
   if (storageItem.keyTypeId != null) {
-    console.log(`  ${BOLD}Key:${RESET} ${describeType(meta.lookup, storageItem.keyTypeId)}`);
+    const keyType = prettyTypeById(meta.lookup, storageItem.keyTypeId, {
+      indent: 2,
+      prefix: 7, // "Key:   "
+    });
+    console.log(`  ${BOLD}Key:${RESET}   ${keyType}`);
   }
+  const valueType = prettyTypeById(meta.lookup, storageItem.valueTypeId, {
+    indent: 2,
+    prefix: 7, // "Value: "
+  });
+  console.log(`  ${BOLD}Value:${RESET} ${valueType}`);
   if (storageItem.docs.length) {
     console.log();
     printDocs(storageItem.docs);
@@ -541,9 +572,15 @@ export async function showItemHelp(
     }
 
     printHeading(`${api.name}.${method.name} (Runtime API)`);
-    const argStr = describeRuntimeApiMethodArgs(meta, method);
-    const retStr = describeType(meta.lookup, method.output);
-    console.log(`  ${BOLD}Args:${RESET} ${argStr}`);
+    const argStr = prettyRuntimeApiArgs(meta.lookup, method.inputs, {
+      indent: 2,
+      prefix: 9, // "Args:    " (4 spaces) — value starts at column 11
+    });
+    const retStr = prettyTypeById(meta.lookup, method.output, {
+      indent: 2,
+      prefix: 9, // "Returns: " — value starts at column 11
+    });
+    console.log(`  ${BOLD}Args:${RESET}    ${argStr}`);
     console.log(`  ${BOLD}Returns:${RESET} ${retStr}`);
     if (method.docs.length) {
       console.log();
@@ -592,7 +629,10 @@ export async function showItemHelp(
         throw new Error(suggestMessage(`call in ${pallet.name}`, itemName!, names));
       }
       printHeading(`${pallet.name}.${callItem.name} (Call)`);
-      const args = describeCallArgs(meta, pallet.name, callItem.name);
+      const args = prettyCallArgs(meta, pallet.name, callItem.name, {
+        indent: 2,
+        prefix: 6, // "Args: "
+      });
       console.log(`  ${BOLD}Args:${RESET} ${args}`);
       if (callItem.docs.length) {
         console.log();
@@ -622,11 +662,19 @@ export async function showItemHelp(
         throw new Error(suggestMessage(`storage item in ${pallet.name}`, itemName!, names));
       }
       printHeading(`${pallet.name}.${storageItem.name} (Storage)`);
-      console.log(`  ${BOLD}Type:${RESET} ${storageItem.type}`);
-      console.log(`  ${BOLD}Value:${RESET} ${describeType(meta.lookup, storageItem.valueTypeId)}`);
+      console.log(`  ${BOLD}Type:${RESET}  ${storageItem.type}`);
       if (storageItem.keyTypeId != null) {
-        console.log(`  ${BOLD}Key:${RESET} ${describeType(meta.lookup, storageItem.keyTypeId)}`);
+        const keyType = prettyTypeById(meta.lookup, storageItem.keyTypeId, {
+          indent: 2,
+          prefix: 7, // "Key:   "
+        });
+        console.log(`  ${BOLD}Key:${RESET}   ${keyType}`);
       }
+      const valueType = prettyTypeById(meta.lookup, storageItem.valueTypeId, {
+        indent: 2,
+        prefix: 7, // "Value: "
+      });
+      console.log(`  ${BOLD}Value:${RESET} ${valueType}`);
       if (storageItem.docs.length) {
         console.log();
         printDocs(storageItem.docs);
@@ -660,7 +708,11 @@ export async function showItemHelp(
         throw new Error(suggestMessage(`constant in ${pallet.name}`, itemName!, names));
       }
       printHeading(`${pallet.name}.${constItem.name} (Constant)`);
-      console.log(`  ${BOLD}Type:${RESET} ${describeType(meta.lookup, constItem.typeId)}`);
+      const constType = prettyTypeById(meta.lookup, constItem.typeId, {
+        indent: 2,
+        prefix: 6, // "Type: "
+      });
+      console.log(`  ${BOLD}Type:${RESET} ${constType}`);
       if (constItem.docs.length) {
         console.log();
         printDocs(constItem.docs);
@@ -679,7 +731,10 @@ export async function showItemHelp(
         throw new Error(suggestMessage(`event in ${pallet.name}`, itemName!, names));
       }
       printHeading(`${pallet.name}.${eventItem.name} (Event)`);
-      const fields = describeEventFields(meta, pallet.name, eventItem.name);
+      const fields = prettyEventFields(meta, pallet.name, eventItem.name, {
+        indent: 2,
+        prefix: 8, // "Fields: "
+      });
       console.log(`  ${BOLD}Fields:${RESET} ${fields}`);
       if (eventItem.docs.length) {
         console.log();
@@ -771,8 +826,16 @@ export async function handleExtensions(
   }
 
   printHeading(`${described.identifier} (Transaction Extension)`);
-  console.log(`  ${BOLD}Value type:${RESET}       ${described.valueType}`);
-  console.log(`  ${BOLD}AdditionalSigned:${RESET} ${described.additionalSignedType}`);
+  const valueType = prettyTypeById(meta.lookup, described.valueTypeId, {
+    indent: 2,
+    prefix: 18, // "Value type:       " — value starts at column 20
+  });
+  const addSigType = prettyTypeById(meta.lookup, described.additionalSignedTypeId, {
+    indent: 2,
+    prefix: 18, // "AdditionalSigned: " — value starts at column 20
+  });
+  console.log(`  ${BOLD}Value type:${RESET}       ${valueType}`);
+  console.log(`  ${BOLD}AdditionalSigned:${RESET} ${addSigType}`);
   console.log(
     `  ${BOLD}Handled by:${RESET}       ${described.isBuiltin ? "polkadot-api (builtin)" : "user (custom — provide via --ext)"}`,
   );
