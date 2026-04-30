@@ -571,6 +571,25 @@ describe("item-level --help", () => {
     expect(stdout).toContain("(Runtime API)");
     expect(stdout).toContain("Usage:");
   });
+
+  test("runtime API detail uses pretty-printed Args / Returns blocks", async () => {
+    const { stdout, exitCode } = await runCli(["apis.Core.execute_block", "--help"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Runtime API)");
+    expect(stdout).toMatch(/Args:\s+/);
+    expect(stdout).toMatch(/Returns:\s+/);
+    // No truncation of long types
+    expect(stdout).not.toMatch(/\.\.\./);
+  });
+
+  test("transaction extension detail page renders pretty Value type (no truncation)", async () => {
+    const { stdout, exitCode } = await runCli(["extensions.CheckMortality"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("(Transaction Extension)");
+    expect(stdout).toMatch(/Value type:\s+/);
+    expect(stdout).toMatch(/AdditionalSigned:\s+/);
+    expect(stdout).not.toMatch(/\.\.\./);
+  });
 });
 
 describe("stdout/stderr separation (pipe-safe output)", () => {

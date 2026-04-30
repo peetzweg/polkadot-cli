@@ -152,9 +152,10 @@ describe("dot inspect", () => {
     const { stdout, exitCode } = await runCli(["inspect", "Balances"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("transfer_allow_death");
-    // Calls should show argument signatures
-    expect(stdout).toContain("dest:");
-    expect(stdout).toContain("value:");
+    // Calls should show argument signatures (names may be padded for alignment
+    // when expanded across multiple lines).
+    expect(stdout).toMatch(/dest\s*:/);
+    expect(stdout).toMatch(/value\s*:/);
   });
 
   test("call detail view", async () => {
@@ -180,10 +181,10 @@ describe("dot inspect", () => {
   test("storage listing shows map tag for map items", async () => {
     const { stdout, exitCode } = await runCli(["inspect", "System"]);
     expect(exitCode).toBe(0);
-    // Account is a map storage item — should show [map] tag and arrow
+    // Account is a map storage item — should show [map] tag and a Key line
     expect(stdout).toContain("Account");
     expect(stdout).toContain("[map]");
-    expect(stdout).toContain("→");
+    expect(stdout).toMatch(/Key:\s+AccountId32/);
   });
 
   test("storage listing shows plain type without map tag", async () => {
@@ -223,16 +224,16 @@ describe("dot inspect", () => {
     expect(stdout).toContain("Transfer some liquid free balance");
   });
 
-  test("call listing shows doc on indented second line", async () => {
+  test("call listing shows doc on indented line below the signature", async () => {
     const { stdout, exitCode } = await runCli(["inspect", "Balances"]);
     expect(exitCode).toBe(0);
     const lines = stdout.split("\n");
-    // Match the actual call line (has opening paren), not a doc line that references the name
-    const callIdx = lines.findIndex((l: string) => l.includes("transfer_allow_death("));
-    expect(callIdx).toBeGreaterThan(-1);
-    const docLine = lines[callIdx + 1];
-    expect(docLine).toMatch(/^\s{8}/); // 8-space indent for doc line
-    expect(docLine).toContain("Transfer some liquid free balance");
+    // The doc line should be indented at 8 spaces and follow the signature
+    // (which may span multiple lines when it doesn't fit). Just find the
+    // doc line directly by its content.
+    const docLine = lines.find((l: string) => l.includes("Transfer some liquid free balance"));
+    expect(docLine).toBeDefined();
+    expect(docLine!).toMatch(/^\s{8}/);
   });
 
   test("docs appear on indented second line", async () => {
@@ -365,13 +366,13 @@ describe("dot inspect", () => {
   test("type strings are not truncated at 60 chars", async () => {
     const { stdout, exitCode } = await runCli(["inspect", "System"]);
     expect(exitCode).toBe(0);
-    // Account value type is well over 60 chars — should not end with "..."
-    expect(stdout).toContain("sufficients: u32, data:");
-    // Verify no "..." truncation artifacts in type strings
-    const lines = stdout.split("\n");
-    const accountLine = lines.find((l: string) => l.includes("Account") && l.includes("[map]"));
-    expect(accountLine).toBeDefined();
-    expect(accountLine).not.toMatch(/\.\.\./);
+    // Account value type is well over 60 chars — every field (incl. data, free,
+    // reserved) must still appear, and no truncation marker.
+    expect(stdout).toContain("sufficients");
+    expect(stdout).toContain("data");
+    expect(stdout).toContain("free");
+    expect(stdout).toContain("reserved");
+    expect(stdout).not.toMatch(/\.\.\./);
   });
 
   test("stdout has no progress messages (pipe-safe)", async () => {
@@ -490,5 +491,66 @@ describe("dot inspect", () => {
     const parsed = JSON.parse(stdout);
     expect(parsed.pallet).toBe("Balances");
     expect(parsed.category).toBe("error");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Pretty-print integration: width-aware multi-line layout
+  // ---------------------------------------------------------------------------
+  describe("pretty-printed output", () => {
+    test("storage detail with composite Value expands struct fields", async () => {
+      const { stdout, exitCode } = await runCli(["inspect", "System.Account"]);
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("(Storage)");
+      // Expanded struct fields appear on separate indented lines, aligned by colon
+      const lines = stdout.split("\n");
+      const fieldLines = lines.filter((l) => /^\s+\w+\s*:\s/.test(l) && !l.includes("Type:"));
+      const colonCols = fieldLines.map((l) => l.indexOf(":"));
+      // All child-field colons (skipping the "Key:" / "Value:" labels) must
+      // align in the same column when the struct expands.
+      const childCols = colonCols.filter((c) => c > 8);
+      if (childCols.length > 1) {
+        expect(new Set(childCols).size).toBe(1);
+      }
+    });
+
+    test("pallet listing shows long call signature on multiple lines", async () => {
+      const { stdout, exitCode } = await runCli(["inspect", "Referenda"]);
+      expect(exitCode).toBe(0);
+      // submit() args don't fit on 80 chars — should expand
+      expect(stdout).toMatch(/submit\(\s*\n/);
+      expect(stdout).toMatch(/proposal_origin\s*:\s+/);
+      expect(stdout).toMatch(/enactment_moment\s*:\s+/);
+    });
+
+    test("storage Map item shows separate Key/Value lines, no arrow", async () => {
+      const { stdout, exitCode } = await runCli(["inspect", "System.Account"]);
+      expect(exitCode).toBe(0);
+      expect(stdout).toMatch(/Key:\s+AccountId32/);
+      expect(stdout).toMatch(/Value:\s/);
+      expect(stdout).not.toContain("→");
+    });
+
+    test("call detail shows all arg names and aligned colons", async () => {
+      const { stdout, exitCode } = await runCli(["inspect", "Balances.transfer_allow_death"]);
+      expect(exitCode).toBe(0);
+      expect(stdout).toMatch(/dest\s*:/);
+      expect(stdout).toMatch(/value\s*:/);
+    });
+
+    test("plain JSON output unchanged — single-line type strings", async () => {
+      const { stdout, exitCode } = await runCli(["inspect", "System.Account", "--json"]);
+      expect(exitCode).toBe(0);
+      const parsed = JSON.parse(stdout);
+      // JSON `valueType` must remain a single-line string (no embedded newlines)
+      expect(parsed.valueType).toBeDefined();
+      expect(parsed.valueType.split("\n").length).toBe(1);
+      expect(parsed.valueType).toContain("nonce");
+    });
+
+    test("pretty output contains no ANSI escapes when stdout is piped", async () => {
+      const { stdout } = await runCli(["inspect", "Referenda"]);
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI strip
+      expect(stdout).not.toMatch(/\x1b\[[0-9;]*m/);
+    });
   });
 });

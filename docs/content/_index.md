@@ -847,6 +847,8 @@ Browse chain metadata offline (uses the cached copy after the first fetch). Show
 
 The chain is required: pass it with `--chain` or as a prefix on the inspect target (e.g. `dot inspect polkadot.System`).
 
+Output is **width-aware**: short type signatures stay on a single line, long ones expand across multiple lines with field names aligned by colon. Composite struct fields and call arguments are color-coded (cyan field names, yellow primitives, magenta container keywords like `Vec`/`Option`, green enum variants) when stdout is a TTY; piped output stays plain.
+
 ```
 # Pallet detail — list storage, constants, calls, events, errors
 dot inspect polkadot.System
@@ -854,23 +856,47 @@ dot inspect polkadot.System
 # System Pallet
 #
 #   Storage Items:
-#     Account: AccountId32 → { nonce: u32, consumers: u32, ... }    [map]
+#     Account [map]
+#       Key:   AccountId32
+#       Value: {
+#         nonce      : u32,
+#         consumers  : u32,
+#         providers  : u32,
+#         sufficients: u32,
+#         data       : { free: u128, reserved: u128, frozen: u128, flags: u128 },
+#       }
 #         The full account information for a particular account ID.
 #     ...
 
-# Storage item detail
+# Storage item detail — Type / Key / Value on separate lines, composite Value expands
 dot inspect polkadot.System.Account
 # Output:
 # System.Account (Storage)
 #
-#   Type: map
-#   Value: { nonce: u32, consumers: u32, providers: u32, sufficients: u32, data: { free: u128, ... } }
-#   Key: AccountId32
+#   Type:  map
+#   Key:   AccountId32
+#   Value: {
+#     nonce      : u32,
+#     consumers  : u32,
+#     providers  : u32,
+#     sufficients: u32,
+#     data       : { free: u128, reserved: u128, frozen: u128, flags: u128 },
+#   }
 #
 #   The full account information for a particular account ID.
 
-# Call detail
-dot inspect polkadot.Balances.transfer_allow_death
+# Call detail — long signatures expand across lines with names aligned
+dot inspect polkadot.Referenda.submit
+# Output:
+# Referenda.submit (Call)
+#
+#   Args: (
+#     proposal_origin : system | Origins | ParachainsOrigin | XcmPallet,
+#     proposal        : Legacy | Inline | Lookup,
+#     enactment_moment: At | After,
+#   )
+#
+#   Propose a referendum on a privileged action.
 
 # Event detail
 dot inspect polkadot.Balances.Transfer
@@ -895,13 +921,21 @@ All listings — pallets, storage items, constants, calls, events, and errors �
 
 When inspecting a pallet (e.g. `dot inspect Balances`), each item shows type information inline so you can understand the shape without drilling into the detail view:
 
-**Storage items** show key and value types. Map items include a `[map]` tag:
+**Storage items** show name + optional `[map]` tag with `Key:` and `Value:` on indented lines below. Composite values expand to one field per line when wide:
 
 ```
   Storage Items:
-    Account: AccountId32 → { free: u128, reserved: u128, frozen: u128, flags: u128 }    [map]
+    Account [map]
+      Key:   AccountId32
+      Value: {
+        free    : u128,
+        reserved: u128,
+        frozen  : u128,
+        flags   : u128,
+      }
         The Balances pallet example of storing the balance of an account.
-    TotalIssuance: u128
+    TotalIssuance
+      Value: u128
         The total units issued in the system.
 ```
 
@@ -915,14 +949,21 @@ When inspecting a pallet (e.g. `dot inspect Balances`), each item shows type inf
         The maximum number of locks that should exist on an account.
 ```
 
-**Calls** show their full argument signature:
+**Calls** show their full argument signature inline if it fits, otherwise across multiple lines with names aligned:
 
 ```
   Calls:
-    transfer_allow_death(dest: enum(5 variants), value: Compact<u128>)
+    transfer_allow_death(dest: Id | Index | Raw | Address32 | Address20, value: Compact<u128>)
         Transfer some liquid free balance to another account.
-    force_transfer(source: enum(5 variants), dest: enum(5 variants), value: Compact<u128>)
+    submit(
+      proposal_origin : system | Origins | ParachainsOrigin | XcmPallet,
+      proposal        : Legacy | Inline | Lookup,
+      enactment_moment: At | After,
+    )
+        Propose a referendum on a privileged action.
 ```
+
+Enums up to 24 variants render as `A | B | C | …` (variants visible). Only enums with more than 24 variants are still summarized as `enum(N variants)` for readability.
 
 **Events** show their field signature:
 
@@ -1243,13 +1284,17 @@ Build, sign, and submit extrinsics using dot-path syntax: `dot tx.Pallet.Call`. 
 Use the chain-prefix dotpath form. Method names are snake_case as defined in the runtime metadata.
 
 ```
-# Estimate fees without submitting (no broadcast)
+# Estimate fees without submitting (no broadcast). The Decode block shows the
+# call name on the header line and indented JSON for its arguments below.
 dot polkadot.tx.System.remark 0xdeadbeef --from alice --dry-run
 # Output:
 #   Chain:  polkadot
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0x000010deadbeef
-#   Decode: System.remark { remark: 0xdeadbeef }
+#   Decode: System.remark
+#     {
+#       "remark": "0xdeadbeef"
+#     }
 #   Estimated fees: 125598975
 
 # Transfer (amount in plancks)
@@ -1279,7 +1324,10 @@ dot polkadot.tx 0x000010deadbeef --from alice --dry-run
 #   Chain:  polkadot
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0x000010deadbeef
-#   Decode: System.remark { remark: 0xdeadbeef }
+#   Decode: System.remark
+#     {
+#       "remark": "0xdeadbeef"
+#     }
 #   Estimated fees: 125598975
 ```
 
@@ -1294,11 +1342,20 @@ B=$(dot polkadot.tx.System.remark 0xcafe --encode)
 
 # Batch them (comma-separated encoded calls)
 dot polkadot.tx.Utility.batch_all "$A,$B" --from alice --dry-run
-# Output:
+# Output (excerpt — each nested call gets its own enum {type, value} envelope):
 #   Chain:  polkadot
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0x1a0208000010deadbeef000008cafe
-#   Decode: Utility.batch_all { calls: [System(remark( { remark: 0xdeadbeef })), System(remark( { remark: 0xcafe }))] }
+#   Decode: Utility.batch_all
+#     {
+#       "calls": [
+#         {
+#           "type": "System",
+#           "value": { "type": "remark", "value": { "remark": "0xdeadbeef" } }
+#         },
+#         ...
+#       ]
+#     }
 #   Estimated fees: 133994995
 ```
 
@@ -1319,7 +1376,11 @@ dot polkadot.tx.Utility.dispatch_as 'system(Authorized)' "$INNER" --from alice -
 #   Chain:  polkadot
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0x1a030003000008cafe
-#   Decode: Utility.dispatch_as { as_origin: system(Authorized), call: System(remark( { remark: 0xcafe })) }
+#   Decode: Utility.dispatch_as
+#     {
+#       "as_origin": { "type": "system", "value": { "type": "Authorized" } },
+#       "call":      { "type": "System", "value": { "type": "remark", "value": { "remark": "0xcafe" } } }
+#     }
 #   Estimated fees: 127644270
 ```
 
@@ -1357,7 +1418,10 @@ dot paseo-asset-hub.tx.Sudo.sudo $(dot paseo-asset-hub.tx.System.remark 0xcafe -
 #   Chain:  paseo-asset-hub
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0xfb00000008cafe
-#   Decode: Sudo.sudo { call: System(remark( { remark: 0xcafe })) }
+#   Decode: Sudo.sudo
+#     {
+#       "call": { "type": "System", "value": { "type": "remark", "value": { "remark": "0xcafe" } } }
+#     }
 #   Estimated fees: ...
 ```
 
@@ -1404,19 +1468,29 @@ dot ./remark.yaml --encode                              # chain comes from the f
 
 ### Transaction output
 
-Both dry-run and submission display the encoded call hex and a decoded human-readable form:
+Both dry-run and submission display the encoded call hex and a decoded human-readable form. The decoded call is rendered as JSON with two-space indentation under the `Decode:` header so even deeply nested calls remain easy to scan:
 
 ```
-  Call:   0x0001076465616462656566
-  Decode: System.remark(remark: 0xdeadbeef)
+  Call:   0x000010deadbeef
+  Decode: System.remark
+    {
+      "remark": "0xdeadbeef"
+    }
   Tx:     0xabc123...
   Status: ok
 ```
 
-Complex calls (e.g. XCM teleports) that the primary decoder cannot handle are automatically decoded via a fallback path:
+Complex calls (XCM teleports, batched governance proposals, sudo wrappers) keep the same shape — every nested enum becomes a `{ "type": ..., "value": ... }` block, indented one level deeper, so you can read the structure top-down without it ever wrapping past the terminal width:
 
 ```
-  Decode: PolkadotXcm.limited_teleport_assets { dest: V3 { parents: 1, interior: X1(Parachain(5140)) }, beneficiary: V3 { ... }, assets: V3 [...], fee_asset_item: 0, weight_limit: Unlimited }
+  Decode: PolkadotXcm.limited_teleport_assets
+    {
+      "dest": {
+        "type": "V3",
+        "value": { "parents": 1, "interior": { "type": "X1", "value": { "type": "Parachain", "value": 5140 } } }
+      },
+      ...
+    }
 ```
 
 ### Exit codes
@@ -1551,7 +1625,11 @@ dot polkadot-asset-hub.tx.Balances.transfer_keep_alive bob 1000000000 \
 #   Chain:  polkadot-asset-hub
 #   From:   alice (5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
 #   Call:   0x0a0300d435...02286bee
-#   Decode: Balances.transfer_keep_alive { dest: Id(...), value: 1000000000 }
+#   Decode: Balances.transfer_keep_alive
+#     {
+#       "dest": { "type": "Id", "value": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty" },
+#       "value": 1000000000
+#     }
 #   Asset:  {"parents":0,"interior":{"type":"X2","value":[{"type":"PalletInstance","value":50},{"type":"GeneralIndex","value":"1337"}]}}
 #   Estimated fees: 9249754
 

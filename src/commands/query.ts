@@ -20,6 +20,7 @@ import {
   printResult,
   RESET,
 } from "../core/output.ts";
+import { prettyTypeById } from "../core/pretty-type.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseValue } from "../utils/parse-value.ts";
 import { loadMeta, resolvePallet, showItemHelp } from "./focused-inspect.ts";
@@ -99,15 +100,21 @@ export async function handleQuery(
 
     printHeading(`${pallet.name} Storage`);
     for (const s of pallet.storage) {
-      const valueType = describeType(meta.lookup, s.valueTypeId);
-      let typeSuffix: string;
-      if (s.keyTypeId != null) {
-        const keyType = describeType(meta.lookup, s.keyTypeId);
-        typeSuffix = `: ${keyType} → ${valueType}    [map]`;
-      } else {
-        typeSuffix = `: ${valueType}`;
+      const isMap = s.keyTypeId != null;
+      const tag = isMap ? `${DIM} [map]${RESET}` : "";
+      console.log(`  ${CYAN}${s.name}${RESET}${tag}`);
+      if (isMap) {
+        const keyType = prettyTypeById(meta.lookup, s.keyTypeId!, {
+          indent: 4,
+          prefix: 5, // "Key: "
+        });
+        console.log(`    ${DIM}Key:${RESET}   ${keyType}`);
       }
-      console.log(`  ${CYAN}${s.name}${RESET}${DIM}${typeSuffix}${RESET}`);
+      const valueType = prettyTypeById(meta.lookup, s.valueTypeId, {
+        indent: 4,
+        prefix: 7, // "Value: "
+      });
+      console.log(`    ${DIM}Value:${RESET} ${valueType}`);
       const summary = firstSentence(s.docs);
       if (summary) {
         console.log(`      ${DIM}${summary}${RESET}`);

@@ -110,6 +110,10 @@ export async function handleApis(
 
     printHeading(`${api.name} Methods`);
     for (const m of api.methods) {
+      // Listing view: keep signatures compact (single-line) regardless of width
+      // so the API overview stays scannable. Use the focused detail page
+      // (`dot <chain>.apis.<Api>.<method> --help`) for the pretty-printed
+      // multi-line breakdown of complex args / return types.
       const argStr = describeRuntimeApiMethodArgs(meta, m);
       const retStr = describeType(meta.lookup, m.output);
       console.log(`  ${CYAN}${m.name}${RESET}${DIM}${argStr} → ${retStr}${RESET}`);
