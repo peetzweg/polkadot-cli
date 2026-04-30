@@ -14,7 +14,7 @@ import {
   type MetadataBundle,
   parseMetadata,
 } from "../core/metadata.ts";
-import { formatJson } from "../core/output.ts";
+import { formatJson, writeStdout } from "../core/output.ts";
 import { CliError } from "../utils/errors.ts";
 import type { RuntimeFingerprint } from "../utils/runtime-fingerprint.ts";
 
@@ -81,18 +81,6 @@ export async function handleMetadata(chain: string, opts: MetadataCommandOpts): 
   const meta = parseMetadata(rawBytes);
   const fingerprint = await loadMetadataFingerprint(chainName);
   await writeStdout(`${formatJson(buildMetadataPayload(chainName, meta, fingerprint))}\n`);
-}
-
-// Awaitable write to process.stdout — multi-MB JSON via console.log gets
-// truncated when piped on Linux because process.exit() doesn't wait for the
-// stream's userspace buffer to drain. The write-callback form fires after
-// the chunk has been handed to the OS, so awaiting it before the command
-// returns ensures the full payload reaches the reader. EPIPE is swallowed
-// — that's the reader closing early (e.g. `… | head -c 50`).
-function writeStdout(text: string): Promise<void> {
-  return new Promise<void>((resolve) => {
-    process.stdout.write(text, () => resolve());
-  });
 }
 
 export function registerMetadataCommand(cli: CAC) {

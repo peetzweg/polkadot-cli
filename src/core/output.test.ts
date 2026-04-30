@@ -7,6 +7,7 @@ import {
   isJsonOutput,
   printImportResults,
   Spinner,
+  writeStdout,
 } from "./output.ts";
 
 describe("formatJson", () => {
@@ -373,6 +374,69 @@ describe("printImportResults", () => {
     );
     expect(out).toContain("No accounts imported");
     expect(out).not.toContain("(dry run)");
+  });
+});
+
+describe("writeStdout", () => {
+  // Patches process.stdout.write to capture writes and control when the
+  // callback fires, so we can prove writeStdout's promise waits for it.
+  function patchManual(): {
+    captured: string[];
+    fireCallbacks: () => void;
+    restore: () => void;
+  } {
+    const captured: string[] = [];
+    const pendingCallbacks: Array<() => void> = [];
+    const original = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: unknown, ...rest: unknown[]) => {
+      captured.push(typeof chunk === "string" ? chunk : String(chunk));
+      const cb = rest.find((a) => typeof a === "function") as ((err?: Error) => void) | undefined;
+      if (cb) pendingCallbacks.push(cb);
+      return true;
+    }) as typeof process.stdout.write;
+    return {
+      captured,
+      fireCallbacks: () => {
+        for (const cb of pendingCallbacks.splice(0)) cb();
+      },
+      restore: () => {
+        process.stdout.write = original;
+      },
+    };
+  }
+
+  test("does not resolve until the write callback fires", async () => {
+    const { fireCallbacks, restore } = patchManual();
+    let resolved = false;
+    try {
+      const promise = writeStdout("payload\n").then(() => {
+        resolved = true;
+      });
+      // Yield once so any synchronous resolution would have set the flag.
+      await Promise.resolve();
+      expect(resolved).toBe(false);
+      fireCallbacks();
+      await promise;
+      expect(resolved).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  test("delivers the full text to process.stdout.write", async () => {
+    const { captured, fireCallbacks, restore } = patchManual();
+    try {
+      // Build a payload large enough to cross the Linux pipe buffer (~64 KiB).
+      const big = `${"x".repeat(70_000)}\n`;
+      const promise = writeStdout(big);
+      fireCallbacks();
+      await promise;
+      expect(captured.length).toBe(1);
+      expect(captured[0]!.length).toBe(big.length);
+      expect(captured[0]!.endsWith("\n")).toBe(true);
+    } finally {
+      restore();
+    }
   });
 });
 
