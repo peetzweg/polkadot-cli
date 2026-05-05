@@ -25,7 +25,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Chain topology — relay/parachain hierarchy with tree display and auto-detection
 - ✅ Batteries included — all system parachains and testnets already setup to be used
 - ✅ File-based commands — run any command from a YAML/JSON file with variable substitution
-- ✅ Parachain sovereign accounts — derive child and sibling addresses from a parachain ID
+- ✅ Sovereign accounts — store a parachain (child / sibling) or pallet (Treasury, Bounties, NominationPools, …) sovereign as a named watch-only account in one command
 - ✅ Message signing — sign arbitrary bytes with account keypairs for use as `MultiSignature` arguments
 - ✅ Unsigned/authorized transactions — submit governance-authorized calls without a signer (`--unsigned`)
 - ✅ Non-native fee payment — pay tx fees in any asset the chain accepts via `--asset` (asset-hub-style chains)
@@ -323,7 +323,7 @@ dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 dot account add council 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
 ```
 
-Watch-only accounts appear in `dot account list` with a `(watch-only)` badge and can be inspected and removed like any other account. They cannot be used with `--from` (signing) or as a source for `derive`.
+Watch-only accounts appear in `dot account list` under a dedicated **Watch-only** section and can be inspected and removed like any other account. They cannot be used with `--from` (signing) or as a source for `derive`.
 
 The `add` subcommand is context-sensitive: bare `add <name> <address>` creates a watch-only entry, while `add --secret` or `add --env` imports a keyed account. `dot account import` is reserved for file-based batch import.
 
@@ -388,7 +388,8 @@ dot account inspect alice --json
 #   "publicKey": "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
 #   "ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
 #   "prefix": 42,
-#   "name": "Alice"
+#   "name": "Alice",
+#   "kind": "dev"
 # }
 ```
 
@@ -400,10 +401,13 @@ dot account inspect alice
 # Account Info
 #
 #   Name:        Alice
+#   Kind:        dev
 #   Public Key:  0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
 #   SS58:        5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 #   Prefix:      42
 ```
+
+The `Kind:` line categorises the account: `dev` (built-in), `signer` (has a secret/env), `watch-only` (raw external address), `pallet sovereign` (derived from a `PalletId`), or `parachain sovereign (child|sibling)` (derived from a parachain ID). For derived sovereigns, an extra `Source:` line shows what the address was derived from. For env-backed signers, an `Env:` line shows the variable; for derived child keys, `Derivation:` shows the path.
 
 #### Reveal the sr25519 private key
 
@@ -426,7 +430,7 @@ dot account add ci-signer --env MY_SECRET
 
 `--secret` and `--env` are mutually exclusive. Use `dot account add` for single-account imports; `dot account import` is reserved for file-based batch import.
 
-The secret is never written to disk. At signing time, the CLI reads `$MY_SECRET` and derives the keypair. If the variable is not set, the CLI errors with a clear message. `account list` shows an `(env: MY_SECRET)` badge and resolves the address live when the variable is available.
+The secret is never written to disk. At signing time, the CLI reads `$MY_SECRET` and derives the keypair. If the variable is not set, the CLI errors with a clear message. `account list` annotates env-backed signers with `env $MY_SECRET` in the metadata column and resolves the address live when the variable is available.
 
 #### Derivation paths
 
@@ -448,11 +452,15 @@ dot account derive treasury treasury-staking --path //staking
 
 `derive` copies the source account's secret and applies the given path. It requires both a source name, a new name, and `--path`. Works with env-backed accounts too — the derived account shares the same env var reference.
 
-`account list` shows the derivation path next to the account name:
+`account list` shows derivation paths and env sources on tree-style continuation lines (label names mirror the `--flag` that sets them):
 
 ```
-  treasury-staking (//staking)  5FHneW46...
-  ci-signer (//ci) (env: MY_SECRET)  5EPCUjPx...
+Signers
+  treasury-staking  5FHneW46...
+     └─ path: //staking
+  ci-signer         5EPCUjPx...
+     ├─ path: //ci
+     └─ env:  $MY_SECRET
 ```
 
 **Supported secret formats for import:**
@@ -1579,50 +1587,79 @@ Output shows the crypto type, message bytes in hex, raw signature, and an `Enum`
 
 Use `--type` to select the signature algorithm (default: `sr25519`). Run `dot sign` with no arguments to see usage and examples.
 
-### Parachain sovereign accounts
+### Sovereign accounts (parachain & pallet)
 
-Derive the sovereign account addresses for a parachain. These are deterministic accounts derived from a parachain ID — no chain connection required.
+`dot account add` accepts derivation flags that compute a deterministic sovereign address and store it as a named watch-only account — reusable in `--from` (for `--unsigned` flows), as a tx argument, and in `dot account list`. Runs offline; no chain connection required.
 
-- **Child** accounts represent a parachain on the relay chain (prefix `"para"`)
-- **Sibling** accounts represent a parachain on another parachain (prefix `"sibl"`)
+Two kinds of sovereign:
+
+- **Pallet sovereign** — every FRAME pallet that holds funds (Treasury, Bounties, Crowdloan, Society, NominationPools, ChildBounties, …) declares an 8-byte `PalletId`. The 32-byte account ID is `b"modl"` (4 bytes) + `palletId` (8 bytes) + 20 zero bytes. (`AccountIdConversion::into_account_truncating` with `PalletId::TYPE_ID = b"modl"` from `frame_support`.)
+- **Parachain sovereign** — every parachain has a `child` account (its account on the relay chain, `b"para"` prefix) and a `sibling` account (its account on another parachain, `b"sibl"` prefix). Both are 32-byte IDs of the form `prefix (4 bytes)` + `paraId as LE u32 (4 bytes)` + 24 zero bytes.
 
 ```bash
-# Show both child and sibling accounts
-dot parachain 1000
+# Pallet sovereign — ASCII PalletId
+dot account add Treasury --pallet-id py/trsry
 # Output:
-# Parachain 1000 — Sovereign Accounts
+# Account Added (watch-only)
 #
-#   Child:
-#     Public Key:  0x70617261e8030000000000000000000000000000000000000000000000000000
-#     SS58:        5Ec4AhPZk8STuex8Wsi9TwDtJQxKqzPJRCH7348Xtcs9vZLJ
-#     Prefix:      42
-#
-#   Sibling:
-#     Public Key:  0x7369626ce8030000000000000000000000000000000000000000000000000000
-#     SS58:        5Eg2fntNprdN3FgH4sfEaaZhYtddZQSQUqvYJ1f2mLtinVhV
-#     Prefix:      42
+#   Name:    Treasury
+#   Address: 5EYCAe5ijiYfyeZ2JJCGq56LmPyNRAKzpG4QkoQkkQNB5e6Z
+#   Source:  pallet py/trsry (0x70792f7472737279)
 
-# Show only the child (relay chain) account
-dot parachain 2004 --type child
+# Pallet sovereign — 0x-prefixed hex (16 hex chars)
+dot account add Bounties --pallet-id 0x70792f626f756e74
 
-# Show only the sibling (parachain-to-parachain) account
-dot parachain 2004 --type sibling
-
-# Use Polkadot SS58 prefix (default: 42)
-dot parachain 1000 --prefix 0
-
-# JSON output
-dot parachain 1000 --json
+# Parachain sovereign — child (relay-chain side) — type is required
+dot account add People --parachain 1004 --parachain-type child
 # Output:
+# Account Added (watch-only)
+#
+#   Name:    People
+#   Address: 5Ec4AhPaYcfBz8fMoPd4EfnAgwbzRS7np3APZUnnFo12qEYk
+#   Source:  parachain 1004 (child sovereign)
+
+# Parachain sovereign — sibling (XCM peer side)
+dot account add People-Sibling --parachain 1004 --parachain-type sibling
+
+# JSON output includes a `derivation` object describing the source
+dot account add Bnt --pallet-id py/bount --json
 # {
-#   "paraId": 1000,
-#   "prefix": 42,
-#   "child":   { "publicKey": "0x70617261...", "ss58": "5Ec4AhPZ..." },
-#   "sibling": { "publicKey": "0x7369626c...", "ss58": "5Eg2fntN..." }
+#   "name": "Bnt",
+#   "address": "5EYCAe5ijiYdYTM8d3VytEARdH7dFp4rdCPpAsPXrfopdm7d",
+#   "watchOnly": true,
+#   "derivation": {
+#     "kind": "pallet",
+#     "palletId": "py/bount",
+#     "palletIdHex": "0x70792f626f756e74"
+#   }
 # }
+
+# Stored sovereigns appear alongside other accounts
+dot account list
 ```
 
-Run `dot parachain` with no arguments to see usage and examples.
+#### Discovering a chain's PalletId
+
+Pallets that need a sovereign account expose their `PalletId` as a runtime constant. Read it via the `const` category and feed the hex straight into `--pallet-id`:
+
+```bash
+# Pre-req: metadata cached for the chain (e.g. `dot chain update polkadot`)
+dot polkadot.const.Treasury.PalletId
+# Output (JSON-quoted hex):
+# "0x70792f7472737279"
+
+# Pipe into the add command (strip JSON quotes with tr)
+dot account add Treasury --pallet-id "$(dot polkadot.const.Treasury.PalletId | tr -d '"')"
+```
+
+There is no central registry of "well-known" PalletIds — each runtime author picks the 8 bytes when wiring up a pallet's `Config`. The chain's metadata is the authoritative source for that chain's values.
+
+#### Constraints
+
+- `--parachain` requires `--parachain-type child|sibling` (no implicit default — picking the wrong one silently produces a different address).
+- `--parachain` and `--pallet-id` are mutually exclusive.
+- A positional address (`dot account add foo <ss58>`) cannot be combined with derivation flags.
+- Derivation flags cannot be combined with `--secret` or `--env` — a derived sovereign has no signing key.
 
 ### Bandersnatch member keys
 

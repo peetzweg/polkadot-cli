@@ -30,7 +30,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
   ext: "extensions",
 };
 
-const NAMED_COMMANDS = ["chain", "account", "inspect", "hash", "sign", "parachain", "completions"];
+const NAMED_COMMANDS = ["chain", "account", "inspect", "hash", "sign", "completions"];
 
 const CHAIN_SUBCOMMANDS = ["add", "info", "list", "remove", "update"];
 const ACCOUNT_SUBCOMMANDS = [
@@ -203,11 +203,8 @@ export async function generateCompletions(
     return filterPrefix(getAlgorithmNames(), currentWord);
   }
 
-  if (firstArg === "parachain") {
-    if (prevWord === "--type") {
-      return filterPrefix(["child", "sibling"], currentWord);
-    }
-    return [];
+  if (firstArg === "account" && prevWord === "--parachain-type") {
+    return filterPrefix(["child", "sibling"], currentWord);
   }
 
   // 4. Dotpath completion

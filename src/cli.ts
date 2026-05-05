@@ -15,7 +15,6 @@ import {
 import { registerHashCommand } from "./commands/hash.ts";
 import { registerInspectCommand } from "./commands/inspect.ts";
 import { registerMetadataCommand } from "./commands/metadata.ts";
-import { registerParachainCommand } from "./commands/parachain.ts";
 import { handleQuery } from "./commands/query.ts";
 import { registerSignCommand } from "./commands/sign.ts";
 import { handleTx } from "./commands/tx.ts";
@@ -66,7 +65,6 @@ if (process.argv[2] === "__complete") {
   registerAccountCommands(cli);
   registerHashCommand(cli);
   registerSignCommand(cli);
-  registerParachainCommand(cli);
   registerCompletionsCommand(cli);
   registerVerifiableCommands(cli);
 
@@ -356,7 +354,6 @@ if (process.argv[2] === "__complete") {
     console.log("  account            Manage accounts");
     console.log("  hash               Hash utilities");
     console.log("  sign               Sign a message with an account keypair");
-    console.log("  parachain          Derive parachain sovereign accounts");
     console.log("  verifiable         Derive Bandersnatch member key from mnemonic");
     console.log("  completions <sh>   Generate shell completions (zsh, bash, fish)");
     console.log();
