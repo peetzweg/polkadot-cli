@@ -1726,4 +1726,159 @@ describe("dot account", { timeout: 15_000 }, () => {
       palletIdHex: "0x70792f7472737279",
     });
   });
+
+  // Stateless derivation via `dot account inspect` — no persistence
+  test("inspect --pallet-id derives without saving (script-friendly)", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "inspect",
+      "--pallet-id",
+      "py/trsry",
+      "--prefix",
+      "0",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("pallet sovereign");
+    expect(stdout).toContain("13UVJyLnbVp9RBZYFwFGyDvVd1y27Tt8tkntv6Q7JVPhFsTB");
+    expect(stdout).toContain("PalletId py/trsry");
+    expect(stdout).toContain("0x70792f7472737279");
+  });
+
+  test("inspect --pallet-id hex matches ASCII derivation", async () => {
+    const ascii = await runCli(["account", "inspect", "--pallet-id", "py/trsry", "--json"]);
+    const hex = await runCli(["account", "inspect", "--pallet-id", "0x70792f7472737279", "--json"]);
+    expect(ascii.exitCode).toBe(0);
+    expect(hex.exitCode).toBe(0);
+    expect(JSON.parse(ascii.stdout).ss58).toBe(JSON.parse(hex.stdout).ss58);
+  });
+
+  test("inspect --pallet-id --json yields the script-friendly shape", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "inspect",
+      "--pallet-id",
+      "py/trsry",
+      "--json",
+    ]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.ss58).toBe("5EYCAe5ijiYfyeZ2JJCGq56LmPyNRAKzpG4QkoQkkQNB5e6Z");
+    expect(parsed.publicKey).toBe(
+      "0x6d6f646c70792f74727372790000000000000000000000000000000000000000",
+    );
+    expect(parsed.kind).toBe("pallet sovereign");
+    expect(parsed.source).toEqual({
+      kind: "pallet",
+      palletId: "py/trsry",
+      palletIdHex: "0x70792f7472737279",
+    });
+    // Stateless: no `name` field (no persisted entry)
+    expect(parsed.name).toBeUndefined();
+  });
+
+  test("inspect --parachain --parachain-type derives without saving", async () => {
+    const child = await runCli([
+      "account",
+      "inspect",
+      "--parachain",
+      "1004",
+      "--parachain-type",
+      "child",
+      "--json",
+    ]);
+    const sibling = await runCli([
+      "account",
+      "inspect",
+      "--parachain",
+      "1004",
+      "--parachain-type",
+      "sibling",
+      "--json",
+    ]);
+    expect(child.exitCode).toBe(0);
+    expect(sibling.exitCode).toBe(0);
+    expect(JSON.parse(child.stdout).ss58).not.toBe(JSON.parse(sibling.stdout).ss58);
+    expect(JSON.parse(child.stdout).source).toEqual({
+      kind: "parachain",
+      paraId: 1004,
+      type: "child",
+    });
+    expect(JSON.parse(child.stdout).kind).toBe("parachain sovereign (child)");
+  });
+
+  test("inspect --parachain rejects without --parachain-type", async () => {
+    const { stderr, exitCode } = await runCli(["account", "inspect", "--parachain", "1004"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toMatch(/--parachain-type is required/);
+  });
+
+  test("inspect rejects positional input combined with --pallet-id", async () => {
+    const { stderr, exitCode } = await runCli([
+      "account",
+      "inspect",
+      "alice",
+      "--pallet-id",
+      "py/trsry",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toMatch(/Cannot combine a positional input/);
+  });
+
+  test("inspect rejects --pallet-id combined with --parachain", async () => {
+    const { stderr, exitCode } = await runCli([
+      "account",
+      "inspect",
+      "--pallet-id",
+      "py/trsry",
+      "--parachain",
+      "1004",
+      "--parachain-type",
+      "child",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toMatch(/mutually exclusive/);
+  });
+
+  test("inspect with no input and no derivation flags errors with usage", async () => {
+    const { stderr, exitCode } = await runCli(["account", "inspect"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Input is required");
+    // Hint at both modes
+    expect(stderr).toContain("--pallet-id");
+    expect(stderr).toContain("--parachain");
+  });
+
+  test("inspect --pallet-id --show-secret rejects (no key)", async () => {
+    const { stderr, exitCode } = await runCli([
+      "account",
+      "inspect",
+      "--pallet-id",
+      "py/trsry",
+      "--show-secret",
+    ]);
+    expect(exitCode).toBe(1);
+    // No name → existing --show-secret guard fires
+    expect(stderr).toMatch(/--show-secret/);
+  });
+
+  test("inspect --pallet-id --prefix changes SS58 only", async () => {
+    const def = await runCli(["account", "inspect", "--pallet-id", "py/trsry", "--json"]);
+    const p0 = await runCli([
+      "account",
+      "inspect",
+      "--pallet-id",
+      "py/trsry",
+      "--prefix",
+      "0",
+      "--json",
+    ]);
+    expect(def.exitCode).toBe(0);
+    expect(p0.exitCode).toBe(0);
+    const a = JSON.parse(def.stdout);
+    const b = JSON.parse(p0.stdout);
+    // Same publicKey, different SS58
+    expect(a.publicKey).toBe(b.publicKey);
+    expect(a.ss58).not.toBe(b.ss58);
+    expect(b.ss58).toBe("13UVJyLnbVp9RBZYFwFGyDvVd1y27Tt8tkntv6Q7JVPhFsTB");
+  });
 });

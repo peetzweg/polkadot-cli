@@ -53,3 +53,11 @@ Parachain Sovereigns
 **`dot account inspect` now surfaces the derivation source.** The output gains a `Kind:` line (`dev` / `signer` / `watch-only` / `pallet sovereign` / `parachain sovereign (child|sibling)`) and, for derived sovereigns, a `Source:` line (`PalletId py/trsry (0x70792f7472737279)` or `parachain 1004`). For env-backed signers there's an `Env:` line; derived child keys show their `Derivation:` path.
 
 **Storage-format change:** `StoredAccount` gains an optional `source` field that records how a watch-only account was derived. Existing accounts without this field continue to work — they're classified as plain `signer` or `watch-only` based on the presence of a secret.
+
+**`dot account inspect` accepts the same derivation flags for stateless lookup.** When you just need the SS58 in a script and don't want a stored entry, run `dot account inspect --pallet-id <id>` or `dot account inspect --parachain <id> --parachain-type <child|sibling>` — same output shape (Kind / Source / SS58 / public key, plus a structured `source` object on `--json`), no name, nothing written to `~/.polkadot/accounts.json`.
+
+```bash
+SS58=$(dot account inspect --pallet-id py/trsry --prefix 0 --json | jq -r .ss58)
+```
+
+Use `account add` to persist (named, reusable as `--from` / tx arg / in `account list`); use `account inspect` to derive ad-hoc.

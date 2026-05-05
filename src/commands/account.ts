@@ -53,6 +53,8 @@ ${BOLD}Usage:${RESET}
   $ dot account export [names...]                                    Export accounts to stdout
   $ dot account derive <source> <new-name> --path <derivation>       Derive a child account
   $ dot account inspect <input> [--prefix <N>] [--show-secret]       Inspect an account/address/key
+  $ dot account inspect --pallet-id <id> [--prefix <N>]              Derive a pallet sovereign (no save — script-friendly)
+  $ dot account inspect --parachain <id> --parachain-type <t>        Derive a parachain sovereign (no save — script-friendly)
   $ dot account list                                                 List all accounts
   $ dot account remove|delete <name> [name2] ...                     Remove stored account(s)
 
@@ -79,6 +81,8 @@ ${BOLD}Examples:${RESET}
   $ dot account inspect dave --show-secret
   $ dot account inspect 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
   $ dot account inspect 0xd435...a27d --prefix 0
+  $ dot account inspect --pallet-id py/trsry --prefix 0
+  $ dot account inspect --parachain 1004 --parachain-type child
   $ dot account list
   $ dot account remove my-validator stale-key
 
@@ -844,11 +848,38 @@ async function accountRemove(names: string[], opts: { output?: string; json?: bo
 
 async function accountInspect(
   input: string | undefined,
-  opts: { prefix?: string; showSecret?: boolean; output?: string; json?: boolean },
+  opts: {
+    parachain?: string;
+    parachainType?: string;
+    palletId?: string;
+    prefix?: string;
+    showSecret?: boolean;
+    output?: string;
+    json?: boolean;
+  },
 ) {
-  if (!input) {
+  // Stateless derivation mode: --pallet-id / --parachain compute and display
+  // a sovereign address without persisting it. Mutually exclusive with the
+  // positional input (which resolves names/ss58/hex from existing state).
+  const sovereignSource = resolveSovereignSource({
+    parachain: opts.parachain,
+    parachainType: opts.parachainType,
+    palletId: opts.palletId,
+  });
+
+  if (sovereignSource && input) {
+    throw new Error(
+      "Cannot combine a positional input with --parachain or --pallet-id. Pass either an existing-account input OR a derivation flag, not both.",
+    );
+  }
+
+  if (!sovereignSource && !input) {
     console.error("Input is required.\n");
     console.error("Usage: dot account inspect <name|ss58-address|0x-public-key> [--prefix <N>]");
+    console.error("       dot account inspect --pallet-id <id> [--prefix <N>]");
+    console.error(
+      "       dot account inspect --parachain <id> --parachain-type <child|sibling> [--prefix <N>]",
+    );
     process.exit(1);
   }
 
@@ -864,11 +895,36 @@ async function accountInspect(
   let hasSecret = false;
   let storedAccount: StoredAccount | undefined;
   let isDev = false;
+  // Synthetic source for the stateless-derivation branch — same shape as
+  // StoredAccount.source so the JSON/pretty-print branches downstream don't
+  // need a separate code path.
+  let virtualSource:
+    | { kind: "pallet"; palletIdHex: string }
+    | { kind: "parachain"; paraId: number; type: "child" | "sibling" }
+    | undefined;
 
+  if (sovereignSource) {
+    if (sovereignSource.kind === "pallet") {
+      const accountId = derivePalletAccount(sovereignSource.palletId);
+      publicKeyHex = publicKeyToHex(accountId);
+      virtualSource = {
+        kind: "pallet",
+        palletIdHex: `0x${Array.from(sovereignSource.palletId, (b) => b.toString(16).padStart(2, "0")).join("")}`,
+      };
+    } else {
+      const accountId = deriveSovereignAccount(sovereignSource.paraId, sovereignSource.type);
+      publicKeyHex = publicKeyToHex(accountId);
+      virtualSource = {
+        kind: "parachain",
+        paraId: sovereignSource.paraId,
+        type: sovereignSource.type,
+      };
+    }
+  }
   // 1. Dev account name
-  if (isDevAccount(input)) {
-    name = input.charAt(0).toUpperCase() + input.slice(1).toLowerCase();
-    const devAddr = getDevAddress(input);
+  else if (isDevAccount(input!)) {
+    name = input!.charAt(0).toUpperCase() + input!.slice(1).toLowerCase();
+    const devAddr = getDevAddress(input!);
     publicKeyHex = publicKeyToHex(fromSs58(devAddr));
     hasSecret = true;
     isDev = true;
@@ -876,7 +932,7 @@ async function accountInspect(
   // 2. Stored account name
   else {
     const accountsFile = await loadAccounts();
-    const account = findAccount(accountsFile, input);
+    const account = findAccount(accountsFile, input!);
     if (account) {
       name = account.name;
       bandersnatch = account.bandersnatch;
@@ -900,13 +956,13 @@ async function accountInspect(
       }
     }
     // 3. Hex public key
-    else if (isHexPublicKey(input)) {
-      publicKeyHex = input;
+    else if (isHexPublicKey(input!)) {
+      publicKeyHex = input!;
     }
     // 4. Try SS58 decode
     else {
       try {
-        const decoded = fromSs58(input);
+        const decoded = fromSs58(input!);
         publicKeyHex = publicKeyToHex(decoded);
       } catch {
         console.error(
@@ -932,7 +988,7 @@ async function accountInspect(
       process.exit(1);
     }
     try {
-      privateKeyHex = bytesToHex(await resolveAccountExpandedSecret(input));
+      privateKeyHex = bytesToHex(await resolveAccountExpandedSecret(input!));
     } catch (err) {
       console.error((err as Error).message);
       process.exit(1);
@@ -945,7 +1001,14 @@ async function accountInspect(
   let derivationLine: string | undefined;
   let envLine: string | undefined;
 
-  if (isDev) {
+  if (virtualSource?.kind === "pallet") {
+    kindLabel = "pallet sovereign";
+    const bytes = parsePalletId(virtualSource.palletIdHex);
+    sourceLine = `PalletId ${formatPalletId(bytes)} (${virtualSource.palletIdHex})`;
+  } else if (virtualSource?.kind === "parachain") {
+    kindLabel = `parachain sovereign (${virtualSource.type})`;
+    sourceLine = `parachain ${virtualSource.paraId}`;
+  } else if (isDev) {
     kindLabel = "dev";
   } else if (storedAccount) {
     const k = classifyAccount(storedAccount);
@@ -971,7 +1034,20 @@ async function accountInspect(
     const result: Record<string, unknown> = { publicKey: publicKeyHex!, ss58, prefix };
     if (name) result.name = name;
     if (kindLabel) result.kind = kindLabel;
-    if (storedAccount?.source) {
+    if (virtualSource?.kind === "pallet") {
+      const bytes = parsePalletId(virtualSource.palletIdHex);
+      result.source = {
+        kind: "pallet",
+        palletId: formatPalletId(bytes),
+        palletIdHex: virtualSource.palletIdHex,
+      };
+    } else if (virtualSource?.kind === "parachain") {
+      result.source = {
+        kind: "parachain",
+        paraId: virtualSource.paraId,
+        type: virtualSource.type,
+      };
+    } else if (storedAccount?.source) {
       if (storedAccount.source.kind === "pallet") {
         const bytes = parsePalletId(storedAccount.source.palletId);
         result.source = {

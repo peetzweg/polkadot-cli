@@ -431,7 +431,33 @@ dot account add Bnt --pallet-id py/bount --json
 dot account add Treasury --pallet-id "$(dot polkadot.const.Treasury.PalletId | tr -d '"')"
 ```
 
-**Constraints (will error):** `--parachain` requires `--parachain-type child|sibling`; `--parachain` and `--pallet-id` are mutually exclusive; cannot combine derivation flags with a positional address or with `--secret` / `--env`.
+**Stateless derivation for scripts (no save):** the same `--pallet-id` /
+`--parachain` / `--parachain-type` flags work on `dot account inspect` to
+compute and print the address **without** writing to accounts.json. Use this
+when you just need the SS58 in a script — no name to invent, no cleanup later.
+
+```bash
+# Pretty output
+dot account inspect --pallet-id py/trsry --prefix 0
+# Account Info
+#
+#   Kind:        pallet sovereign
+#   Public Key:  0x6d6f646c70792f74727372790000000000000000000000000000000000000000
+#   SS58:        13UVJyLnbVp9RBZYFwFGyDvVd1y27Tt8tkntv6Q7JVPhFsTB
+#   Source:      PalletId py/trsry (0x70792f7472737279)
+#   Prefix:      0
+
+# Just the SS58 (script-friendly)
+SS58=$(dot account inspect --pallet-id py/trsry --prefix 0 --json | jq -r .ss58)
+
+# Parachain sovereign
+dot account inspect --parachain 1004 --parachain-type child --json | jq -r .ss58
+```
+
+Use `account add` to persist (named, reusable in `--from`/tx args, appears in
+`dot account list`); use `account inspect` to derive ad-hoc.
+
+**Constraints (will error):** `--parachain` requires `--parachain-type child|sibling`; `--parachain` and `--pallet-id` are mutually exclusive; on `account add`, derivation flags can't combine with a positional address or with `--secret` / `--env`; on `account inspect`, derivation flags can't combine with a positional input.
 
 ## Other Commands
 

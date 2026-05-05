@@ -664,6 +664,8 @@ Convert between SS58 addresses, hex public keys, and account names. Accepts any 
 - **Stored account name** — looks up the public key from the accounts file
 - **SS58 address** — decodes to the underlying public key
 - **Hex public key** (`0x` + 64 hex chars) — encodes to SS58
+- **`--pallet-id <id>`** — derives a pallet sovereign address without saving it (script-friendly)
+- **`--parachain <id> --parachain-type <child|sibling>`** — derives a parachain sovereign address without saving it
 
 ```
 dot account inspect alice
@@ -709,6 +711,58 @@ dot account inspect alice --json
 #   "kind": "dev"
 # }
 ```
+
+#### Stateless sovereign derivation (script-friendly)
+
+Pass `--pallet-id` or `--parachain` / `--parachain-type` to compute a sovereign address **without persisting** anything to `~/.polkadot/accounts.json`. The output shape matches the stored case (same `Kind:` / `Source:` / SS58 / public key + same `--json` schema), but no `Name:` line and nothing in `dot account list` afterwards. Use this in scripts when you just need the address — no name to come up with, no cleanup later.
+
+```
+dot account inspect --pallet-id py/trsry --prefix 0
+# Output:
+# Account Info
+#
+#   Kind:        pallet sovereign
+#   Public Key:  0x6d6f646c70792f74727372790000000000000000000000000000000000000000
+#   SS58:        13UVJyLnbVp9RBZYFwFGyDvVd1y27Tt8tkntv6Q7JVPhFsTB
+#   Source:      PalletId py/trsry (0x70792f7472737279)
+#   Prefix:      0
+```
+
+Hex form works the same:
+
+```
+dot account inspect --pallet-id 0x70792f7472737279 --prefix 0
+```
+
+Parachain sovereigns require an explicit `--parachain-type`:
+
+```
+dot account inspect --parachain 1004 --parachain-type child
+dot account inspect --parachain 1004 --parachain-type sibling
+```
+
+Pipeline pattern — extract just the SS58:
+
+```
+SS58=$(dot account inspect --pallet-id py/trsry --prefix 0 --json | jq -r .ss58)
+```
+
+JSON shape includes a structured `source` field describing the derivation:
+
+```
+dot account inspect --pallet-id py/trsry --json
+# {
+#   "publicKey": "0x6d6f646c70792f74727372790000000000000000000000000000000000000000",
+#   "ss58":      "5EYCAe5ijiYfyeZ2JJCGq56LmPyNRAKzpG4QkoQkkQNB5e6Z",
+#   "prefix":    42,
+#   "kind":      "pallet sovereign",
+#   "source":    { "kind": "pallet", "palletId": "py/trsry", "palletIdHex": "0x70792f7472737279" }
+# }
+```
+
+Constraints (will error): cannot combine a positional input with derivation flags; `--pallet-id` and `--parachain` are mutually exclusive; `--parachain` requires `--parachain-type child|sibling`; `--show-secret` doesn't apply (derived sovereigns have no key).
+
+To persist the derived address as a named account in `~/.polkadot/accounts.json` (so you can reuse the name in `--from`, in tx args, in `dot account list`), use `dot account add` with the same flags instead.
 
 ### Reveal the sr25519 private key
 
