@@ -4,9 +4,11 @@ import {
   findChainName,
   loadConfig,
   loadMetadataFingerprint,
+  loadRpcMethods,
   removeChainData,
   resolveChain,
   saveConfig,
+  saveRpcMethods,
 } from "../config/store.ts";
 import {
   BUILTIN_CHAIN_NAMES,
@@ -30,6 +32,8 @@ import {
   RESET,
   YELLOW,
 } from "../core/output.ts";
+import { fetchRpcMethods } from "../core/rpc.ts";
+import { inferFamily, RPC_REGISTRY } from "../data/rpc-registry.ts";
 
 const CHAIN_HELP = `
 ${BOLD}Usage:${RESET}
@@ -131,6 +135,26 @@ export function registerChainCommands(cli: CAC) {
     );
 }
 
+/**
+ * Best-effort fetch + cache of the node's `rpc_methods` list. Failures are
+ * non-fatal — the metadata operation that called us still succeeds.
+ */
+async function refreshRpcMethods(
+  chainName: string,
+  rpcUrl: string | string[],
+  silent = false,
+): Promise<void> {
+  try {
+    const { methods, version } = await fetchRpcMethods(rpcUrl);
+    await saveRpcMethods(chainName, methods, version);
+  } catch (err) {
+    if (!silent) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`${YELLOW}Warning:${RESET} could not fetch rpc_methods — ${msg}\n`);
+    }
+  }
+}
+
 async function chainAdd(
   name: string | undefined,
   opts: {
@@ -167,6 +191,7 @@ async function chainAdd(
   try {
     process.stderr.write("Fetching metadata...\n");
     await fetchMetadataFromChain(clientHandle, name);
+    await refreshRpcMethods(name, opts.rpc);
 
     if (opts.relay) {
       const config = await loadConfig();
@@ -349,6 +374,14 @@ async function chainInfo(name: string | undefined, opts: { output?: string; json
     .map(([n, c]) => ({ name: n, parachainId: c.parachainId }));
 
   const fingerprint = await loadMetadataFingerprint(resolved);
+  const rpcCache = await loadRpcMethods(resolved);
+  const rpcSummary = rpcCache
+    ? {
+        count: rpcCache.methods.length,
+        fetchedAt: rpcCache.fetchedAt,
+        byFamily: countByFamily(rpcCache.methods),
+      }
+    : null;
 
   if (isJsonOutput(opts)) {
     console.log(
@@ -365,6 +398,7 @@ async function chainInfo(name: string | undefined, opts: { output?: string; json
               fetchedAt: fingerprint.fetchedAt,
             }
           : null,
+        rpcMethods: rpcSummary,
       }),
     );
     return;
@@ -400,6 +434,26 @@ async function chainInfo(name: string | undefined, opts: { output?: string; json
   } else {
     console.log(`    ${DIM}not cached — run \`dot chain update ${resolved}\`${RESET}`);
   }
+
+  console.log(`  ${CYAN}rpc methods:${RESET}`);
+  if (rpcSummary) {
+    const families = Object.entries(rpcSummary.byFamily)
+      .map(([f, n]) => `${f}: ${n}`)
+      .join(", ");
+    console.log(`    ${rpcSummary.count} ${DIM}(${families})${RESET}`);
+    console.log(`    ${DIM}cached ${rpcSummary.fetchedAt}${RESET}`);
+  } else {
+    console.log(`    ${DIM}not cached — run \`dot chain update ${resolved}\`${RESET}`);
+  }
+}
+
+function countByFamily(methods: string[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const m of methods) {
+    const family = RPC_REGISTRY[m]?.family ?? inferFamily(m);
+    counts[family] = (counts[family] ?? 0) + 1;
+  }
+  return counts;
 }
 
 async function chainUpdate(
@@ -426,6 +480,7 @@ async function chainUpdate(
   try {
     process.stderr.write("Fetching metadata...\n");
     await fetchMetadataFromChain(clientHandle, chainName);
+    await refreshRpcMethods(chainName, opts.rpc ?? chainConfig.rpc);
     if (isJsonOutput(opts)) {
       console.log(formatJson({ action: "updated", chain: chainName }));
     } else {
@@ -461,6 +516,7 @@ async function updateChainsMetadata(
       const clientHandle = await createChainClient(chainName, chainConfig);
       try {
         await fetchMetadataFromChain(clientHandle, chainName);
+        await refreshRpcMethods(chainName, chainConfig.rpc, true);
       } finally {
         clientHandle.destroy();
       }

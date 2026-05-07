@@ -20,6 +20,7 @@ Ships with Polkadot and all system parachains preconfigured with multiple fallba
 - ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
 - ✅ Named address resolution across all commands
 - ✅ Runtime API calls — `dot polkadot.apis.Core.version`
+- ✅ Raw JSON-RPC calls — `dot polkadot.rpc.system_health`, with discovery via `rpc_methods` and tab-completion
 - ✅ Full-metadata dump — `dot metadata <chain>` emits one JSON blob with pallets, runtime APIs, and transaction extensions (or raw SCALE bytes via `--raw`)
 - ✅ Stale-metadata detection — when a tx or query fails because the runtime upgraded, the CLI tells you exactly which `dot chain update` to run
 - ✅ Chain topology — relay/parachain hierarchy with tree display and auto-detection
@@ -580,7 +581,7 @@ dot polkadot.apis.Core
 dot apis Core --chain polkadot
 ```
 
-This works for all categories (`query`, `tx`, `const`, `events`, `errors`, `apis`, `extensions`). When passing positional method arguments, keep `Pallet` and `Item` either fully dot-joined (`query.System.Account 5Grw...`) or fully space-separated (`query System Account 5Grw...`) — mixing the two (`query System.Account 5Grw...`) does not work because the second arg gets parsed as a pallet name.
+This works for all categories (`query`, `tx`, `const`, `events`, `errors`, `apis`, `extensions`, `rpc`). When passing positional method arguments, keep `Pallet` and `Item` either fully dot-joined (`query.System.Account 5Grw...`) or fully space-separated (`query System Account 5Grw...`) — mixing the two (`query System.Account 5Grw...`) does not work because the second arg gets parsed as a pallet name.
 
 ### Query storage
 
@@ -1010,6 +1011,74 @@ The list view tags each entry:
 - `[custom]` — you must provide a value with `--ext` when signing, for example `--ext '{"<Identifier>":{"value":<v>}}'`
 
 The detail view shows the extension's value type, its `additionalSigned` type, and a ready-to-adapt `--ext` snippet for custom extensions. Use this to discover what `--ext` payload a chain expects before submitting a `dot tx` command.
+
+### Raw JSON-RPC
+
+Substrate nodes expose a JSON-RPC surface that lives outside runtime metadata: `system_*` (sync state, peers, version), `chain_*` (blocks, headers, finalized head), `state_*` (raw storage, key iteration, runtime version), `author_*` (mempool, key management), `payment_*` (fee estimation), consensus families (`babe_*`, `grandpa_*`, `mmr_*`, `beefy_*`), and the new spec families (`chainSpec_v1_*`, `archive_v1_*`, `rpc_methods`). The `rpc` category exposes them all.
+
+Methods are discovered per-chain via the standard `rpc_methods` JSON-RPC call and cached at `~/.polkadot/chains/<chain>/rpc-methods.json`. The set of available methods depends on the node, not the chain — an archive node adds `archive_v1_*`, validators may add `babe_epochAuthorship`, dev nodes add `dev_newBlock`, and `--rpc-methods safe` strips writes.
+
+```bash
+# List all methods the node exposes, grouped by family
+dot polkadot.rpc
+# Output:
+# RPC methods on polkadot (129)
+#
+# system (20)
+#   system_health  Node sync state (peers, isSyncing, shouldHavePeers).
+#   system_version  Node software version string.
+#   system_chain  Chain name as reported by the node.
+#   ...
+# chain (19)
+#   chain_getBlock  Full block (header + extrinsics) by hash.
+#   chain_getFinalizedHead  Hash of the latest finalized head.
+#   ...
+
+# Call a method
+dot polkadot.rpc.system_health
+# Output:
+# {
+#   "peers": 131,
+#   "isSyncing": false,
+#   "shouldHavePeers": true
+# }
+
+# Positional args (parsed by the same heuristic as tx args)
+dot polkadot.rpc.chain_getBlockHash 1000
+# Output:
+# "0xcf36a1e4a16fc579136137b8388f35490f09c5bdd7b9133835eba907a8b76c30"
+
+# Show curated info for a known method
+dot polkadot.rpc.author_insertKey --help
+# Output:
+# author_insertKey
+#   ⚠️  WRITE / state-changing
+#   Insert a key into the node keystore.
+#
+#   Family: author
+#   Args:   <keyType: string> <suri: string> <publicKey: hex>
+
+# Refresh the cached method list (after a node upgrade)
+dot polkadot.rpc --refresh
+
+# JSON output works on any method
+dot polkadot.rpc.system_health --json
+```
+
+`dot chain add` and `dot chain update` automatically populate the method cache, and `dot chain info <name>` shows a per-family breakdown. Tab completion sources from the cache, so methods on a custom chain start completing the moment you've added or updated it.
+
+About 50 well-known methods carry curated metadata (description, named args, `⚠️ WRITE` tag for state-changing calls). Any other method the node reports is callable via raw passthrough — args are forwarded as-is to the JSON-RPC `params` array.
+
+Subscription methods (`*_subscribe*`, `chainHead_v1_follow`, `transaction_v1_*`) appear in tab-completion but error out as one-shots — they need a long-running follow session that doesn't fit a single CLI invocation:
+
+```bash
+dot polkadot.rpc.chain_subscribeAllHeads
+# Error: "chain_subscribeAllHeads" is a subscription method (requires a follow
+# session) and is not callable as a one-shot. Use a long-running client for
+# streaming RPC.
+```
+
+The `rpc` category is **flat** — there's no pallet level. The form is `[chain.]rpc.<method_name>`, where `<method_name>` keeps its underscores in a single segment (e.g. `polkadot.rpc.chain_getBlock`).
 
 ### Submit extrinsics
 

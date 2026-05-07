@@ -3,9 +3,10 @@ name: dot-cli
 description: >
   Guide for using the `dot` CLI (polkadot-cli) to interact with Polkadot/Substrate chains.
   Use when the user works with Substrate-based blockchains — querying storage, submitting
-  transactions, calling runtime APIs, managing chain connections, or scripting multi-chain
-  setups. Triggers: user mentions `dot` CLI, polkadot-cli, Substrate chain queries,
-  extrinsic submission, runtime APIs, XCM, asset pools, or chain setup scripts using `dot`.
+  transactions, calling runtime APIs, raw JSON-RPC calls, managing chain connections, or
+  scripting multi-chain setups. Triggers: user mentions `dot` CLI, polkadot-cli,
+  Substrate chain queries, extrinsic submission, runtime APIs, JSON-RPC, `system_health`
+  / `chain_getBlock` / `rpc_methods`, XCM, asset pools, or chain setup scripts using `dot`.
 ---
 
 # dot CLI (polkadot-cli)
@@ -18,7 +19,7 @@ Unified CLI for Polkadot/Substrate chains. Install: `npm install -g polkadot-cli
 dot [chain.]<category>[.Pallet[.Item]] [args] [options]
 ```
 
-Categories: `query`, `tx`, `apis`, `const`, `events`, `errors`, `extensions`
+Categories: `query`, `tx`, `apis`, `const`, `events`, `errors`, `extensions`, `rpc`
 
 Top-level commands: `dot inspect`, `dot metadata`, `dot chain`, `dot account`, `dot sign`, `dot hash`.
 
@@ -235,6 +236,45 @@ dot polkadot-asset-hub.apis.AssetConversionApi.get_reserves \
 ```
 
 Call a method without args to see its signature, or use `--help`.
+
+## Raw JSON-RPC
+
+Runtime APIs and storage cover everything the runtime exposes; the `rpc` category covers what the **node** exposes outside the runtime — `system_*` (sync state, peers, version), `chain_*` (blocks/headers/finalized head), `state_*` (raw storage, key iteration, runtime version), `author_*` (mempool, key management), `payment_*` (fee estimation), consensus families (`babe_*`, `grandpa_*`, `mmr_*`, `beefy_*`), and the new spec families (`chainSpec_v1_*`, `archive_v1_*`, `rpc_methods`).
+
+Methods are discovered per-chain via the `rpc_methods` JSON-RPC call and cached. Use it when the user asks for things like "is the node synced?", "what block hash is at height N?", "what's in the mempool?", or "fee estimate for this encoded tx?":
+
+```bash
+# List the methods this node exposes, grouped by family
+dot polkadot.rpc
+
+# Sync / health
+dot polkadot.rpc.system_health --json
+# Output:
+# {
+#   "peers": 131,
+#   "isSyncing": false,
+#   "shouldHavePeers": true
+# }
+
+# Block hash by height (returns latest if no arg)
+dot polkadot.rpc.chain_getBlockHash 1000
+# Output:
+# "0xcf36a1e4a16fc579136137b8388f35490f09c5bdd7b9133835eba907a8b76c30"
+
+# Mempool snapshot — list pending extrinsics
+dot polkadot.rpc.author_pendingExtrinsics --json | jq length
+
+# Fee estimate for an already-encoded extrinsic
+ENCODED=$(dot polkadot.tx.System.remark 0xdead --from alice --encode)
+dot polkadot.rpc.payment_queryInfo "$ENCODED" --json
+
+# Curated --help shows the arg signature and a ⚠️ WRITE tag for state-changing methods
+dot polkadot.rpc.author_insertKey --help
+```
+
+The `rpc` category is **flat** — there's no pallet level. Form: `[chain.]rpc.<method_name>` (underscores stay in the single segment, e.g. `polkadot.rpc.chain_getBlock`).
+
+Subscription methods (`*_subscribe*`, `chainHead_v1_follow`, `transaction_v1_*`) appear in tab-completion but error out as one-shots — they need a follow session. About 50 well-known methods carry curated descriptions and arg names; any other method the node reports is callable via raw passthrough. Use `dot polkadot.rpc --refresh` to re-discover after a node upgrade.
 
 ### Complex Arguments (Location, enums)
 

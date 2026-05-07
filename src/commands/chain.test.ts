@@ -904,7 +904,8 @@ describe("dot chain", () => {
     expect(stdout).toContain("metadata:");
     expect(stdout).toContain("polkadot v1003000");
     expect(stdout).toContain("2026-04-29T12:34:56.000Z");
-    expect(stdout).not.toContain("not cached");
+    // Metadata block must not be in the "not cached" state.
+    expect(stdout).not.toMatch(/metadata:\s*\n\s*not cached/);
   });
 
   test("info --json on cached chain emits structured metadata block", async () => {
