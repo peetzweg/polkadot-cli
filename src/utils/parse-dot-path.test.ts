@@ -253,6 +253,40 @@ describe("parseDotPath", () => {
     });
   });
 
+  // --- rpc category (flat: identifier in `pallet` slot, like extensions) ---
+  test("rpc → category only", () => {
+    expect(parseDotPath("rpc", knownChains)).toEqual({ category: "rpc" });
+  });
+
+  test("rpc.system_health → category + method", () => {
+    expect(parseDotPath("rpc.system_health", knownChains)).toEqual({
+      category: "rpc",
+      pallet: "system_health",
+    });
+  });
+
+  test("rpc.chain_getBlock → underscored method as a single segment", () => {
+    expect(parseDotPath("rpc.chain_getBlock", knownChains)).toEqual({
+      category: "rpc",
+      pallet: "chain_getBlock",
+    });
+  });
+
+  test("polkadot.rpc.system_health → chain + category + method", () => {
+    expect(parseDotPath("polkadot.rpc.system_health", knownChains)).toEqual({
+      chain: "polkadot",
+      category: "rpc",
+      pallet: "system_health",
+    });
+  });
+
+  test("polkadot.rpc → chain + category", () => {
+    expect(parseDotPath("polkadot.rpc", knownChains)).toEqual({
+      chain: "polkadot",
+      category: "rpc",
+    });
+  });
+
   // --- Hyphenated chain names ---
   test("polkadot-asset-hub.query → hyphenated chain name (not split on dots)", () => {
     // Note: "polkadot-asset-hub" has no dots, so it works with split on "."

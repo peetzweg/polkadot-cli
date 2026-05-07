@@ -289,6 +289,32 @@ dot polkadot-asset-hub.apis.XcmPaymentApi.query_acceptable_payment_assets 5 --js
 
 This is a runtime API — the accepted assets are derived by the runtime (e.g., from existing AMM pools on Asset Hub), not set manually.
 
+### Node-level checks via raw RPC
+
+`dot polkadot.rpc.<method>` covers things that aren't in runtime metadata — sync state, block hashes, mempool, fee estimation, key management.
+
+```bash
+# Wait for the node to finish syncing before scripting against it
+until [ "$(dot polkadot.rpc.system_health --json | jq -r '.isSyncing')" = "false" ]; do
+  sleep 5
+done
+
+# Block hash for a specific height
+HASH=$(dot polkadot.rpc.chain_getBlockHash 1000 --json | tr -d '"')
+
+# Number of pending txs in the mempool
+dot polkadot.rpc.author_pendingExtrinsics --json | jq length
+
+# Pre-submission fee estimate for an encoded extrinsic
+ENCODED=$(dot polkadot.tx.System.remark 0xdead --from alice --encode)
+dot polkadot.rpc.payment_queryInfo "$ENCODED" --json | jq -r '.partialFee'
+
+# List every method this node exposes (useful for capability detection)
+dot polkadot.rpc --json | jq -r '.methods[] | select(.family=="archive") | .method'
+```
+
+The `rpc` category is flat — `[chain.]rpc.<method_name>`, no pallet level. Methods discovered per-chain via `rpc_methods` and cached; refresh with `dot polkadot.rpc --refresh` after a node upgrade. Subscription methods (`*_subscribe*`, `chainHead_v1_*`, `transaction_v1_*`) are not callable as one-shots.
+
 ### Check pool reserves
 
 ```bash
@@ -318,3 +344,5 @@ dot polkadot-asset-hub.apis.AssetConversionApi.get_reserves "$NATIVE" "$ASSET" -
 6. **`--dump` required for keyless map queries.** `dot polkadot.query.System.Account` without a key or `--dump` shows usage help, not results.
 
 7. **Method names are snake_case.** Calls like `Balances.transfer_keep_alive` use the runtime's `snake_case` identifiers. CamelCase variants don't resolve — the fuzzy matcher will suggest the right name.
+
+8. **JSON-RPC method names use underscores, not dots.** `chain_getBlock`, not `chain.getBlock`. The form is `[chain.]rpc.<method_name>` — the underscored token is one segment.

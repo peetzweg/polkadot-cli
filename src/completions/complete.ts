@@ -1,5 +1,5 @@
 import { loadAccounts } from "../config/accounts-store.ts";
-import { loadConfig, loadMetadata } from "../config/store.ts";
+import { loadConfig, loadMetadata, loadRpcMethods } from "../config/store.ts";
 import type { Config } from "../config/types.ts";
 import { DEV_NAMES } from "../core/accounts.ts";
 import { getAlgorithmNames } from "../core/hash.ts";
@@ -10,8 +10,18 @@ import {
   listRuntimeApis,
   parseMetadata,
 } from "../core/metadata.ts";
+import { RPC_REGISTRY } from "../data/rpc-registry.ts";
 
-const CATEGORIES = ["query", "tx", "const", "events", "errors", "apis", "extensions"] as const;
+const CATEGORIES = [
+  "query",
+  "tx",
+  "const",
+  "events",
+  "errors",
+  "apis",
+  "extensions",
+  "rpc",
+] as const;
 
 const CATEGORY_ALIASES: Record<string, string> = {
   query: "query",
@@ -28,6 +38,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
   extensions: "extensions",
   extension: "extensions",
   ext: "extensions",
+  rpc: "rpc",
 };
 
 const NAMED_COMMANDS = ["chain", "account", "inspect", "hash", "sign", "parachain", "completions"];
@@ -285,6 +296,11 @@ async function completeDotpath(
       );
     }
 
+    // RPC methods are also flat: <category>.<method_name>
+    if (category === "rpc") {
+      return completeRpcCategory(first, numComplete, endsWithDot, currentWord, chainFromFlag);
+    }
+
     if (numComplete === 1 && endsWithDot) {
       // "category." → pallet names
       const chainName = chainFromFlag;
@@ -363,6 +379,16 @@ async function completeDotpath(
           endsWithDot,
           currentWord,
           config,
+          chainName,
+        );
+      }
+
+      if (category === "rpc") {
+        return completeRpcCategory(
+          `${first}.${completeSegments[1]!}`,
+          numComplete - 1,
+          endsWithDot,
+          currentWord,
           chainName,
         );
       }
@@ -471,6 +497,39 @@ async function completeExtensionsCategory(
   if (!chainName) return [];
   const names = await loadExtensionIdentifiers(config, chainName);
   if (!names) return [];
+
+  if (numComplete === 1 && endsWithDot) {
+    const candidates = names.map((n) => `${prefix}.${n}`);
+    return filterPrefix(candidates, currentWord.slice(0, -1));
+  }
+
+  if (numComplete === 1 && !endsWithDot) {
+    const candidates = names.map((n) => `${prefix}.${n}`);
+    return filterPrefix(candidates, currentWord);
+  }
+
+  return [];
+}
+
+/**
+ * Complete JSON-RPC method names for the `rpc` category.
+ * Flat: `[chain.]rpc.<method>`. Sources candidates from the cached
+ * `rpc_methods` list; falls back to the curated registry when no cache exists.
+ */
+async function completeRpcCategory(
+  prefix: string,
+  numComplete: number,
+  endsWithDot: boolean,
+  currentWord: string,
+  chainNameOverride?: string,
+): Promise<string[]> {
+  let names: string[];
+  if (chainNameOverride) {
+    const cached = await loadRpcMethods(chainNameOverride);
+    names = cached?.methods ?? Object.keys(RPC_REGISTRY);
+  } else {
+    names = Object.keys(RPC_REGISTRY);
+  }
 
   if (numComplete === 1 && endsWithDot) {
     const candidates = names.map((n) => `${prefix}.${n}`);

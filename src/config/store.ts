@@ -27,6 +27,16 @@ export function getMetadataFingerprintPath(chainName: string): string {
   return join(getChainDir(chainName), "metadata.fingerprint.json");
 }
 
+export function getRpcMethodsPath(chainName: string): string {
+  return join(getChainDir(chainName), "rpc-methods.json");
+}
+
+export interface RpcMethodsCache {
+  methods: string[];
+  version: number;
+  fetchedAt: string;
+}
+
 function getConfigPath(): string {
   return join(getConfigDir(), "config.json");
 }
@@ -106,6 +116,40 @@ export async function loadMetadataFingerprint(
   } catch {
     return null;
   }
+}
+
+export async function loadRpcMethods(chainName: string): Promise<RpcMethodsCache | null> {
+  const path = getRpcMethodsPath(chainName);
+  if (!(await fileExists(path))) return null;
+  try {
+    const parsed = JSON.parse(await readFile(path, "utf-8"));
+    if (
+      parsed &&
+      Array.isArray(parsed.methods) &&
+      typeof parsed.version === "number" &&
+      typeof parsed.fetchedAt === "string"
+    ) {
+      return parsed as RpcMethodsCache;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveRpcMethods(
+  chainName: string,
+  methods: string[],
+  version: number,
+): Promise<void> {
+  const dir = getChainDir(chainName);
+  await ensureDir(dir);
+  const cache: RpcMethodsCache = {
+    methods,
+    version,
+    fetchedAt: new Date().toISOString(),
+  };
+  await writeFile(getRpcMethodsPath(chainName), `${JSON.stringify(cache, null, 2)}\n`);
 }
 
 export async function removeChainData(chainName: string): Promise<void> {

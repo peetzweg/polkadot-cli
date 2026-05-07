@@ -17,6 +17,7 @@ import { registerInspectCommand } from "./commands/inspect.ts";
 import { registerMetadataCommand } from "./commands/metadata.ts";
 import { registerParachainCommand } from "./commands/parachain.ts";
 import { handleQuery } from "./commands/query.ts";
+import { handleRpc } from "./commands/rpc.ts";
 import { registerSignCommand } from "./commands/sign.ts";
 import { handleTx } from "./commands/tx.ts";
 import { registerVerifiableCommands } from "./commands/verifiable.ts";
@@ -94,6 +95,7 @@ if (process.argv[2] === "__complete") {
     .option("--mortality <spec>", '"immortal" or period number (for tx)')
     .option("--at <block>", 'Block hash, "best", or "finalized" to validate against (for tx)')
     .option("--unsigned", "Submit as unsigned/bare transaction (no signer required, for tx)")
+    .option("--refresh", "Refresh the cached RPC method list from the node (for rpc)")
     .action(
       async (
         dotpath: string | undefined,
@@ -117,6 +119,7 @@ if (process.argv[2] === "__complete") {
           at?: string;
           unsigned?: boolean;
           dump?: boolean;
+          refresh?: boolean;
           var?: string | string[];
         },
       ) => {
@@ -197,9 +200,12 @@ if (process.argv[2] === "__complete") {
         // Only consume item from args if pallet was also consumed from args,
         // to avoid misinterpreting method arguments as item names
         // (e.g. `dot query.System 0x1234` should NOT treat 0x1234 as an item).
+        // Flat categories (rpc, extensions) only absorb the identifier slot —
+        // any remaining positionals are method arguments, not sub-items.
+        const isFlatCategory = parsed.category === "rpc" || parsed.category === "extensions";
         if (!parsed.pallet && args.length > 0) {
           parsed.pallet = args.shift()!;
-          if (!parsed.item && args.length > 0) {
+          if (!isFlatCategory && !parsed.item && args.length > 0) {
             parsed.item = args.shift()!;
           }
         }
@@ -284,6 +290,22 @@ if (process.argv[2] === "__complete") {
             await handleExtensions(parsed.pallet, handlerOpts);
             break;
           }
+          case "rpc": {
+            if (parsed.item) {
+              const suggestion = parsed.chain
+                ? `dot ${parsed.chain}.rpc.${parsed.pallet}`
+                : opts.chain
+                  ? `dot rpc.${parsed.pallet} --chain ${opts.chain}`
+                  : `dot rpc.${parsed.pallet} --chain <chain>`;
+              throw new CliError(`RPC methods have no sub-items. Try "${suggestion}".`);
+            }
+            await handleRpc(parsed.pallet, args, {
+              ...handlerOpts,
+              help: cli.options.help,
+              refresh: opts.refresh,
+            });
+            break;
+          }
         }
       },
     );
@@ -321,6 +343,7 @@ if (process.argv[2] === "__complete") {
     console.log("  errors    List or inspect pallet errors");
     console.log("  apis      Browse and call runtime APIs");
     console.log("  extensions  List transaction extensions on a chain");
+    console.log("  rpc       Call raw JSON-RPC methods on a node");
     console.log();
     console.log("Examples:");
     console.log("  dot polkadot.query.System.Account <addr>            Query a storage item");
@@ -339,6 +362,10 @@ if (process.argv[2] === "__complete") {
       "  dot polkadot.extensions                             List transaction extensions",
     );
     console.log("  dot polkadot.extensions.CheckMortality              Inspect one extension");
+    console.log(
+      "  dot polkadot.rpc                                    List RPC methods on the node",
+    );
+    console.log("  dot polkadot.rpc.system_health                      Call a JSON-RPC method");
     console.log("  dot query.System.Number --chain polkadot            --chain flag form");
     console.log(
       "  dot ./transfer.yaml --from alice                    Run from file (chain in YAML)",
