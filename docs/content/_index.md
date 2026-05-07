@@ -2287,6 +2287,18 @@ Pre-req: metadata cached for the chain (`dot chain update polkadot`). There is n
 - A positional address (`dot account add foo <ss58>`) cannot be combined with derivation flags.
 - Derivation flags cannot be combined with `--secret` or `--env` — a derived sovereign has no signing key.
 
+### Legacy `dot parachain` (deprecated)
+
+The earlier standalone `dot parachain <paraId>` command is **preserved for backward compatibility** and prints a deprecation warning to stderr. Stdout is byte-identical to prior releases — pipes such as `dot parachain 2004 --json | jq -r '.child.ss58'` keep working unchanged. Migrate to `dot account inspect --parachain <id> --parachain-type <child|sibling>` at your convenience. Tracked for removal in a future release ([#208](https://github.com/peetzweg/polkadot-cli/issues/208)).
+
+```bash
+# Old (deprecated alias — still works, emits stderr warning)
+dot parachain 1000 --type child --json
+
+# New
+dot account inspect --parachain 1000 --parachain-type child --json
+```
+
 ## Bandersnatch Member Keys
 
 Derive Bandersnatch member keys from account mnemonics for on-chain member set registration. Uses the [`verifiablejs`](https://github.com/paritytech/verifiablejs) WASM library (Ring VRF on the Bandersnatch elliptic curve). Runs offline — no chain connection required.

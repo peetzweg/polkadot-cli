@@ -1701,6 +1701,18 @@ There is no central registry of "well-known" PalletIds — each runtime author p
 - A positional address (`dot account add foo <ss58>`) cannot be combined with derivation flags.
 - Derivation flags cannot be combined with `--secret` or `--env` — a derived sovereign has no signing key.
 
+#### Legacy `dot parachain` command (deprecated)
+
+The standalone `dot parachain <paraId>` command from earlier releases is **still available for backward compatibility** and now prints a deprecation warning to stderr. Stdout output is unchanged, so existing pipes (e.g. `dot parachain 1000 --json | jq`) keep working. Migrate to `dot account inspect --parachain <id> --parachain-type <child|sibling>` at your convenience — it will be removed in a future release ([#208](https://github.com/peetzweg/polkadot-cli/issues/208)).
+
+```bash
+# Old (deprecated, still works — emits stderr warning)
+dot parachain 1000 --type child --json
+
+# New
+dot account inspect --parachain 1000 --parachain-type child --json
+```
+
 ### Bandersnatch member keys
 
 Derive Bandersnatch member keys from account mnemonics for on-chain member set registration (personhood proofs, Ring VRF). Uses the [`verifiablejs`](https://github.com/paritytech/verifiablejs) WASM library.

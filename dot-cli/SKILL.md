@@ -459,6 +459,15 @@ Use `account add` to persist (named, reusable in `--from`/tx args, appears in
 
 **Constraints (will error):** `--parachain` requires `--parachain-type child|sibling`; `--parachain` and `--pallet-id` are mutually exclusive; on `account add`, derivation flags can't combine with a positional address or with `--secret` / `--env`; on `account inspect`, derivation flags can't combine with a positional input.
 
+**Deprecated alias:** the legacy `dot parachain <paraId>` command is preserved for backward compat with older scripts. Stdout is byte-identical to prior releases; a deprecation warning is printed to stderr. Prefer `dot account inspect --parachain <id> --parachain-type <type>` for new code (tracked for removal in [#208](https://github.com/peetzweg/polkadot-cli/issues/208)):
+
+```bash
+# Old (deprecated, still works)
+dot parachain 1000 --type child --json
+# New
+dot account inspect --parachain 1000 --parachain-type child --json
+```
+
 ## Other Commands
 
 ```bash
