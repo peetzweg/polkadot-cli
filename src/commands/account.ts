@@ -2,6 +2,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import type { CAC } from "cac";
 import { findAccount, loadAccounts, saveAccounts } from "../config/accounts-store.ts";
 import {
+  type AccountKind,
+  classifyAccount,
   type EnvSecret,
   isEnvSecret,
   isWatchOnly,
@@ -23,25 +25,36 @@ import {
 } from "../core/accounts.ts";
 import {
   BOLD,
+  CYAN,
+  DIM,
   formatJson,
   isJsonOutput,
   printHeading,
   printImportResults,
-  printItem,
   RESET,
   YELLOW,
 } from "../core/output.ts";
+import { derivePalletAccount, formatPalletId, parsePalletId } from "../core/pallet.ts";
+import {
+  deriveSovereignAccount,
+  isValidParaId,
+  type SovereignAccountType,
+} from "../core/parachain.ts";
 
 const ACCOUNT_HELP = `
 ${BOLD}Usage:${RESET}
   $ dot account add <name> <ss58|hex>                                Add a watch-only address (no secret)
   $ dot account add <name> --secret <s> [--path <derivation>]        Import from BIP39 mnemonic
   $ dot account add <name> --env <VAR> [--path <derivation>]         Import account backed by env variable
+  $ dot account add <name> --parachain <id> --parachain-type <t>     Derive a parachain sovereign (t = child|sibling)
+  $ dot account add <name> --pallet-id <8 chars or 0x hex>           Derive a pallet sovereign (e.g. py/trsry)
   $ dot account create|new <name> [--path <derivation>]              Create a new account
   $ dot account import <file>                                        Batch-import accounts from a file
   $ dot account export [names...]                                    Export accounts to stdout
   $ dot account derive <source> <new-name> --path <derivation>       Derive a child account
   $ dot account inspect <input> [--prefix <N>] [--show-secret]       Inspect an account/address/key
+  $ dot account inspect --pallet-id <id> [--prefix <N>]              Derive a pallet sovereign (no save — script-friendly)
+  $ dot account inspect --parachain <id> --parachain-type <t>        Derive a parachain sovereign (no save — script-friendly)
   $ dot account list                                                 List all accounts
   $ dot account remove|delete <name> [name2] ...                     Remove stored account(s)
 
@@ -49,6 +62,10 @@ ${BOLD}Examples:${RESET}
   $ dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
   $ dot account add treasury --secret "word1 word2 ... word12"
   $ dot account add ci-signer --env MY_SECRET --path //ci
+  $ dot account add Treasury --pallet-id py/trsry
+  $ dot account add Bounties --pallet-id 0x70792f626f756e74
+  $ dot account add People --parachain 1004 --parachain-type child
+  $ dot account add People-Sibling --parachain 1004 --parachain-type sibling
   $ dot account create my-validator
   $ dot account create my-staking --path //staking
   $ dot account create multi --path //polkadot//0/wallet
@@ -64,6 +81,8 @@ ${BOLD}Examples:${RESET}
   $ dot account inspect dave --show-secret
   $ dot account inspect 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
   $ dot account inspect 0xd435...a27d --prefix 0
+  $ dot account inspect --pallet-id py/trsry --prefix 0
+  $ dot account inspect --parachain 1004 --parachain-type child
   $ dot account list
   $ dot account remove my-validator stale-key
 
@@ -82,6 +101,9 @@ export function registerAccountCommands(cli: CAC) {
     .option("--secret <value>", "Secret key (mnemonic or hex seed) for import")
     .option("--env <varName>", "Environment variable name holding the secret")
     .option("--path <derivation>", "Derivation path (e.g. //staking, //polkadot//0/wallet)")
+    .option("--parachain <id>", "Derive a parachain sovereign account (requires --parachain-type)")
+    .option("--parachain-type <type>", "Parachain sovereign type: child or sibling")
+    .option("--pallet-id <id>", "Derive a pallet sovereign account from an 8-byte PalletId")
     .option("--prefix <number>", "SS58 prefix for address encoding (default: 42)")
     .option("--file <path>", "Input/output file for batch import/export")
     .option("--overwrite", "Overwrite existing accounts on batch import")
@@ -97,6 +119,9 @@ export function registerAccountCommands(cli: CAC) {
           secret?: string;
           env?: string;
           path?: string;
+          parachain?: string;
+          parachainType?: string;
+          palletId?: string;
           prefix?: string;
           file?: string;
           overwrite?: boolean;
@@ -118,7 +143,22 @@ export function registerAccountCommands(cli: CAC) {
           case "create":
             return accountCreate(names[0], opts);
           case "add":
-            if (opts.secret || opts.env) return accountImport(names[0], opts);
+            if (opts.secret || opts.env) {
+              const hasDerivation =
+                opts.parachain != null ||
+                opts.palletId != null ||
+                process.argv.includes("--parachain") ||
+                process.argv.includes("--pallet-id") ||
+                process.argv.some(
+                  (a) => a.startsWith("--parachain=") || a.startsWith("--pallet-id="),
+                );
+              if (hasDerivation) {
+                throw new Error(
+                  "Derivation flags (--parachain, --pallet-id) cannot be combined with --secret or --env. A derived sovereign account has no secret.",
+                );
+              }
+              return accountImport(names[0], opts);
+            }
             return accountAddWatchOnly(names[0], names[1], opts);
           case "import":
             return accountBatchImport(names[0], opts);
@@ -298,10 +338,20 @@ async function accountImport(
   }
 }
 
+type SovereignSource =
+  | { kind: "parachain"; paraId: number; type: SovereignAccountType }
+  | { kind: "pallet"; palletId: Uint8Array };
+
 async function accountAddWatchOnly(
   name: string | undefined,
   address: string | undefined,
-  opts: { output?: string; json?: boolean } = {},
+  opts: {
+    parachain?: string;
+    parachainType?: string;
+    palletId?: string;
+    output?: string;
+    json?: boolean;
+  } = {},
 ) {
   if (!name) {
     console.error("Account name is required.\n");
@@ -309,9 +359,21 @@ async function accountAddWatchOnly(
     process.exit(1);
   }
 
-  if (!address) {
+  const sovereignSource = resolveSovereignSource(opts);
+
+  if (sovereignSource && address) {
+    throw new Error(
+      "Cannot combine a positional address with --parachain or --pallet-id. Pass either an address OR a derivation flag, not both.",
+    );
+  }
+
+  if (!sovereignSource && !address) {
     console.error("Address is required.\n");
     console.error("Usage: dot account add <name> <ss58-address|0x-public-key>");
+    console.error(
+      "       dot account add <name> --parachain <id> --parachain-type <child|sibling>",
+    );
+    console.error("       dot account add <name> --pallet-id <8 chars or 0x hex>");
     process.exit(1);
   }
 
@@ -326,13 +388,18 @@ async function accountAddWatchOnly(
     throw new Error(`Account "${name}" already exists.`);
   }
 
-  // Decode SS58 or hex to get publicKey hex
   let hexPub: string;
-  if (isHexPublicKey(address)) {
-    hexPub = address;
+  if (sovereignSource) {
+    const accountId =
+      sovereignSource.kind === "parachain"
+        ? deriveSovereignAccount(sovereignSource.paraId, sovereignSource.type)
+        : derivePalletAccount(sovereignSource.palletId);
+    hexPub = publicKeyToHex(accountId);
+  } else if (isHexPublicKey(address as string)) {
+    hexPub = address as string;
   } else {
     try {
-      const decoded = fromSs58(address);
+      const decoded = fromSs58(address as string);
       hexPub = publicKeyToHex(decoded);
     } catch {
       throw new Error(
@@ -341,22 +408,122 @@ async function accountAddWatchOnly(
     }
   }
 
+  let persistedSource: import("../config/accounts-types.ts").AccountSource | undefined;
+  if (sovereignSource?.kind === "pallet") {
+    persistedSource = {
+      kind: "pallet",
+      palletId: `0x${Array.from(sovereignSource.palletId, (b) => b.toString(16).padStart(2, "0")).join("")}`,
+    };
+  } else if (sovereignSource?.kind === "parachain") {
+    persistedSource = {
+      kind: "parachain",
+      paraId: sovereignSource.paraId,
+      type: sovereignSource.type,
+    };
+  }
+
   accountsFile.accounts.push({
     name,
     publicKey: hexPub,
     derivationPath: "",
+    ...(persistedSource ? { source: persistedSource } : {}),
   });
   await saveAccounts(accountsFile);
 
   if (isJsonOutput(opts)) {
-    console.log(formatJson({ name, address: toSs58(hexPub), watchOnly: true }));
+    const payload: Record<string, unknown> = {
+      name,
+      address: toSs58(hexPub),
+      watchOnly: true,
+    };
+    if (sovereignSource?.kind === "parachain") {
+      payload.derivation = {
+        kind: "parachain",
+        paraId: sovereignSource.paraId,
+        type: sovereignSource.type,
+      };
+    } else if (sovereignSource?.kind === "pallet") {
+      payload.derivation = {
+        kind: "pallet",
+        palletId: formatPalletId(sovereignSource.palletId),
+        palletIdHex: `0x${Array.from(sovereignSource.palletId, (b) => b.toString(16).padStart(2, "0")).join("")}`,
+      };
+    }
+    console.log(formatJson(payload));
     return;
   }
 
   printHeading("Account Added (watch-only)");
   console.log(`  ${BOLD}Name:${RESET}    ${name}`);
   console.log(`  ${BOLD}Address:${RESET} ${toSs58(hexPub)}`);
+  if (sovereignSource?.kind === "parachain") {
+    console.log(
+      `  ${BOLD}Source:${RESET}  parachain ${sovereignSource.paraId} (${sovereignSource.type} sovereign)`,
+    );
+  } else if (sovereignSource?.kind === "pallet") {
+    const display = formatPalletId(sovereignSource.palletId);
+    const hex = `0x${Array.from(sovereignSource.palletId, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+    console.log(`  ${BOLD}Source:${RESET}  pallet ${display} (${hex})`);
+  }
   console.log();
+}
+
+// cac coerces values that look numeric (including 0x-hex) via Number(), which
+// truncates hex PalletIds. Re-read the raw token from argv to bypass that.
+function rawArgValue(flag: string): string | undefined {
+  const argv = process.argv;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === flag && i + 1 < argv.length) return argv[i + 1];
+    const prefix = `${flag}=`;
+    if (argv[i]?.startsWith(prefix)) return argv[i]!.slice(prefix.length);
+  }
+  return undefined;
+}
+
+function resolveSovereignSource(opts: {
+  parachain?: string;
+  parachainType?: string;
+  palletId?: string;
+}): SovereignSource | undefined {
+  const rawPalletId = rawArgValue("--pallet-id") ?? opts.palletId;
+  const rawParachain = rawArgValue("--parachain") ?? opts.parachain;
+
+  if (rawParachain != null && rawPalletId != null) {
+    throw new Error(
+      "--parachain and --pallet-id are mutually exclusive. Pass only one derivation flag.",
+    );
+  }
+
+  if (rawParachain != null) {
+    const paraId = Number(rawParachain);
+    if (!isValidParaId(paraId)) {
+      throw new Error(
+        `Invalid parachain ID "${rawParachain}". Must be a non-negative integer (0 to 4294967295).`,
+      );
+    }
+    if (!opts.parachainType) {
+      throw new Error(
+        "--parachain-type is required when --parachain is given. Use --parachain-type child or --parachain-type sibling.",
+      );
+    }
+    const type = opts.parachainType.toLowerCase();
+    if (type !== "child" && type !== "sibling") {
+      throw new Error(
+        `Unknown parachain account type "${opts.parachainType}". Valid types: child, sibling.`,
+      );
+    }
+    return { kind: "parachain", paraId, type: type as SovereignAccountType };
+  }
+
+  if (rawPalletId != null) {
+    return { kind: "pallet", palletId: parsePalletId(String(rawPalletId)) };
+  }
+
+  if (opts.parachainType != null) {
+    throw new Error("--parachain-type requires --parachain.");
+  }
+
+  return undefined;
 }
 
 async function accountDerive(
@@ -467,6 +634,93 @@ async function accountDerive(
   }
 }
 
+type AccountAttribute = { label: string; value: string };
+
+type StoredAccountRow = {
+  account: StoredAccount;
+  kind: AccountKind;
+  address: string;
+  attributes: AccountAttribute[];
+};
+
+function resolveAddress(account: StoredAccount): string {
+  if (isWatchOnly(account)) {
+    return account.publicKey ? toSs58(account.publicKey) : "n/a";
+  }
+  if (account.secret !== undefined && isEnvSecret(account.secret)) {
+    const pubKey =
+      account.publicKey || tryDerivePublicKey(account.secret.env, account.derivationPath) || "";
+    return pubKey ? toSs58(pubKey) : "n/a";
+  }
+  return toSs58(account.publicKey);
+}
+
+// Attribute labels mirror the `--flag` names that set the corresponding value
+// (--path, --env, --pallet-id, --parachain, --parachain-type) so users can
+// derive the flag from what they see and vice-versa.
+function buildAttributes(account: StoredAccount): AccountAttribute[] {
+  const attrs: AccountAttribute[] = [];
+  if (account.derivationPath) attrs.push({ label: "path", value: account.derivationPath });
+  if (account.secret !== undefined && isEnvSecret(account.secret)) {
+    attrs.push({ label: "env", value: `$${account.secret.env}` });
+  }
+  if (account.source) {
+    if (account.source.kind === "pallet") {
+      const bytes = parsePalletId(account.source.palletId);
+      attrs.push({
+        label: "pallet-id",
+        value: `${formatPalletId(bytes)} (${account.source.palletId})`,
+      });
+    } else {
+      attrs.push({ label: "parachain", value: String(account.source.paraId) });
+      attrs.push({ label: "parachain-type", value: account.source.type });
+    }
+  }
+  return attrs;
+}
+
+function buildRow(account: StoredAccount): StoredAccountRow {
+  return {
+    account,
+    kind: classifyAccount(account),
+    address: resolveAddress(account),
+    attributes: buildAttributes(account),
+  };
+}
+
+const SECTION_ORDER: { kind: AccountKind; title: string }[] = [
+  { kind: "signer", title: "Signers" },
+  { kind: "watch-only", title: "Watch-only" },
+  { kind: "pallet", title: "Pallet Sovereigns" },
+  { kind: "parachain", title: "Parachain Sovereigns" },
+];
+
+function printAccountSection(
+  title: string,
+  rows: { name: string; address: string; attributes: AccountAttribute[] }[],
+) {
+  if (rows.length === 0) return;
+  const nameWidth = Math.max(...rows.map((r) => r.name.length));
+  printHeading(title);
+  for (const row of rows) {
+    const namePad = row.name.padEnd(nameWidth);
+    console.log(`  ${CYAN}${namePad}${RESET}  ${row.address}`);
+    if (row.attributes.length === 0) continue;
+    // Tree-style continuation lines, one per attribute. Labels are key-padded
+    // (key + colon) to the longest label-width within this account so values
+    // align in a column.
+    const labelWidth = Math.max(...row.attributes.map((a) => a.label.length)) + 1; // +1 for ':'
+    for (let i = 0; i < row.attributes.length; i++) {
+      const isLast = i === row.attributes.length - 1;
+      const connector = isLast ? "└─" : "├─";
+      const labelText = `${row.attributes[i]!.label}:`.padEnd(labelWidth + 1);
+      console.log(
+        `     ${DIM}${connector}${RESET} ${DIM}${labelText}${RESET}${row.attributes[i]!.value}`,
+      );
+    }
+  }
+}
+
 async function accountList(opts: { output?: string; json?: boolean } = {}) {
   const accountsFile = await loadAccounts();
 
@@ -474,71 +728,73 @@ async function accountList(opts: { output?: string; json?: boolean } = {}) {
     const dev = DEV_NAMES.map((name) => ({
       name: name.charAt(0).toUpperCase() + name.slice(1),
       address: getDevAddress(name),
+      kind: "dev" as const,
     }));
     const stored = accountsFile.accounts.map((account) => {
-      let address: string | undefined;
-      if (isWatchOnly(account)) {
-        address = account.publicKey ? toSs58(account.publicKey) : undefined;
-      } else if (account.secret !== undefined && isEnvSecret(account.secret)) {
-        let pubKey = account.publicKey;
-        if (!pubKey) {
-          pubKey = tryDerivePublicKey(account.secret.env, account.derivationPath) ?? "";
-        }
-        address = pubKey ? toSs58(pubKey) : undefined;
-      } else {
-        address = toSs58(account.publicKey);
-      }
-      return {
+      const kind = classifyAccount(account);
+      const entry: Record<string, unknown> = {
         name: account.name,
-        address,
-        derivationPath: account.derivationPath || undefined,
+        address: resolveAddress(account),
+        kind,
         watchOnly: isWatchOnly(account),
-        env:
-          account.secret !== undefined && isEnvSecret(account.secret)
-            ? account.secret.env
-            : undefined,
       };
+      if (account.derivationPath) entry.derivationPath = account.derivationPath;
+      if (account.secret !== undefined && isEnvSecret(account.secret)) {
+        entry.env = account.secret.env;
+      }
+      if (account.source) {
+        if (account.source.kind === "pallet") {
+          const bytes = parsePalletId(account.source.palletId);
+          entry.source = {
+            kind: "pallet",
+            palletId: formatPalletId(bytes),
+            palletIdHex: account.source.palletId,
+          };
+        } else {
+          entry.source = account.source;
+        }
+      }
+      return entry;
     });
     console.log(formatJson({ dev, stored }));
     return;
   }
 
-  printHeading("Dev Accounts");
-  for (const name of DEV_NAMES) {
-    const display = name.charAt(0).toUpperCase() + name.slice(1);
-    const address = getDevAddress(name);
-    printItem(display, address);
+  // Dev accounts — always shown first
+  const devRows = DEV_NAMES.map((name) => ({
+    name: name.charAt(0).toUpperCase() + name.slice(1),
+    address: getDevAddress(name),
+    attributes: [] as AccountAttribute[],
+  }));
+  printAccountSection("Dev Accounts", devRows);
+
+  // Stored accounts — bucketed by kind, empty sections omitted
+  const buckets = new Map<AccountKind, StoredAccountRow[]>();
+  for (const account of accountsFile.accounts) {
+    const row = buildRow(account);
+    const arr = buckets.get(row.kind) ?? [];
+    arr.push(row);
+    buckets.set(row.kind, arr);
   }
 
-  if (accountsFile.accounts.length > 0) {
-    printHeading("Stored Accounts");
-    for (const account of accountsFile.accounts) {
-      let displayName = account.name;
-      if (account.derivationPath) {
-        displayName += ` (${account.derivationPath})`;
-      }
-      let address: string;
-
-      if (isWatchOnly(account)) {
-        displayName += " (watch-only)";
-        address = account.publicKey ? toSs58(account.publicKey) : "n/a";
-      } else if (account.secret !== undefined && isEnvSecret(account.secret)) {
-        displayName += ` (env: ${account.secret.env})`;
-        let pubKey = account.publicKey;
-        if (!pubKey) {
-          pubKey = tryDerivePublicKey(account.secret.env, account.derivationPath) ?? "";
-        }
-        address = pubKey ? toSs58(pubKey) : "n/a";
-      } else {
-        address = toSs58(account.publicKey);
-      }
-
-      printItem(displayName, address);
-    }
-  } else {
-    printHeading("Stored Accounts");
-    console.log("  (none)");
+  for (const { kind, title } of SECTION_ORDER) {
+    const rows = buckets.get(kind);
+    if (!rows || rows.length === 0) continue;
+    printAccountSection(
+      title,
+      rows.map((r) => ({
+        name: r.account.name,
+        address: r.address,
+        attributes: r.attributes,
+      })),
+    );
   }
+
+  if (accountsFile.accounts.length === 0) {
+    printHeading("Stored Accounts");
+    console.log(`  ${DIM}(none)${RESET}`);
+  }
+
   console.log();
 }
 
@@ -592,11 +848,38 @@ async function accountRemove(names: string[], opts: { output?: string; json?: bo
 
 async function accountInspect(
   input: string | undefined,
-  opts: { prefix?: string; showSecret?: boolean; output?: string; json?: boolean },
+  opts: {
+    parachain?: string;
+    parachainType?: string;
+    palletId?: string;
+    prefix?: string;
+    showSecret?: boolean;
+    output?: string;
+    json?: boolean;
+  },
 ) {
-  if (!input) {
+  // Stateless derivation mode: --pallet-id / --parachain compute and display
+  // a sovereign address without persisting it. Mutually exclusive with the
+  // positional input (which resolves names/ss58/hex from existing state).
+  const sovereignSource = resolveSovereignSource({
+    parachain: opts.parachain,
+    parachainType: opts.parachainType,
+    palletId: opts.palletId,
+  });
+
+  if (sovereignSource && input) {
+    throw new Error(
+      "Cannot combine a positional input with --parachain or --pallet-id. Pass either an existing-account input OR a derivation flag, not both.",
+    );
+  }
+
+  if (!sovereignSource && !input) {
     console.error("Input is required.\n");
     console.error("Usage: dot account inspect <name|ss58-address|0x-public-key> [--prefix <N>]");
+    console.error("       dot account inspect --pallet-id <id> [--prefix <N>]");
+    console.error(
+      "       dot account inspect --parachain <id> --parachain-type <child|sibling> [--prefix <N>]",
+    );
     process.exit(1);
   }
 
@@ -610,22 +893,51 @@ async function accountInspect(
   let publicKeyHex: string;
   let bandersnatch: Record<string, string> | undefined;
   let hasSecret = false;
+  let storedAccount: StoredAccount | undefined;
+  let isDev = false;
+  // Synthetic source for the stateless-derivation branch — same shape as
+  // StoredAccount.source so the JSON/pretty-print branches downstream don't
+  // need a separate code path.
+  let virtualSource:
+    | { kind: "pallet"; palletIdHex: string }
+    | { kind: "parachain"; paraId: number; type: "child" | "sibling" }
+    | undefined;
 
+  if (sovereignSource) {
+    if (sovereignSource.kind === "pallet") {
+      const accountId = derivePalletAccount(sovereignSource.palletId);
+      publicKeyHex = publicKeyToHex(accountId);
+      virtualSource = {
+        kind: "pallet",
+        palletIdHex: `0x${Array.from(sovereignSource.palletId, (b) => b.toString(16).padStart(2, "0")).join("")}`,
+      };
+    } else {
+      const accountId = deriveSovereignAccount(sovereignSource.paraId, sovereignSource.type);
+      publicKeyHex = publicKeyToHex(accountId);
+      virtualSource = {
+        kind: "parachain",
+        paraId: sovereignSource.paraId,
+        type: sovereignSource.type,
+      };
+    }
+  }
   // 1. Dev account name
-  if (isDevAccount(input)) {
-    name = input.charAt(0).toUpperCase() + input.slice(1).toLowerCase();
-    const devAddr = getDevAddress(input);
+  else if (isDevAccount(input!)) {
+    name = input!.charAt(0).toUpperCase() + input!.slice(1).toLowerCase();
+    const devAddr = getDevAddress(input!);
     publicKeyHex = publicKeyToHex(fromSs58(devAddr));
     hasSecret = true;
+    isDev = true;
   }
   // 2. Stored account name
   else {
     const accountsFile = await loadAccounts();
-    const account = findAccount(accountsFile, input);
+    const account = findAccount(accountsFile, input!);
     if (account) {
       name = account.name;
       bandersnatch = account.bandersnatch;
       hasSecret = account.secret !== undefined;
+      storedAccount = account;
       if (account.publicKey) {
         publicKeyHex = account.publicKey;
       } else if (account.secret !== undefined && isEnvSecret(account.secret)) {
@@ -644,13 +956,13 @@ async function accountInspect(
       }
     }
     // 3. Hex public key
-    else if (isHexPublicKey(input)) {
-      publicKeyHex = input;
+    else if (isHexPublicKey(input!)) {
+      publicKeyHex = input!;
     }
     // 4. Try SS58 decode
     else {
       try {
-        const decoded = fromSs58(input);
+        const decoded = fromSs58(input!);
         publicKeyHex = publicKeyToHex(decoded);
       } catch {
         console.error(
@@ -676,24 +988,91 @@ async function accountInspect(
       process.exit(1);
     }
     try {
-      privateKeyHex = bytesToHex(await resolveAccountExpandedSecret(input));
+      privateKeyHex = bytesToHex(await resolveAccountExpandedSecret(input!));
     } catch (err) {
       console.error((err as Error).message);
       process.exit(1);
     }
   }
 
+  // Compute kind label and source description (only meaningful for known accounts)
+  let kindLabel: string | undefined;
+  let sourceLine: string | undefined;
+  let derivationLine: string | undefined;
+  let envLine: string | undefined;
+
+  if (virtualSource?.kind === "pallet") {
+    kindLabel = "pallet sovereign";
+    const bytes = parsePalletId(virtualSource.palletIdHex);
+    sourceLine = `PalletId ${formatPalletId(bytes)} (${virtualSource.palletIdHex})`;
+  } else if (virtualSource?.kind === "parachain") {
+    kindLabel = `parachain sovereign (${virtualSource.type})`;
+    sourceLine = `parachain ${virtualSource.paraId}`;
+  } else if (isDev) {
+    kindLabel = "dev";
+  } else if (storedAccount) {
+    const k = classifyAccount(storedAccount);
+    if (k === "pallet" && storedAccount.source?.kind === "pallet") {
+      kindLabel = "pallet sovereign";
+      const bytes = parsePalletId(storedAccount.source.palletId);
+      sourceLine = `PalletId ${formatPalletId(bytes)} (${storedAccount.source.palletId})`;
+    } else if (k === "parachain" && storedAccount.source?.kind === "parachain") {
+      kindLabel = `parachain sovereign (${storedAccount.source.type})`;
+      sourceLine = `parachain ${storedAccount.source.paraId}`;
+    } else if (k === "signer") {
+      kindLabel = "signer";
+    } else {
+      kindLabel = "watch-only";
+    }
+    if (storedAccount.derivationPath) derivationLine = storedAccount.derivationPath;
+    if (storedAccount.secret !== undefined && isEnvSecret(storedAccount.secret)) {
+      envLine = `$${storedAccount.secret.env}`;
+    }
+  }
+
   if (isJsonOutput(opts)) {
     const result: Record<string, unknown> = { publicKey: publicKeyHex!, ss58, prefix };
     if (name) result.name = name;
+    if (kindLabel) result.kind = kindLabel;
+    if (virtualSource?.kind === "pallet") {
+      const bytes = parsePalletId(virtualSource.palletIdHex);
+      result.source = {
+        kind: "pallet",
+        palletId: formatPalletId(bytes),
+        palletIdHex: virtualSource.palletIdHex,
+      };
+    } else if (virtualSource?.kind === "parachain") {
+      result.source = {
+        kind: "parachain",
+        paraId: virtualSource.paraId,
+        type: virtualSource.type,
+      };
+    } else if (storedAccount?.source) {
+      if (storedAccount.source.kind === "pallet") {
+        const bytes = parsePalletId(storedAccount.source.palletId);
+        result.source = {
+          kind: "pallet",
+          palletId: formatPalletId(bytes),
+          palletIdHex: storedAccount.source.palletId,
+        };
+      } else {
+        result.source = storedAccount.source;
+      }
+    }
+    if (derivationLine) result.derivationPath = derivationLine;
+    if (envLine) result.env = envLine.replace(/^\$/, "");
     if (bandersnatch && Object.keys(bandersnatch).length > 0) result.bandersnatch = bandersnatch;
     if (privateKeyHex) result.privateKey = privateKeyHex;
     console.log(formatJson(result));
   } else {
     printHeading("Account Info");
     if (name) console.log(`  ${BOLD}Name:${RESET}        ${name}`);
+    if (kindLabel) console.log(`  ${BOLD}Kind:${RESET}        ${kindLabel}`);
     console.log(`  ${BOLD}Public Key:${RESET}  ${publicKeyHex!}`);
     console.log(`  ${BOLD}SS58:${RESET}        ${ss58}`);
+    if (sourceLine) console.log(`  ${BOLD}Source:${RESET}      ${sourceLine}`);
+    if (derivationLine) console.log(`  ${BOLD}Derivation:${RESET}  ${derivationLine}`);
+    if (envLine) console.log(`  ${BOLD}Env:${RESET}         ${envLine}`);
     if (bandersnatch && Object.keys(bandersnatch).length > 0) {
       const entries = Object.entries(bandersnatch);
       for (let i = 0; i < entries.length; i++) {

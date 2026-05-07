@@ -1,3 +1,7 @@
+// DEPRECATED: superseded by `dot account inspect --parachain <id> --parachain-type <type>`.
+// Kept verbatim so production scripts pinned to the old surface keep working; stdout is
+// byte-identical to pre-deprecation behaviour. Tracked for removal:
+// https://github.com/peetzweg/polkadot-cli/issues/208
 import type { CAC } from "cac";
 import { publicKeyToHex, toSs58 } from "../core/accounts.ts";
 import { BOLD, CYAN, DIM, formatJson, isJsonOutput, printHeading, RESET } from "../core/output.ts";
@@ -44,6 +48,11 @@ export function registerParachainCommand(cli: CAC) {
         paraIdStr: string | undefined,
         opts: { type?: string; prefix?: string; output?: string; json?: boolean },
       ) => {
+        // stderr-only — keeps stdout byte-identical for pipes / jq / parsers.
+        console.error(
+          "Warning: `dot parachain` is deprecated; use `dot account inspect --parachain <id> --parachain-type <child|sibling>` instead. Will be removed in a future release.",
+        );
+
         if (!paraIdStr) {
           printParachainHelp();
           return;

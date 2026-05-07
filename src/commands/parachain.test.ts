@@ -116,4 +116,11 @@ describe("dot parachain", () => {
     expect(jsonFlag.exitCode).toBe(0);
     expect(jsonFlag.stdout).toBe(outputJson.stdout);
   });
+
+  test("emits deprecation warning to stderr (not stdout)", async () => {
+    const { stdout, stderr, exitCode } = await runCli(["parachain", "1000", "--json"]);
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain("`dot parachain` is deprecated");
+    expect(stdout).not.toContain("deprecated");
+  });
 });

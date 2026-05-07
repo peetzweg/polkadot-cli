@@ -20,7 +20,7 @@ dot [chain.]<category>[.Pallet[.Item]] [args] [options]
 
 Categories: `query`, `tx`, `apis`, `const`, `events`, `errors`, `extensions`
 
-Top-level commands: `dot inspect`, `dot metadata`, `dot chain`, `dot account`, `dot parachain`, `dot sign`, `dot hash`.
+Top-level commands: `dot inspect`, `dot metadata`, `dot chain`, `dot account`, `dot sign`, `dot hash`.
 
 Omit deeper levels to discover what's available. Always include the chain prefix:
 
@@ -334,18 +334,36 @@ Enum-variant visibility: enums up to **24 variants** now show variant names inli
 ## Account Management
 
 ```bash
-# List dev + stored accounts
+# List dev + stored accounts. Stored accounts are bucketed by kind
+# (Signers / Watch-only / Pallet Sovereigns / Parachain Sovereigns); empty
+# sections are omitted. Each account: first line is `name  ss58` (clean
+# columns for copy-paste). Extra attributes (path, env, pallet-id,
+# parachain, parachain-type) render on tree-style continuation lines —
+# the labels mirror the `--flag` that sets each value.
 dot account list
 # Output:
 # Dev Accounts
 #
-#   Alice  5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
-#   Bob    5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
+#   Alice    5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+#   Bob      5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
 #   ...
 #
-# Stored Accounts
+# Signers
 #
-#   (none)
+#   ci-signer    5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy
+#      ├─ path: //ci
+#      └─ env:  $CI_SECRET
+#
+# Pallet Sovereigns
+#
+#   Treasury     5EYCAe5ijiYfyeZ2JJCGq56LmPyNRAKzpG4QkoQkkQNB5e6Z
+#      └─ pallet-id: py/trsry (0x70792f7472737279)
+#
+# Parachain Sovereigns
+#
+#   People       5Ec4AhPaYcfBz8fMoPd4EfnAgwbzRS7np3APZUnnFo12qEYk
+#      ├─ parachain:      1004
+#      └─ parachain-type: child
 
 # Watch-only — no secret, just a named address
 dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
@@ -368,19 +386,91 @@ dot account create new-key
 
 Built-in dev accounts: `alice`, `bob`, `charlie`, `dave`, `eve`, `ferdie`
 
+### Sovereign Accounts (Parachain & Pallet)
+
+`dot account add` accepts derivation flags that compute a deterministic 32-byte address and store it as a named watch-only account — reusable in `--from`, as tx args, and in `dot account list`. Offline; no chain connection required.
+
+```bash
+# Pallet sovereign — Treasury (PalletId b"py/trsry")
+dot account add Treasury --pallet-id py/trsry
+# Output:
+# Account Added (watch-only)
+#
+#   Name:    Treasury
+#   Address: 5EYCAe5ijiYfyeZ2JJCGq56LmPyNRAKzpG4QkoQkkQNB5e6Z
+#   Source:  pallet py/trsry (0x70792f7472737279)
+
+# Pallet sovereign — hex PalletId form
+dot account add Bounties --pallet-id 0x70792f626f756e74
+
+# Parachain sovereign — `--parachain-type` is REQUIRED (no default)
+dot account add People --parachain 1004 --parachain-type child
+dot account add People-Sibling --parachain 1004 --parachain-type sibling
+
+# JSON output records the derivation
+dot account add Bnt --pallet-id py/bount --json
+# {
+#   "name": "Bnt",
+#   "address": "5EYCAe5ijiYdYTM8d3VytEARdH7dFp4rdCPpAsPXrfopdm7d",
+#   "watchOnly": true,
+#   "derivation": { "kind": "pallet", "palletId": "py/bount",
+#                   "palletIdHex": "0x70792f626f756e74" }
+# }
+```
+
+**How it derives:**
+
+- **Pallet:** 32-byte AccountId is `b"modl"` (4 bytes) + `palletId` (8 bytes) + 20 zero bytes. PalletId comes from each pallet's `#[pallet::constant] type PalletId` (read with `dot <chain>.const.<Pallet>.PalletId`).
+- **Parachain:** 32-byte AccountId is `b"para"` (child) or `b"sibl"` (sibling) + paraId as LE u32 (4 bytes) + 24 zero bytes.
+
+**Discovering a chain's PalletId from metadata:**
+
+```bash
+# Pre-req: metadata cached (dot chain update polkadot).
+# Output is JSON-quoted hex — strip quotes with tr.
+dot account add Treasury --pallet-id "$(dot polkadot.const.Treasury.PalletId | tr -d '"')"
+```
+
+**Stateless derivation for scripts (no save):** the same `--pallet-id` /
+`--parachain` / `--parachain-type` flags work on `dot account inspect` to
+compute and print the address **without** writing to accounts.json. Use this
+when you just need the SS58 in a script — no name to invent, no cleanup later.
+
+```bash
+# Pretty output
+dot account inspect --pallet-id py/trsry --prefix 0
+# Account Info
+#
+#   Kind:        pallet sovereign
+#   Public Key:  0x6d6f646c70792f74727372790000000000000000000000000000000000000000
+#   SS58:        13UVJyLnbVp9RBZYFwFGyDvVd1y27Tt8tkntv6Q7JVPhFsTB
+#   Source:      PalletId py/trsry (0x70792f7472737279)
+#   Prefix:      0
+
+# Just the SS58 (script-friendly)
+SS58=$(dot account inspect --pallet-id py/trsry --prefix 0 --json | jq -r .ss58)
+
+# Parachain sovereign
+dot account inspect --parachain 1004 --parachain-type child --json | jq -r .ss58
+```
+
+Use `account add` to persist (named, reusable in `--from`/tx args, appears in
+`dot account list`); use `account inspect` to derive ad-hoc.
+
+**Constraints (will error):** `--parachain` requires `--parachain-type child|sibling`; `--parachain` and `--pallet-id` are mutually exclusive; on `account add`, derivation flags can't combine with a positional address or with `--secret` / `--env`; on `account inspect`, derivation flags can't combine with a positional input.
+
+**Deprecated alias:** the legacy `dot parachain <paraId>` command is preserved for backward compat with older scripts. Stdout is byte-identical to prior releases; a deprecation warning is printed to stderr. Prefer `dot account inspect --parachain <id> --parachain-type <type>` for new code (tracked for removal in [#208](https://github.com/peetzweg/polkadot-cli/issues/208)):
+
+```bash
+# Old (deprecated, still works)
+dot parachain 1000 --type child --json
+# New
+dot account inspect --parachain 1000 --parachain-type child --json
+```
+
 ## Other Commands
 
 ```bash
-# Derive a parachain's sovereign accounts (no chain connection)
-dot parachain 1000
-# Output:
-# Parachain 1000 — Sovereign Accounts
-#
-#   Child:
-#     SS58:  5Ec4AhPZk8STuex8Wsi9TwDtJQxKqzPJRCH7348Xtcs9vZLJ
-#   Sibling:
-#     SS58:  5Eg2fntNprdN3FgH4sfEaaZhYtddZQSQUqvYJ1f2mLtinVhV
-
 # Sign arbitrary bytes with an account keypair (output is a MultiSignature value)
 dot sign "hello world" --from alice
 # Output:
