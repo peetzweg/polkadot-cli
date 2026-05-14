@@ -426,6 +426,37 @@ dot account create new-key
 
 Built-in dev accounts: `alice`, `bob`, `charlie`, `dave`, `eve`, `ferdie`
 
+### Inspecting accounts (and the pallet-revive H160)
+
+`dot account inspect <input>` resolves a name, SS58, hex public key, **or 20-byte H160** and prints the canonical attributes. Every account now also shows its pallet-revive H160 (EIP-55, prefix-independent) — useful when working across SS58 and EVM tooling on Polkadot Hub / Asset Hub:
+
+```bash
+dot account inspect alice
+# Output:
+# Account Info
+#
+#   Name:        Alice
+#   Kind:        dev
+#   Public Key:  0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+#   SS58:        5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+#   H160:        0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+#   Prefix:      42
+
+# Reverse — a 20-byte H160 resolves to the deterministic fallback AccountId32 (H160 || 0xEE * 12)
+dot account inspect 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+# Output:
+#   Kind:        revive H160 fallback
+#   Public Key:  0x9621dde636de098b43efb0fa9b61facfe328f99deeeeeeeeeeeeeeeeeeeeeeee
+#   SS58:        5FTZ6n1wY3GBqEZ2DWEdspbTarvRnp8DM8x2YXbWubu7JN98
+#   H160:        0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+
+# Script: extract just the H160 for a given account
+dot account inspect alice --json | jq -r .h160
+# 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+```
+
+Mapping rule (offline, matches current `polkadot-sdk` master): if the last 12 bytes of the AccountId32 are `0xEE` the H160 is the first 20 bytes (eth-derived); otherwise `keccak256(accountId32)` and take the last 20. The reverse direction always returns the `H160 || 0xEE * 12` fallback — the full mapping after `pallet_revive.map_account` lives in on-chain `AddressSuffix` storage and isn't recoverable offline. Older `stable2412` runtimes used plain `accountId32[..20]` truncation; if you target one, compute manually.
+
 ### Sovereign Accounts (Parachain & Pallet)
 
 `dot account add` accepts derivation flags that compute a deterministic 32-byte address and store it as a named watch-only account — reusable in `--from`, as tx args, and in `dot account list`. Offline; no chain connection required.

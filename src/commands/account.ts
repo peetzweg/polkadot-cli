@@ -1,4 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { hexToBytes as nobleHexToBytes } from "@noble/hashes/utils.js";
 import type { CAC } from "cac";
 import { findAccount, loadAccounts, saveAccounts } from "../config/accounts-store.ts";
 import {
@@ -23,6 +24,13 @@ import {
   toSs58,
   tryDerivePublicKey,
 } from "../core/accounts.ts";
+import {
+  accountIdToH160,
+  h160FromHex,
+  h160ToFallbackAccountId,
+  isH160Hex,
+  toEip55,
+} from "../core/h160.ts";
 import {
   BOLD,
   CYAN,
@@ -895,6 +903,7 @@ async function accountInspect(
   let hasSecret = false;
   let storedAccount: StoredAccount | undefined;
   let isDev = false;
+  let isH160Fallback = false;
   // Synthetic source for the stateless-derivation branch — same shape as
   // StoredAccount.source so the JSON/pretty-print branches downstream don't
   // need a separate code path.
@@ -959,14 +968,20 @@ async function accountInspect(
     else if (isHexPublicKey(input!)) {
       publicKeyHex = input!;
     }
-    // 4. Try SS58 decode
+    // 4. H160 (20-byte hex) — revive fallback AccountId32 (H160 || 0xEE * 12)
+    else if (isH160Hex(input!)) {
+      const fallback = h160ToFallbackAccountId(h160FromHex(input!));
+      publicKeyHex = publicKeyToHex(fallback);
+      isH160Fallback = true;
+    }
+    // 5. Try SS58 decode
     else {
       try {
         const decoded = fromSs58(input!);
         publicKeyHex = publicKeyToHex(decoded);
       } catch {
         console.error(
-          `Cannot identify "${input}" as an account name, SS58 address, or hex public key.`,
+          `Cannot identify "${input}" as an account name, SS58 address, hex public key, or H160.`,
         );
         process.exit(1);
       }
@@ -974,6 +989,7 @@ async function accountInspect(
   }
 
   const ss58 = toSs58(publicKeyHex!, prefix);
+  const h160Hex = toEip55(accountIdToH160(nobleHexToBytes(publicKeyHex!.slice(2))));
 
   let privateKeyHex: string | undefined;
   if (opts.showSecret) {
@@ -1010,6 +1026,8 @@ async function accountInspect(
     sourceLine = `parachain ${virtualSource.paraId}`;
   } else if (isDev) {
     kindLabel = "dev";
+  } else if (isH160Fallback) {
+    kindLabel = "revive H160 fallback";
   } else if (storedAccount) {
     const k = classifyAccount(storedAccount);
     if (k === "pallet" && storedAccount.source?.kind === "pallet") {
@@ -1031,7 +1049,12 @@ async function accountInspect(
   }
 
   if (isJsonOutput(opts)) {
-    const result: Record<string, unknown> = { publicKey: publicKeyHex!, ss58, prefix };
+    const result: Record<string, unknown> = {
+      publicKey: publicKeyHex!,
+      ss58,
+      h160: h160Hex,
+      prefix,
+    };
     if (name) result.name = name;
     if (kindLabel) result.kind = kindLabel;
     if (virtualSource?.kind === "pallet") {
@@ -1070,6 +1093,7 @@ async function accountInspect(
     if (kindLabel) console.log(`  ${BOLD}Kind:${RESET}        ${kindLabel}`);
     console.log(`  ${BOLD}Public Key:${RESET}  ${publicKeyHex!}`);
     console.log(`  ${BOLD}SS58:${RESET}        ${ss58}`);
+    console.log(`  ${BOLD}H160:${RESET}        ${h160Hex}`);
     if (sourceLine) console.log(`  ${BOLD}Source:${RESET}      ${sourceLine}`);
     if (derivationLine) console.log(`  ${BOLD}Derivation:${RESET}  ${derivationLine}`);
     if (envLine) console.log(`  ${BOLD}Env:${RESET}         ${envLine}`);
