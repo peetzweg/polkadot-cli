@@ -2,6 +2,7 @@ import { blake2b } from "@noble/hashes/blake2.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { twox } from "./xxh64.ts";
 
 interface Algorithm {
   compute: (data: Uint8Array) => Uint8Array;
@@ -29,6 +30,21 @@ export const ALGORITHMS: Record<string, Algorithm> = {
     compute: (data) => sha256(data),
     outputLen: 32,
     description: "SHA-256",
+  },
+  twox64: {
+    compute: (data) => twox(data, 64),
+    outputLen: 8,
+    description: "XXH64 with seed 0 (Substrate twox64)",
+  },
+  twox128: {
+    compute: (data) => twox(data, 128),
+    outputLen: 16,
+    description: "XXH64 with seeds 0,1 (Substrate twox128, pallet/storage prefix)",
+  },
+  twox256: {
+    compute: (data) => twox(data, 256),
+    outputLen: 32,
+    description: "XXH64 with seeds 0,1,2,3 (Substrate twox256)",
   },
 };
 

@@ -519,10 +519,15 @@ dot sign "hello world" --from alice
 #   Signature:  0x4283a3bbae463c39264ca193b1bcce61702794e54e482bc2e46202c85ef6a544...
 #   Enum:       Sr25519(0x4283a3bbae463c39264ca193b1bcce61702794e54e482bc2e46202c8...)
 
-# Compute a hash
+# Compute a hash (algorithms: blake2b256, blake2b128, keccak256, sha256, twox64, twox128, twox256)
 dot hash blake2b256 0xdeadbeef
 # Output:
 # 0xf3e925002fed7cc0ded46842569eb5c90c910c091d8d04a1bdf96e0db719fd91
+
+# Substrate twox128 — pallet/storage prefix (use with `rpc.state_getStorage` to read raw keys)
+dot hash twox128 System
+# Output:
+# 0x26aa394eea5630e07c48ae0c9558cef7
 
 # Execute from a YAML/JSON file
 dot ./transfer.yaml --from alice

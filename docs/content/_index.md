@@ -2130,6 +2130,9 @@ Compute cryptographic hashes commonly used in Substrate. Runs offline — no cha
 | `blake2b128` | 16 bytes | BLAKE2b with 128-bit output |
 | `keccak256` | 32 bytes | Keccak-256 (Ethereum-compatible) |
 | `sha256` | 32 bytes | SHA-256 |
+| `twox64` | 8 bytes | XXH64 with seed 0 (Substrate twox64) |
+| `twox128` | 16 bytes | XXH64 with seeds 0,1 (Substrate pallet/storage prefix) |
+| `twox256` | 32 bytes | XXH64 with seeds 0,1,2,3 (Substrate twox256) |
 
 ### Hash inline data
 
@@ -2173,6 +2176,20 @@ dot hash blake2b256 0xdeadbeef --json
 #   "input": "0xdeadbeef",
 #   "hash": "0xf3e925002fed7cc0ded46842569eb5c90c910c091d8d04a1bdf96e0db719fd91"
 # }
+```
+
+### Build a Substrate storage key with twox
+
+Substrate keys for pallet storage are `twox128(palletName) ++ twox128(itemName) [++ hasher(key)]`. Compose them with `dot hash twox128` and read the raw value via the JSON-RPC passthrough:
+
+```
+dot hash twox128 System
+# Output:
+# 0x26aa394eea5630e07c48ae0c9558cef7
+
+PALLET=$(dot hash twox128 System)
+ITEM=$(dot hash twox128 Number)
+dot polkadot.rpc.state_getStorage "${PALLET}${ITEM:2}"
 ```
 
 Run `dot hash` with no arguments to see all available algorithms and examples.
@@ -2492,7 +2509,7 @@ dot --from <Tab>         # → alice, bob, ..., stored account names
 dot --output <Tab>       # → pretty, json
 dot chain <Tab>          # → add, remove, update, list
 dot account <Tab>        # → create, import, derive, list, remove, ...
-dot hash <Tab>           # → blake2b256, blake2b128, keccak256, sha256
+dot hash <Tab>           # → blake2b256, blake2b128, keccak256, sha256, twox64, twox128, twox256
 ```
 
 Completions are context-aware:
