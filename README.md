@@ -1626,7 +1626,7 @@ All existing flags work with file input — `--chain` overrides the file's `chai
 
 ### Compute hashes
 
-Compute cryptographic hashes commonly used in Substrate. Supports BLAKE2b-256, BLAKE2b-128, Keccak-256, and SHA-256.
+Compute cryptographic hashes commonly used in Substrate. Supports BLAKE2b-256, BLAKE2b-128, Keccak-256, SHA-256, and the XXH64-based `twox64` / `twox128` / `twox256` family used to build Substrate storage keys.
 
 ```bash
 # Hash hex-encoded data
@@ -1655,6 +1655,16 @@ dot hash blake2b256 0xdeadbeef --json
 #   "input": "0xdeadbeef",
 #   "hash": "0xf3e925002fed7cc0ded46842569eb5c90c910c091d8d04a1bdf96e0db719fd91"
 # }
+
+# Substrate twox128 — pallet/storage prefix used everywhere in Substrate state
+dot hash twox128 System
+# Output:
+# 0x26aa394eea5630e07c48ae0c9558cef7
+
+# Build a full storage key for `System.Number` and read it raw via JSON-RPC
+PALLET=$(dot hash twox128 System)
+ITEM=$(dot hash twox128 Number)
+dot polkadot.rpc.state_getStorage "${PALLET}${ITEM:2}"
 ```
 
 Run `dot hash` with no arguments to see all available algorithms.

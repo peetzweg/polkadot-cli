@@ -315,6 +315,27 @@ dot polkadot.rpc --json | jq -r '.methods[] | select(.family=="archive") | .meth
 
 The `rpc` category is flat — `[chain.]rpc.<method_name>`, no pallet level. Methods discovered per-chain via `rpc_methods` and cached; refresh with `dot polkadot.rpc --refresh` after a node upgrade. Subscription methods (`*_subscribe*`, `chainHead_v1_*`, `transaction_v1_*`) are not callable as one-shots.
 
+### Build raw storage keys with twox
+
+Pallet storage in Substrate is keyed by `twox128(palletName) ++ twox128(itemName) [++ hasher(key)]`. Compose the prefix with `dot hash twox128` and read the raw SCALE value via `rpc.state_getStorage` — useful for items that aren't in metadata, or for poking around without loading metadata.
+
+```bash
+# Plain storage value (System.Number — current block number)
+PALLET=$(dot hash twox128 System)
+ITEM=$(dot hash twox128 Number)
+dot polkadot.rpc.state_getStorage "${PALLET}${ITEM:2}" --json
+
+# Well-known keys live outside the twox128++twox128 scheme — pass them directly
+dot polkadot.rpc.state_getStorageHash 0x3a636f6465  # `:code` — runtime WASM blake2 hash
+dot polkadot.rpc.state_getStorageSize 0x3a636f6465  # size of the runtime WASM in bytes
+
+# List the first 5 storage keys under a pallet prefix
+PREFIX=$(dot hash twox128 System)
+dot polkadot.rpc.state_getKeysPaged "$PREFIX" 5 --json
+```
+
+`twox64` and `twox256` are also available; `Twox64Concat` map-hasher keys are `twox64(encodedKey) ++ encodedKey` (compose with `dot hash twox64` and shell concatenation).
+
 ### Check pool reserves
 
 ```bash

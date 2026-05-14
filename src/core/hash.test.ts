@@ -38,6 +38,9 @@ describe("isValidAlgorithm", () => {
     expect(isValidAlgorithm("blake2b128")).toBe(true);
     expect(isValidAlgorithm("keccak256")).toBe(true);
     expect(isValidAlgorithm("sha256")).toBe(true);
+    expect(isValidAlgorithm("twox64")).toBe(true);
+    expect(isValidAlgorithm("twox128")).toBe(true);
+    expect(isValidAlgorithm("twox256")).toBe(true);
   });
 
   test("returns false for invalid algorithms", () => {
@@ -54,7 +57,10 @@ describe("getAlgorithmNames", () => {
     expect(names).toContain("blake2b128");
     expect(names).toContain("keccak256");
     expect(names).toContain("sha256");
-    expect(names).toHaveLength(4);
+    expect(names).toContain("twox64");
+    expect(names).toContain("twox128");
+    expect(names).toContain("twox256");
+    expect(names).toHaveLength(7);
   });
 });
 
@@ -75,6 +81,18 @@ describe("output lengths", () => {
 
   test("sha256 outputs 32 bytes", () => {
     expect(computeHash("sha256", empty)).toHaveLength(32);
+  });
+
+  test("twox64 outputs 8 bytes", () => {
+    expect(computeHash("twox64", empty)).toHaveLength(8);
+  });
+
+  test("twox128 outputs 16 bytes", () => {
+    expect(computeHash("twox128", empty)).toHaveLength(16);
+  });
+
+  test("twox256 outputs 32 bytes", () => {
+    expect(computeHash("twox256", empty)).toHaveLength(32);
   });
 });
 
@@ -107,5 +125,32 @@ describe("known test vectors", () => {
   test("blake2b128 of empty input", () => {
     const hash = toHex(computeHash("blake2b128", new Uint8Array([])));
     expect(hash).toBe("0xcae66941d9efbd404e4d88758ea67670");
+  });
+
+  test("twox64 canonical XXH64 vector (Nobody inspects the spammish repetition)", () => {
+    const hash = toHex(
+      computeHash("twox64", new TextEncoder().encode("Nobody inspects the spammish repetition")),
+    );
+    expect(hash).toBe("0xf18b378a3ca8cefb");
+  });
+
+  test("twox128 of pallet 'System' matches Substrate prefix", () => {
+    const hash = toHex(computeHash("twox128", new TextEncoder().encode("System")));
+    expect(hash).toBe("0x26aa394eea5630e07c48ae0c9558cef7");
+  });
+
+  test("twox128 of pallet 'Sudo' matches Substrate prefix", () => {
+    const hash = toHex(computeHash("twox128", new TextEncoder().encode("Sudo")));
+    expect(hash).toBe("0x5c0d1176a568c1f92944340dbfed9e9c");
+  });
+
+  test("twox128 of pallet 'Balances' matches Substrate prefix", () => {
+    const hash = toHex(computeHash("twox128", new TextEncoder().encode("Balances")));
+    expect(hash).toBe("0xc2261276cc9d1f8598ea4b6a74b15c2f");
+  });
+
+  test("twox256 of empty input", () => {
+    const hash = toHex(computeHash("twox256", new Uint8Array([])));
+    expect(hash).toBe("0x99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a");
   });
 });
