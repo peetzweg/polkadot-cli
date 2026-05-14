@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { formatRuntimeError, isLikelyStaleMetadataError, isPapiCleanupError } from "./errors.ts";
+import {
+  formatRuntimeError,
+  isBlockUnavailableError,
+  isLikelyStaleMetadataError,
+  isPapiCleanupError,
+} from "./errors.ts";
 
 describe("isPapiCleanupError", () => {
   test("matches bare 'Not connected'", () => {
@@ -103,5 +108,45 @@ describe("isLikelyStaleMetadataError", () => {
 
   test("matches plain strings (not just Error instances)", () => {
     expect(isLikelyStaleMetadataError("wasm trap: unreachable")).toBe(true);
+  });
+});
+
+describe("isBlockUnavailableError", () => {
+  test("matches BlockHashNotFoundError shape", () => {
+    expect(
+      isBlockUnavailableError(
+        new Error(
+          "Invalid BlockHash: 0x4d7d68d4ad6d0bdfe6c693b88736e1c5a9f2c8eaf2c2c5e8d5b7b6e6f0a1b2c3",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  test("matches StorageError UnknownBlock shape", () => {
+    expect(
+      isBlockUnavailableError(
+        new Error("Storage Error: UnknownBlock: Header was not found in the database: 0x4d7d..."),
+      ),
+    ).toBe(true);
+  });
+
+  test("matches the 'is not pinned' wrapper papi raises from chainHead_v1", () => {
+    expect(isBlockUnavailableError(new Error("Block 0xabc is not pinned (storage)"))).toBe(true);
+  });
+
+  test("does not match unrelated errors", () => {
+    expect(isBlockUnavailableError(new Error("ECONNREFUSED"))).toBe(false);
+    expect(isBlockUnavailableError(new Error("Invalid Transaction: BadProof"))).toBe(false);
+    expect(isBlockUnavailableError(new Error("pallet 'Foo' not found"))).toBe(false);
+  });
+
+  test("ignores empty / non-string-y values", () => {
+    expect(isBlockUnavailableError(undefined)).toBe(false);
+    expect(isBlockUnavailableError(null)).toBe(false);
+    expect(isBlockUnavailableError(42)).toBe(false);
+  });
+
+  test("matches plain strings (not just Error instances)", () => {
+    expect(isBlockUnavailableError("Invalid BlockHash: 0xdead")).toBe(true);
   });
 });

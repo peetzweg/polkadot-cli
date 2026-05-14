@@ -918,8 +918,15 @@ Anything else errors before any network call. Tx submission rejects `"best"`.
 
 > **Archive-only blocks**: papi v2 talks to the `chainHead_v1_*` JSON-RPC API,
 > which only serves *pinned* (recent) blocks. Querying a hash older than a
-> few minutes against a non-archive node returns `Block … is not pinned`.
-> Point `--rpc` at an archive endpoint for deep historical reads.
+> few minutes against a non-archive node fails with a clean error that
+> includes a copy-pasteable `--rpc wss://<archive-endpoint>` hint:
+>
+> ```
+> ⚠ 0x… is not available on the current RPC endpoint.
+>    Public nodes serve only recent (pinned) blocks via chainHead_v1_*.
+>    For deep historical reads, point --rpc at an archive endpoint, e.g.:
+>      dot ... --at 0x… --rpc wss://<archive-endpoint>
+> ```
 
 ## Constants
 

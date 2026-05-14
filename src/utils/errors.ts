@@ -53,6 +53,22 @@ export function isLikelyStaleMetadataError(err: unknown): boolean {
   return STALE_METADATA_PATTERNS.some((re) => re.test(msg));
 }
 
+// Errors papi raises when the requested block is not available on the
+// connected node — typically a hash older than the chainHead_v1_* pinned
+// window, or a hash that never existed. The user fix is to point --rpc at
+// an archive endpoint, which lives in `withBlockAvailabilityHint`.
+const BLOCK_UNAVAILABLE_PATTERNS: RegExp[] = [
+  /is not pinned/i,
+  /Invalid BlockHash/i,
+  /UnknownBlock.*Header was not found/i,
+];
+
+export function isBlockUnavailableError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  if (!msg) return false;
+  return BLOCK_UNAVAILABLE_PATTERNS.some((re) => re.test(msg));
+}
+
 export function formatRuntimeError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
 

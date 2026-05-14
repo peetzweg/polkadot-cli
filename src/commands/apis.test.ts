@@ -38,4 +38,12 @@ describe("dot apis --at", { timeout: 15_000 }, () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Invalid --at");
   });
+
+  test("--at with a never-pinned hash produces a clean archive-endpoint hint", async () => {
+    const fakeHash = `0x${"ab".repeat(32)}`;
+    const { exitCode, stderr } = await runCli(["apis.Core.version", "--at", fakeHash]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("archive endpoint");
+    expect(stderr).toContain("--rpc wss://<archive-endpoint>");
+  }, 15_000);
 });

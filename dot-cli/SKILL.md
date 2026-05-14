@@ -138,7 +138,9 @@ dot polkadot.apis.Core.version --at "$HASH" --json | jq .spec_version
 ```
 
 papi v2's `chainHead_v1_*` JSON-RPC only serves *pinned* (recent) blocks. For
-deep historical reads, point `--rpc` at an archive node.
+deep historical reads, point `--rpc` at an archive node. If `--at <hash>` hits
+an unavailable block, the CLI surfaces a clean error with a copy-pasteable
+`--rpc wss://<archive>` example — exit code 1.
 
 ### Handling `undefined` — Critical for Scripting
 

@@ -19,6 +19,7 @@ import {
   getSignedExtensions,
   listPallets,
   PAPI_BUILTIN_EXTENSIONS,
+  withBlockAvailabilityHint,
   withStalenessSuggestion,
 } from "../core/metadata.ts";
 import {
@@ -469,7 +470,9 @@ export async function handleTx(
       try {
         estimatedFees = String(
           await withStalenessSuggestion(chainName, clientHandle!, () =>
-            tx.getEstimatedFees(signer?.publicKey, txOptions),
+            withBlockAvailabilityHint(opts.at, () =>
+              tx.getEstimatedFees(signer?.publicKey, txOptions),
+            ),
           ),
         );
       } catch (err) {
@@ -546,7 +549,9 @@ export async function handleTx(
 
       if (isJsonOutput(opts)) {
         const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
-          watchTransactionJson(observable, waitLevel, { unsigned: true }),
+          withBlockAvailabilityHint(opts.at, () =>
+            watchTransactionJson(observable, waitLevel, { unsigned: true }),
+          ),
         );
         const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc);
         if (result.type === "broadcasted") {
@@ -583,7 +588,9 @@ export async function handleTx(
       }
 
       const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
-        watchTransaction(observable, waitLevel, { unsigned: true }),
+        withBlockAvailabilityHint(opts.at, () =>
+          watchTransaction(observable, waitLevel, { unsigned: true }),
+        ),
       );
 
       console.log();
@@ -647,7 +654,9 @@ export async function handleTx(
     // JSON output: NDJSON stream
     if (isJsonOutput(opts)) {
       const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
-        watchTransactionJson(tx.signSubmitAndWatch(signer, txOptions), waitLevel),
+        withBlockAvailabilityHint(opts.at, () =>
+          watchTransactionJson(tx.signSubmitAndWatch(signer, txOptions), waitLevel),
+        ),
       );
       const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc);
       if (result.type === "broadcasted") {
@@ -684,7 +693,9 @@ export async function handleTx(
     }
 
     const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
-      watchTransaction(tx.signSubmitAndWatch(signer, txOptions), waitLevel),
+      withBlockAvailabilityHint(opts.at, () =>
+        watchTransaction(tx.signSubmitAndWatch(signer, txOptions), waitLevel),
+      ),
     );
 
     console.log();

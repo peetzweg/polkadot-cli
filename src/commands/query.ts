@@ -7,6 +7,7 @@ import {
   getOrFetchMetadata,
   getPalletNames,
   listPallets,
+  withBlockAvailabilityHint,
   withStalenessSuggestion,
 } from "../core/metadata.ts";
 import {
@@ -190,7 +191,10 @@ export async function handleQuery(
       const entries: Array<{ keyArgs: any; value: any }> = await withStalenessSuggestion(
         chainName,
         clientHandle,
-        () => storageApi.getEntries(...parsedKeys, ...pullOpts),
+        () =>
+          withBlockAvailabilityHint(opts.at, () =>
+            storageApi.getEntries(...parsedKeys, ...pullOpts),
+          ),
       );
 
       const rows = entries.map((e: any) => ({
@@ -202,7 +206,7 @@ export async function handleQuery(
     } else {
       // Full key → single value lookup
       const result = await withStalenessSuggestion(chainName, clientHandle, () =>
-        storageApi.getValue(...parsedKeys, ...pullOpts),
+        withBlockAvailabilityHint(opts.at, () => storageApi.getValue(...parsedKeys, ...pullOpts)),
       );
       const text = format === "json" ? formatJson(result) : formatPretty(result);
       await writeStdout(`${text}\n`);

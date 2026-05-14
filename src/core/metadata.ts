@@ -12,6 +12,7 @@ import {
   CliError,
   ConnectionError,
   formatRuntimeError,
+  isBlockUnavailableError,
   isLikelyStaleMetadataError,
   MetadataError,
 } from "../utils/errors.ts";
@@ -222,6 +223,32 @@ export async function withStalenessSuggestion<T>(
       `${original}\n\n` +
         `⚠ Local metadata for "${chainName}" is out of date (${versionNote}).\n` +
         `   Run: dot chain update ${chainName}`,
+    );
+  }
+}
+
+// Catch papi errors raised when --at <hash> points at a block the RPC can't
+// serve and re-throw as a CliError that tells the user to use an archive node.
+// Pure error-shape detection — no extra RPC roundtrip, so this composes cheaply
+// inside the staleness wrapper at call sites.
+export async function withBlockAvailabilityHint<T>(
+  atRaw: string | undefined,
+  task: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await task();
+  } catch (err) {
+    if (!isBlockUnavailableError(err)) throw err;
+    const original = err instanceof Error ? err.message : String(err);
+    const isExplicitHash = atRaw && atRaw !== "best" && atRaw !== "finalized";
+    const target = isExplicitHash ? atRaw : "the requested block";
+    const exampleAt = isExplicitHash ? atRaw : "<hash>";
+    throw new CliError(
+      `${original}\n\n` +
+        `⚠ ${target} is not available on the current RPC endpoint.\n` +
+        `   Public nodes serve only recent (pinned) blocks via chainHead_v1_*.\n` +
+        `   For deep historical reads, point --rpc at an archive endpoint, e.g.:\n` +
+        `     dot ... --at ${exampleAt} --rpc wss://<archive-endpoint>`,
     );
   }
 }

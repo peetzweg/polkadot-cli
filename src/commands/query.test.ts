@@ -233,6 +233,14 @@ describe("dot query", { timeout: 15_000 }, () => {
     const { stderr } = await runCli(["query.System.Number", "--at", fakeHash]);
     expect(stderr).not.toContain("Invalid --at");
   }, 15_000);
+
+  test("--at with a never-pinned hash produces a clean archive-endpoint hint", async () => {
+    const fakeHash = `0x${"ab".repeat(32)}`;
+    const { exitCode, stderr } = await runCli(["query.System.Number", "--at", fakeHash]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("archive endpoint");
+    expect(stderr).toContain("--rpc wss://<archive-endpoint>");
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------

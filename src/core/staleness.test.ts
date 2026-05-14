@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getMetadataFingerprintPath, loadMetadataFingerprint } from "../config/store.ts";
 import { withDotHome } from "../test-helpers/with-dot-home.ts";
+import { CliError } from "../utils/errors.ts";
 import type { ClientHandle } from "./client.ts";
-import { withStalenessSuggestion } from "./metadata.ts";
+import { withBlockAvailabilityHint, withStalenessSuggestion } from "./metadata.ts";
 
 interface MockClient {
   client: { _request: <T>(method: string, params: unknown[]) => Promise<T> };
@@ -271,5 +272,63 @@ describe("withStalenessSuggestion", () => {
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
+  });
+});
+
+describe("withBlockAvailabilityHint", () => {
+  test("returns the task result on success", async () => {
+    expect(await withBlockAvailabilityHint("finalized", async () => 42)).toBe(42);
+  });
+
+  test("propagates non-matching errors unchanged", async () => {
+    await expect(
+      withBlockAvailabilityHint("finalized", async () => {
+        throw new Error("ECONNREFUSED");
+      }),
+    ).rejects.toThrow("ECONNREFUSED");
+  });
+
+  test("wraps 'is not pinned' into a CliError with the archive hint", async () => {
+    let captured: Error | undefined;
+    try {
+      await withBlockAvailabilityHint("0xabc", async () => {
+        throw new Error("Block 0xabc is not pinned (storage)");
+      });
+    } catch (err) {
+      captured = err as Error;
+    }
+    expect(captured).toBeInstanceOf(CliError);
+    expect(captured!.message).toContain("0xabc is not available");
+    expect(captured!.message).toContain("archive endpoint");
+    expect(captured!.message).toContain("--rpc wss://<archive-endpoint>");
+  });
+
+  test("wraps BlockHashNotFoundError shape", async () => {
+    await expect(
+      withBlockAvailabilityHint("0xdead", async () => {
+        throw new Error("Invalid BlockHash: 0xdead");
+      }),
+    ).rejects.toThrow(/archive endpoint/);
+  });
+
+  test("uses generic phrasing for 'best'/'finalized'", async () => {
+    let captured: Error | undefined;
+    try {
+      await withBlockAvailabilityHint("finalized", async () => {
+        throw new Error("Block 0xfff is not pinned (storage)");
+      });
+    } catch (err) {
+      captured = err as Error;
+    }
+    expect(captured!.message).toContain("the requested block is not available");
+    expect(captured!.message).toContain("--at <hash>");
+  });
+
+  test("works with undefined atRaw", async () => {
+    await expect(
+      withBlockAvailabilityHint(undefined, async () => {
+        throw new Error("Invalid BlockHash: 0xabc");
+      }),
+    ).rejects.toThrow(/the requested block is not available/);
   });
 });

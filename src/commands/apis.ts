@@ -8,6 +8,7 @@ import {
   getOrFetchMetadata,
   getRuntimeApiNames,
   listRuntimeApis,
+  withBlockAvailabilityHint,
 } from "../core/metadata.ts";
 import {
   BOLD,
@@ -158,7 +159,9 @@ export async function handleApis(
     const pullOpts = atArg !== undefined ? [{ at: atArg }] : [];
 
     const unsafeApi = clientHandle.client.getUnsafeApi();
-    const result = await (unsafeApi as any).apis[api.name][method.name](...parsedArgs, ...pullOpts);
+    const result = await withBlockAvailabilityHint(opts.at, () =>
+      (unsafeApi as any).apis[api.name][method.name](...parsedArgs, ...pullOpts),
+    );
 
     const format = isJsonOutput(opts) ? "json" : (opts.output ?? "pretty");
     printResult(result, format);
