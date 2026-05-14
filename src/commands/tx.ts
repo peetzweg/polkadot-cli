@@ -132,6 +132,18 @@ export function parseAtOption(raw: string | undefined): string | undefined {
   );
 }
 
+// Storage reads / runtime API calls go through papi's `PullOptions`, which
+// accepts "best" — unlike tx submission. Keep the two parsers separate so
+// each call site is explicit about which semantics apply.
+export function parseAtForRead(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === "best" || raw === "finalized") return raw;
+  if (/^0x[0-9a-fA-F]{64}$/.test(raw)) return raw;
+  throw new CliError(
+    `Invalid --at value "${raw}". Use "best", "finalized", or a 0x-prefixed 32-byte block hash.`,
+  );
+}
+
 export async function handleTx(
   target: string | undefined,
   args: string[],

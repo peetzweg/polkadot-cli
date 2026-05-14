@@ -126,7 +126,19 @@ dot polkadot.query.System.Number --json
 # 31014744
 ```
 
-Queries always read the latest finalized head — **historical state reads are not supported**. `--at <block>` is a tx-submission flag, not a query flag.
+Queries default to the latest finalized head. Pass `--at <block-hash|best|finalized>` for historical or non-finalized state reads. Also applies to `apis.*` runtime calls. Tx submission accepts only a block hash or `finalized` — not `best`.
+
+```bash
+# Read at the chain head (best, non-finalized) or pin to the latest finalized block
+dot polkadot.query.System.Number --at best
+HASH=$(dot polkadot.rpc.chain_getFinalizedHead | tr -d '"')
+dot polkadot.query.System.Number --at "$HASH"
+# Same flag on runtime APIs
+dot polkadot.apis.Core.version --at "$HASH" --json | jq .spec_version
+```
+
+papi v2's `chainHead_v1_*` JSON-RPC only serves *pinned* (recent) blocks. For
+deep historical reads, point `--rpc` at an archive node.
 
 ### Handling `undefined` — Critical for Scripting
 
@@ -547,7 +559,7 @@ dot polkadot.tx.System.remark 0xdeadbeef --to-yaml
 | `--dry-run` | tx | Estimate fees without submitting |
 | `--dump` | query | Dump all entries of a storage map |
 | `--ext <json>` | tx | Custom signed extension values |
-| `--at <block>` | tx | Submit at a specific block hash (32-byte `0x…`); defaults to finalized. Not supported on queries. |
+| `--at <block>` | tx, query, apis | Block hash, `"best"`, or `"finalized"` to read/validate against. Defaults to finalized. Tx submission rejects `"best"`. |
 
 ## Common Errors
 

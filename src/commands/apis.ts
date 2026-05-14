@@ -24,7 +24,7 @@ import {
 } from "../core/output.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { loadMeta } from "./focused-inspect.ts";
-import { parseTypedArg } from "./tx.ts";
+import { parseAtForRead, parseTypedArg } from "./tx.ts";
 
 export async function handleApis(
   target: string | undefined,
@@ -34,6 +34,7 @@ export async function handleApis(
     rpc?: string;
     output?: string;
     json?: boolean;
+    at?: string;
     /** Pre-parsed args from a file */
     parsedArgs?: unknown;
   },
@@ -153,9 +154,11 @@ export async function handleApis(
                 : String(opts.parsedArgs),
             ];
     const parsedArgs = await parseRuntimeApiArgs(meta, method, effectiveArgs);
+    const atArg = parseAtForRead(opts.at);
+    const pullOpts = atArg !== undefined ? [{ at: atArg }] : [];
 
     const unsafeApi = clientHandle.client.getUnsafeApi();
-    const result = await (unsafeApi as any).apis[api.name][method.name](...parsedArgs);
+    const result = await (unsafeApi as any).apis[api.name][method.name](...parsedArgs, ...pullOpts);
 
     const format = isJsonOutput(opts) ? "json" : (opts.output ?? "pretty");
     printResult(result, format);

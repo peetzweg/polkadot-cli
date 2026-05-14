@@ -21,6 +21,7 @@ import {
   NO_DEFAULT,
   normalizeValue,
   parseAssetOption,
+  parseAtForRead,
   parseAtOption,
   parseCallArgs,
   parseEnumShorthand,
@@ -203,6 +204,34 @@ describe("parseAtOption", () => {
   test("invalid value throws", () => {
     expect(() => parseAtOption("0x123")).toThrow("Invalid --at");
     expect(() => parseAtOption("latest")).toThrow("Invalid --at");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseAtForRead — permissive variant for query / apis (papi PullOptions)
+// ---------------------------------------------------------------------------
+
+describe("parseAtForRead", () => {
+  test("undefined returns undefined", () => {
+    expect(parseAtForRead(undefined)).toBeUndefined();
+  });
+
+  test('"best" passes through (papi reads allow it)', () => {
+    expect(parseAtForRead("best")).toBe("best");
+  });
+
+  test('"finalized" passes through verbatim (not collapsed)', () => {
+    expect(parseAtForRead("finalized")).toBe("finalized");
+  });
+
+  test("valid block hash returns hash", () => {
+    const hash = `0x${"ab".repeat(32)}`;
+    expect(parseAtForRead(hash)).toBe(hash);
+  });
+
+  test("invalid value throws", () => {
+    expect(() => parseAtForRead("0x123")).toThrow("Invalid --at");
+    expect(() => parseAtForRead("latest")).toThrow("Invalid --at");
   });
 });
 

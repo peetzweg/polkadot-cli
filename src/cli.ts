@@ -93,7 +93,10 @@ if (process.argv[2] === "__complete") {
     .option("--nonce <n>", "Custom nonce for manual tx sequencing (for tx)")
     .option("--tip <amount>", "Tip to prioritize transaction (for tx)")
     .option("--mortality <spec>", '"immortal" or period number (for tx)')
-    .option("--at <block>", 'Block hash, "best", or "finalized" to validate against (for tx)')
+    .option(
+      "--at <block>",
+      'Block hash, "best", or "finalized" to read/validate against (tx, query, apis)',
+    )
     .option("--unsigned", "Submit as unsigned/bare transaction (no signer required, for tx)")
     .option("--refresh", "Refresh the cached RPC method list from the node (for rpc)")
     .action(
@@ -128,6 +131,10 @@ if (process.argv[2] === "__complete") {
           return;
         }
 
+        // Read --at from raw argv to bypass CAC/mri's numeric coercion of
+        // hex block hashes. opts.at is unreliable for hex strings.
+        const atRaw = readAtFromArgv(process.argv);
+
         // --- File-based command input ---
         if (isFilePath(dotpath)) {
           // Collect all --var flags from process.argv (CAC only keeps the last)
@@ -160,7 +167,7 @@ if (process.argv[2] === "__complete") {
                 nonce: opts.nonce,
                 tip: opts.tip,
                 mortality: opts.mortality,
-                at: opts.at,
+                at: atRaw,
                 parsedArgs: cmd.args,
               });
               break;
@@ -168,6 +175,7 @@ if (process.argv[2] === "__complete") {
               await handleQuery(target, args, {
                 ...handlerOpts,
                 dump: opts.dump,
+                at: atRaw,
                 parsedArgs: cmd.args,
               });
               break;
@@ -177,6 +185,7 @@ if (process.argv[2] === "__complete") {
             case "apis":
               await handleApis(target, args, {
                 ...handlerOpts,
+                at: atRaw,
                 parsedArgs: cmd.args,
               });
               break;
@@ -239,7 +248,7 @@ if (process.argv[2] === "__complete") {
 
         switch (parsed.category) {
           case "query":
-            await handleQuery(target, args, { ...handlerOpts, dump: opts.dump });
+            await handleQuery(target, args, { ...handlerOpts, dump: opts.dump, at: atRaw });
             break;
           case "tx": {
             // Handle raw hex: if pallet starts with 0x, it's a raw call hex
@@ -257,7 +266,7 @@ if (process.argv[2] === "__complete") {
               nonce: opts.nonce,
               tip: opts.tip,
               mortality: opts.mortality,
-              at: opts.at,
+              at: atRaw,
             };
             if (parsed.pallet && /^0x[0-9a-fA-F]+$/.test(parsed.pallet)) {
               await handleTx(parsed.pallet, args, txOpts);
@@ -276,7 +285,7 @@ if (process.argv[2] === "__complete") {
             await handleErrors(target, handlerOpts);
             break;
           case "apis":
-            await handleApis(target, args, handlerOpts);
+            await handleApis(target, args, { ...handlerOpts, at: atRaw });
             break;
           case "extensions": {
             if (parsed.item) {
@@ -312,6 +321,19 @@ if (process.argv[2] === "__complete") {
 
   cli.option("--help, -h", "Display this message");
   cli.version(version);
+
+  /**
+   * Read `--at <value>` from raw argv. CAC delegates to mri, which silently
+   * coerces 0x-hex block hashes to JS Numbers and loses precision. Falling
+   * back to argv keeps the original string intact.
+   */
+  function readAtFromArgv(argv: string[]): string | undefined {
+    for (let i = 0; i < argv.length; i++) {
+      if (argv[i] === "--at" && i + 1 < argv.length) return argv[i + 1];
+      if (argv[i]!.startsWith("--at=")) return argv[i]!.slice(5);
+    }
+    return undefined;
+  }
 
   /** Collect all --var KEY=VALUE flags from argv (CAC only keeps the last for repeated options) */
   function collectVarFlags(argv: string[]): Record<string, string> {
