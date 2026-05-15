@@ -1,5 +1,127 @@
 # polkadot-cli
 
+## 1.19.0
+
+### Minor Changes
+
+- 64bc0b5: fix(query, apis): honor `--at <block>` for historical reads
+
+  `--at` was declared on the global command but only ever wired into `tx`
+  submission. `query.*` and `apis.*` accepted the flag silently and read
+  current head anyway, making historical state reads and per-block runtime
+  API replays impossible from the high-level wrappers.
+
+  papi v2 supports historical reads natively via the trailing `PullOptions`
+  argument on storage and runtime calls (`{ at: "best" | "finalized" |
+<hash> }`). The fix threads the flag through.
+
+  - `dot polkadot.query.System.Number --at best`
+  - `dot polkadot.query.System.Number --at finalized`
+  - `dot polkadot.query.System.Number --at 0x<hash>`
+  - `dot polkadot.apis.Core.version --at 0x<hash>`
+
+  Behavior matrix:
+
+  | Command   | `--at best`                   | `--at finalized` | `--at 0x<hash>` |
+  | --------- | ----------------------------- | ---------------- | --------------- |
+  | `query.*` | ✓                             | ✓                | ✓               |
+  | `apis.*`  | ✓                             | ✓                | ✓               |
+  | `tx.*`    | rejected (papi v2 constraint) | ✓                | ✓               |
+
+  Also fixes a pre-existing CAC/mri argv-parsing bug where 0x-hex block
+  hashes passed to `--at` were silently coerced to JS Numbers, losing
+  precision. `--at` is now read from raw argv to keep the original string
+  intact.
+
+  papi v2's `chainHead_v1_*` JSON-RPC only serves pinned (recent) blocks.
+  For deep historical reads, point `--rpc` at an archive endpoint.
+
+- debed0d: feat(account): show pallet-revive H160 in `dot account inspect`
+
+  Every Substrate account now also shows its pallet-revive 20-byte H160
+  address (EIP-55 checksummed) on the `H160:` line, so developers working
+  across SS58 and EVM tooling on Polkadot Hub / Asset Hub can see both
+  representations side by side. The same H160 appears under the `h160`
+  field of `--output json`.
+
+  The mapping is offline and matches current `polkadot-sdk` master:
+
+  - **AccountId32 → H160:** if the last 12 bytes are `0xEE`, strip them
+    (the account originated from an Eth address); otherwise
+    `keccak256(accountId32)` and take the last 20 bytes.
+  - **H160 → AccountId32:** deterministic fallback `H160 || 0xEE * 12`.
+    The full mapping after `pallet_revive.map_account` lives in on-chain
+    `AddressSuffix` storage and is not recoverable offline.
+
+  `dot account inspect` accepts a 20-byte H160 hex value as a new input
+  form. It resolves to the fallback AccountId32 and reports
+  `Kind: revive H160 fallback`.
+
+  ```bash
+  dot account inspect alice
+  #   H160:        0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+
+  dot account inspect 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+  #   Kind:        revive H160 fallback
+  #   Public Key:  0x9621dde636de098b43efb0fa9b61facfe328f99deeeeeeeeeeeeeeeeeeeeeeee
+
+  dot account inspect alice --json | jq -r .h160
+  # 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+  ```
+
+  Older `stable2412` runtimes used plain `accountId32[..20]` truncation
+  instead of the keccak fallback for the forward direction. A
+  `--revive-truncate` flag for those is not implemented; this release
+  ships only the canonical current-master mapping.
+
+- ecd453b: feat(hash): add `twox64`, `twox128`, `twox256` algorithms
+
+  Substrate uses XXH64-based `twox*` hashes throughout — pallet/storage prefixes
+  are `twox128(palletName) ++ twox128(itemName)`, and `Twox64Concat` is a common
+  storage-map hasher. Previously `dot hash` only supported the BLAKE2b, Keccak,
+  and SHA-2 families, so constructing a raw storage key required an external
+  tool.
+
+  The three new algorithms are pure-TypeScript (no wasm, no native deps) and
+  verified against canonical XXH64 vectors and Substrate prefixes:
+
+  - `dot hash twox128 System` → `0x26aa394eea5630e07c48ae0c9558cef7`
+  - `dot hash twox128 Balances` → `0xc2261276cc9d1f8598ea4b6a74b15c2f`
+  - `dot hash twox64 <key>` / `dot hash twox256 <key>` for the other variants
+
+  Combined with `dot [chain.]rpc.state_getStorage 0x<key>`, this is enough to
+  read any raw storage value, including the well-known keys (`:code`,
+  `:heappages`) that live outside metadata.
+
+### Patch Changes
+
+- 47992bf: fix(errors): friendlier message when `--at <block>` is not available
+
+  When `--at` points at a block the connected RPC can't serve — most often
+  an old hash against a non-archive node — papi raises
+  `BlockHashNotFoundError` / `StorageError: UnknownBlock` / "is not pinned"
+  rejections. These now get caught at the `query.*` / `apis.*` / `tx.*`
+  call sites and re-surfaced as a clean `CliError` with a copy-pasteable
+  hint:
+
+  ```
+  Error: Block 0x… is not pinned (storage)
+
+  ⚠ 0x… is not available on the current RPC endpoint.
+     Public nodes serve only recent (pinned) blocks via chainHead_v1_*.
+     For deep historical reads, point --rpc at an archive endpoint, e.g.:
+       dot ... --at 0x… --rpc wss://<archive-endpoint>
+  ```
+
+  Note: papi's substrate-client may still emit its own internal stack
+  trace ahead of the clean message; suppressing that is a separate
+  follow-up.
+
+- a801337: chore(deps): upgrade `verifiablejs` to `1.3.0-beta.2`
+
+  Tracks the upstream beta. The CLI only consumes `member_from_entropy`,
+  whose signature is unchanged, so `dot verifiable` output is byte-identical.
+
 ## 1.18.0
 
 ### Minor Changes
