@@ -373,6 +373,11 @@ dot account alice                    # shorthand — unknown subcommands fall th
 
 dot account inspect 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 dot account inspect 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+
+# pallet-revive H160 — the 20-byte address shape from EVM tooling. Same
+# input slot as SS58 / hex pubkey; resolved to the deterministic fallback
+# AccountId32 (`H160 || 0xEE * 12`).
+dot account inspect 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
 ```
 
 Use `--prefix` to encode the SS58 address with a specific network prefix (default: 42):
@@ -390,6 +395,7 @@ dot account inspect alice --json
 # {
 #   "publicKey": "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
 #   "ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+#   "h160": "0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D",
 #   "prefix": 42,
 #   "name": "Alice",
 #   "kind": "dev"
@@ -407,10 +413,38 @@ dot account inspect alice
 #   Kind:        dev
 #   Public Key:  0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
 #   SS58:        5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+#   H160:        0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
 #   Prefix:      42
 ```
 
-The `Kind:` line categorises the account: `dev` (built-in), `signer` (has a secret/env), `watch-only` (raw external address), `pallet sovereign` (derived from a `PalletId`), or `parachain sovereign (child|sibling)` (derived from a parachain ID). For derived sovereigns, an extra `Source:` line shows what the address was derived from. For env-backed signers, an `Env:` line shows the variable; for derived child keys, `Derivation:` shows the path.
+The `Kind:` line categorises the account: `dev` (built-in), `signer` (has a secret/env), `watch-only` (raw external address), `pallet sovereign` (derived from a `PalletId`), `parachain sovereign (child|sibling)` (derived from a parachain ID), or `revive H160 fallback` (a 20-byte input resolved to its deterministic Substrate AccountId32). For derived sovereigns, an extra `Source:` line shows what the address was derived from. For env-backed signers, an `Env:` line shows the variable; for derived child keys, `Derivation:` shows the path.
+
+##### pallet-revive H160 address
+
+Every Substrate account has a corresponding 20-byte H160 address under [pallet-revive](https://github.com/paritytech/polkadot-sdk/tree/master/substrate/frame/revive) (the new EVM-compatible smart-contracts pallet on Polkadot Hub / Asset Hub). `dot account inspect` always shows it, EIP-55 checksummed, on the `H160:` line. The mapping is offline and prefix-independent:
+
+- **AccountId32 → H160:** if the last 12 bytes are `0xEE`, strip them (the account originated from an Eth address); otherwise `keccak256(accountId32)` and take the last 20 bytes.
+- **H160 → AccountId32:** deterministic fallback is `H160 || 0xEE * 12`. (The full mapping after a successful `pallet_revive.map_account` extrinsic lives in on-chain `AddressSuffix` storage and isn't recoverable offline — that's a chain-state lookup.)
+
+Pass a 20-byte hex value as the inspect input to resolve it back to its fallback Substrate account:
+
+```bash
+dot account inspect 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+# Output:
+# Account Info
+#
+#   Kind:        revive H160 fallback
+#   Public Key:  0x9621dde636de098b43efb0fa9b61facfe328f99deeeeeeeeeeeeeeeeeeeeeeee
+#   SS58:        5FTZ6n1wY3GBqEZ2DWEdspbTarvRnp8DM8x2YXbWubu7JN98
+#   H160:        0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+#   Prefix:      42
+
+# Script-friendly: just the H160 for a given account
+dot account inspect alice --json | jq -r .h160
+# 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+```
+
+Note: `dot` implements the current `pallet-revive` master variant (keccak fallback). Older `stable2412` runtimes used plain `accountId32[..20]` truncation; if you target one, compute it manually until a `--revive-truncate` flag lands.
 
 ##### Stateless sovereign derivation (script-friendly)
 

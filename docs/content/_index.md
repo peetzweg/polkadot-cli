@@ -665,6 +665,7 @@ Convert between SS58 addresses, hex public keys, and account names. Accepts any 
 - **Stored account name** — looks up the public key from the accounts file
 - **SS58 address** — decodes to the underlying public key
 - **Hex public key** (`0x` + 64 hex chars) — encodes to SS58
+- **H160 / EVM address** (`0x` + 40 hex chars) — resolves to the pallet-revive fallback `AccountId32` (`H160 || 0xEE * 12`)
 - **`--pallet-id <id>`** — derives a pallet sovereign address without saving it (script-friendly)
 - **`--parachain <id> --parachain-type <child|sibling>`** — derives a parachain sovereign address without saving it
 
@@ -674,6 +675,7 @@ dot account alice                    # shorthand — unknown subcommands fall th
 
 dot account inspect 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 dot account inspect 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+dot account inspect 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D   # H160 / EVM input
 ```
 
 Use `--prefix` to encode the SS58 address with a specific network prefix (default: 42):
@@ -694,10 +696,11 @@ dot account inspect alice
 #   Kind:        dev
 #   Public Key:  0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
 #   SS58:        5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+#   H160:        0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
 #   Prefix:      42
 ```
 
-The `Kind:` line categorises the account: `dev`, `signer`, `watch-only`, `pallet sovereign`, or `parachain sovereign (child|sibling)`. For derived sovereigns, an extra `Source:` line shows what the address was derived from (e.g. `PalletId py/trsry (0x70792f7472737279)` or `parachain 1004`). For env-backed signers an `Env:` line shows the variable; for derived child keys, `Derivation:` shows the path.
+The `Kind:` line categorises the account: `dev`, `signer`, `watch-only`, `pallet sovereign`, `parachain sovereign (child|sibling)`, or `revive H160 fallback` (when a 20-byte hex input is resolved to its deterministic Substrate AccountId32). For derived sovereigns, an extra `Source:` line shows what the address was derived from (e.g. `PalletId py/trsry (0x70792f7472737279)` or `parachain 1004`). For env-backed signers an `Env:` line shows the variable; for derived child keys, `Derivation:` shows the path. The `H160:` line is shown for every account — it's the pallet-revive 20-byte address, EIP-55 checksummed and prefix-independent.
 
 JSON output:
 
@@ -707,11 +710,42 @@ dot account inspect alice --json
 # {
 #   "publicKey": "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
 #   "ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+#   "h160": "0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D",
 #   "prefix": 42,
 #   "name": "Alice",
 #   "kind": "dev"
 # }
 ```
+
+#### pallet-revive H160 mapping
+
+Every Substrate account has a corresponding 20-byte H160 under [pallet-revive](https://github.com/paritytech/polkadot-sdk/tree/master/substrate/frame/revive) (the new EVM-compatible smart-contracts pallet on Polkadot Hub / Asset Hub). `dot` computes this offline using the canonical mapping (current `polkadot-sdk` master):
+
+- **AccountId32 → H160:** if the last 12 bytes are `0xEE`, strip them (the account originated from an Eth address); otherwise `keccak256(accountId32)` and take the last 20 bytes.
+- **H160 → AccountId32:** deterministic fallback is `H160 || 0xEE * 12`. The full mapping after a successful `pallet_revive.map_account` extrinsic lives in on-chain `AddressSuffix` storage and isn't recoverable offline — that's a chain-state lookup, not an `inspect` concern.
+
+Resolve an H160 back to its fallback Substrate account by passing it as the inspect input:
+
+```
+dot account inspect 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+# Output:
+# Account Info
+#
+#   Kind:        revive H160 fallback
+#   Public Key:  0x9621dde636de098b43efb0fa9b61facfe328f99deeeeeeeeeeeeeeeeeeeeeeee
+#   SS58:        5FTZ6n1wY3GBqEZ2DWEdspbTarvRnp8DM8x2YXbWubu7JN98
+#   H160:        0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+#   Prefix:      42
+```
+
+Script-friendly extraction:
+
+```
+dot account inspect alice --json | jq -r .h160
+# 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+```
+
+Caveat: older `stable2412` runtimes used plain `accountId32[..20]` truncation for the forward direction instead of the keccak fallback. `dot` implements the current variant; if you target a legacy runtime, compute manually until a `--revive-truncate` flag lands.
 
 #### Stateless sovereign derivation (script-friendly)
 

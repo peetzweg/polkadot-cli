@@ -529,13 +529,15 @@ describe("dot account", { timeout: 15_000 }, () => {
 
   // inspect tests
 
-  test("inspect alice shows public key and SS58", async () => {
+  test("inspect alice shows public key, SS58 and H160", async () => {
     const { stdout, exitCode } = await runCli(["account", "inspect", "alice"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Account Info");
     expect(stdout).toContain("Alice");
     expect(stdout).toContain("0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
     expect(stdout).toContain("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+    expect(stdout).toContain("H160:");
+    expect(stdout).toContain("0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D");
   });
 
   test("inspect alice (implicit, no inspect keyword) works", async () => {
@@ -596,7 +598,41 @@ describe("dot account", { timeout: 15_000 }, () => {
       "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
     );
     expect(parsed.ss58).toBe("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+    expect(parsed.h160).toBe("0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D");
     expect(parsed.prefix).toBe(42);
+  });
+
+  test("inspect H160 resolves to revive fallback AccountId32", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "inspect",
+      "0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Info");
+    expect(stdout).toContain("revive H160 fallback");
+    // Fallback AccountId32 = H160 || 0xEE * 12 (lowercased in public-key form)
+    expect(stdout).toContain("0x9621dde636de098b43efb0fa9b61facfe328f99deeeeeeeeeeeeeeeeeeeeeeee");
+    // The H160 line echoes the same EIP-55 address back
+    expect(stdout).toContain("H160:");
+    expect(stdout).toContain("0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D");
+  });
+
+  test("inspect H160 with --output json returns fallback fields", async () => {
+    const { stdout, exitCode } = await runCli([
+      "account",
+      "inspect",
+      "0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D",
+      "--output",
+      "json",
+    ]);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.kind).toBe("revive H160 fallback");
+    expect(parsed.publicKey).toBe(
+      "0x9621dde636de098b43efb0fa9b61facfe328f99deeeeeeeeeeeeeeeeeeeeeeee",
+    );
+    expect(parsed.h160).toBe("0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D");
   });
 
   test("inspect invalid input errors", async () => {
