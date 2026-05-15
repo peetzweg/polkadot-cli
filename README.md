@@ -659,6 +659,40 @@ dot polkadot-asset-hub.query.Assets.Metadata 1984
 # }
 ```
 
+#### Historical reads — `--at <block>`
+
+Storage queries default to the latest finalized head. Pass `--at` to read
+state at a specific block hash, the chain head (`best`), or `finalized`
+(explicit). Accepted on both `query.*` and `apis.*` runtime calls.
+
+```bash
+# Read at the current best (non-finalized) head — useful for low-latency reads
+dot polkadot.query.System.Number --at best
+
+# Read at the last finalized block — same as the default, but explicit
+dot polkadot.query.System.Number --at finalized
+
+# Pin a finalized hash and read multiple items at that exact block
+HASH=$(dot polkadot.rpc.chain_getFinalizedHead | tr -d '"')
+dot polkadot.query.System.Number --at "$HASH"
+dot polkadot.apis.Core.version --at "$HASH" --json | jq .spec_version
+```
+
+`--at` accepts a 32-byte `0x…` block hash, `"best"`, or `"finalized"`.
+Anything else errors before any network call. Tx submission rejects `"best"`.
+
+> **Archive-only blocks**: papi v2 talks to the `chainHead_v1_*` JSON-RPC API,
+> which only serves *pinned* (recent) blocks. Querying a hash older than a
+> few minutes against a non-archive node fails with a clean error that
+> includes a copy-pasteable `--rpc wss://<archive-endpoint>` hint:
+>
+> ```
+> ⚠ 0x… is not available on the current RPC endpoint.
+>    Public nodes serve only recent (pinned) blocks via chainHead_v1_*.
+>    For deep historical reads, point --rpc at an archive endpoint, e.g.:
+>      dot ... --at 0x… --rpc wss://<archive-endpoint>
+> ```
+
 ### Look up constants
 
 ```bash
@@ -1340,7 +1374,7 @@ Override low-level transaction parameters. Useful for rapid-fire submission (cus
 | `--nonce <n>` | non-negative integer | Override the auto-detected nonce |
 | `--tip <amount>` | non-negative integer (planck) | Priority tip for the transaction pool |
 | `--mortality <spec>` | `immortal` or period (min 4) | Transaction mortality window |
-| `--at <block>` | 0x-prefixed block hash | Block hash to validate against (defaults to finalized) |
+| `--at <block>` | 0x-prefixed block hash, `"best"`, or `"finalized"` | Block to read/validate against (defaults to finalized). Also honored on `query.*` and `apis.*` for historical reads; tx submission rejects `"best"`. |
 
 ```bash
 # Fire-and-forget: submit two txs in rapid succession with manual nonces

@@ -109,6 +109,8 @@ describe("Claude Code skill marketplace", () => {
     expect(md).toContain("## Common Errors");
     expect(md).toContain("Complex Arguments");
     expect(md).toMatch(/--at\s*<block>/);
-    expect(md).toContain("historical state reads are not supported");
+    // --at now applies to query/apis too; the historical-reads guidance lives
+    // near the storage examples.
+    expect(md).toMatch(/--at\s*<[^>]+>.*historical/);
   });
 });

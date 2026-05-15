@@ -19,6 +19,7 @@ import {
   getSignedExtensions,
   listPallets,
   PAPI_BUILTIN_EXTENSIONS,
+  withBlockAvailabilityHint,
   withStalenessSuggestion,
 } from "../core/metadata.ts";
 import {
@@ -129,6 +130,18 @@ export function parseAtOption(raw: string | undefined): string | undefined {
   if (/^0x[0-9a-fA-F]{64}$/.test(raw)) return raw;
   throw new CliError(
     `Invalid --at value "${raw}". Use a 0x-prefixed 32-byte block hash, or omit for finalized.`,
+  );
+}
+
+// Storage reads / runtime API calls go through papi's `PullOptions`, which
+// accepts "best" — unlike tx submission. Keep the two parsers separate so
+// each call site is explicit about which semantics apply.
+export function parseAtForRead(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === "best" || raw === "finalized") return raw;
+  if (/^0x[0-9a-fA-F]{64}$/.test(raw)) return raw;
+  throw new CliError(
+    `Invalid --at value "${raw}". Use "best", "finalized", or a 0x-prefixed 32-byte block hash.`,
   );
 }
 
@@ -457,7 +470,9 @@ export async function handleTx(
       try {
         estimatedFees = String(
           await withStalenessSuggestion(chainName, clientHandle!, () =>
-            tx.getEstimatedFees(signer?.publicKey, txOptions),
+            withBlockAvailabilityHint(opts.at, () =>
+              tx.getEstimatedFees(signer?.publicKey, txOptions),
+            ),
           ),
         );
       } catch (err) {
@@ -534,7 +549,9 @@ export async function handleTx(
 
       if (isJsonOutput(opts)) {
         const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
-          watchTransactionJson(observable, waitLevel, { unsigned: true }),
+          withBlockAvailabilityHint(opts.at, () =>
+            watchTransactionJson(observable, waitLevel, { unsigned: true }),
+          ),
         );
         const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc);
         if (result.type === "broadcasted") {
@@ -571,7 +588,9 @@ export async function handleTx(
       }
 
       const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
-        watchTransaction(observable, waitLevel, { unsigned: true }),
+        withBlockAvailabilityHint(opts.at, () =>
+          watchTransaction(observable, waitLevel, { unsigned: true }),
+        ),
       );
 
       console.log();
@@ -635,7 +654,9 @@ export async function handleTx(
     // JSON output: NDJSON stream
     if (isJsonOutput(opts)) {
       const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
-        watchTransactionJson(tx.signSubmitAndWatch(signer, txOptions), waitLevel),
+        withBlockAvailabilityHint(opts.at, () =>
+          watchTransactionJson(tx.signSubmitAndWatch(signer, txOptions), waitLevel),
+        ),
       );
       const rpcUrl = primaryRpc(opts.rpc ?? chainConfig.rpc);
       if (result.type === "broadcasted") {
@@ -672,7 +693,9 @@ export async function handleTx(
     }
 
     const result = await withStalenessSuggestion(chainName, clientHandle!, () =>
-      watchTransaction(tx.signSubmitAndWatch(signer, txOptions), waitLevel),
+      withBlockAvailabilityHint(opts.at, () =>
+        watchTransaction(tx.signSubmitAndWatch(signer, txOptions), waitLevel),
+      ),
     );
 
     console.log();

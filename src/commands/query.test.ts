@@ -211,6 +211,36 @@ describe("dot query", { timeout: 15_000 }, () => {
     expect(() => JSON.parse(jsonFlag.stdout)).not.toThrow();
     expect(() => JSON.parse(outputJson.stdout)).not.toThrow();
   }, 15_000);
+
+  test("--at best is accepted and threads through to papi", async () => {
+    const { exitCode, stdout } = await runCli(["query.System.Number", "--at", "best"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBeTruthy();
+  }, 15_000);
+
+  test("--at with invalid value errors before hitting the network", async () => {
+    const { exitCode, stderr } = await runCli(["query.System.Number", "--at", "latest"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Invalid --at");
+  });
+
+  test("--at with a 0x-hex block hash is not coerced to Number by CAC", async () => {
+    // Regression: CAC/mri silently parses 0x-hex as Number and loses precision.
+    // We sidestep this by reading --at from raw argv. The block hash here is
+    // syntactically valid but doesn't resolve, so we just assert the parser
+    // didn't reject it with "Invalid --at" (which would mean it saw a number).
+    const fakeHash = `0x${"ab".repeat(32)}`;
+    const { stderr } = await runCli(["query.System.Number", "--at", fakeHash]);
+    expect(stderr).not.toContain("Invalid --at");
+  }, 15_000);
+
+  test("--at with a never-pinned hash produces a clean archive-endpoint hint", async () => {
+    const fakeHash = `0x${"ab".repeat(32)}`;
+    const { exitCode, stderr } = await runCli(["query.System.Number", "--at", fakeHash]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("archive endpoint");
+    expect(stderr).toContain("--rpc wss://<archive-endpoint>");
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------

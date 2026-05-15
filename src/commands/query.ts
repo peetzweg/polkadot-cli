@@ -7,6 +7,7 @@ import {
   getOrFetchMetadata,
   getPalletNames,
   listPallets,
+  withBlockAvailabilityHint,
   withStalenessSuggestion,
 } from "../core/metadata.ts";
 import {
@@ -25,7 +26,7 @@ import { prettyTypeById } from "../core/pretty-type.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseValue } from "../utils/parse-value.ts";
 import { loadMeta, resolvePallet, showItemHelp } from "./focused-inspect.ts";
-import { parseStructArgs, parseTypedArg } from "./tx.ts";
+import { parseAtForRead, parseStructArgs, parseTypedArg } from "./tx.ts";
 
 export async function handleQuery(
   target: string | undefined,
@@ -36,6 +37,7 @@ export async function handleQuery(
     output?: string;
     json?: boolean;
     dump?: boolean;
+    at?: string;
     /** Pre-parsed args from a file */
     parsedArgs?: unknown;
   },
@@ -166,6 +168,8 @@ export async function handleQuery(
                 : String(opts.parsedArgs),
             ];
     const parsedKeys = await parseStorageKeys(meta, palletInfo.name, storageItem, effectiveKeys);
+    const atArg = parseAtForRead(opts.at);
+    const pullOpts = atArg !== undefined ? [{ at: atArg }] : [];
     const format = isJsonOutput(opts) ? "json" : (opts.output ?? "pretty");
 
     // Determine expected key count for maps
@@ -187,7 +191,10 @@ export async function handleQuery(
       const entries: Array<{ keyArgs: any; value: any }> = await withStalenessSuggestion(
         chainName,
         clientHandle,
-        () => storageApi.getEntries(...parsedKeys),
+        () =>
+          withBlockAvailabilityHint(opts.at, () =>
+            storageApi.getEntries(...parsedKeys, ...pullOpts),
+          ),
       );
 
       const rows = entries.map((e: any) => ({
@@ -199,7 +206,7 @@ export async function handleQuery(
     } else {
       // Full key → single value lookup
       const result = await withStalenessSuggestion(chainName, clientHandle, () =>
-        storageApi.getValue(...parsedKeys),
+        withBlockAvailabilityHint(opts.at, () => storageApi.getValue(...parsedKeys, ...pullOpts)),
       );
       const text = format === "json" ? formatJson(result) : formatPretty(result);
       await writeStdout(`${text}\n`);
