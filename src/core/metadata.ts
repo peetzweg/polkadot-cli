@@ -48,32 +48,32 @@ export interface StorageItemInfo {
   valueTypeId: number;
 }
 
-export interface ConstantInfo {
+interface ConstantInfo {
   name: string;
   docs: string[];
   typeId: number;
 }
 
-export interface CallInfo {
+interface CallInfo {
   name: string;
   docs: string[];
   typeId: number | null; // lookup ID for the call variant's inner type
 }
 
-export interface EventInfo {
+interface EventInfo {
   name: string;
   docs: string[];
   typeId: number | null;
 }
 
-export interface ErrorInfo {
+interface ErrorInfo {
   name: string;
   docs: string[];
 }
 
-export type UnifiedMeta = ReturnType<typeof unifyMetadata>;
+type UnifiedMeta = ReturnType<typeof unifyMetadata>;
 export type Lookup = ReturnType<typeof getLookupFn>;
-export type DynamicBuilder = ReturnType<typeof getDynamicBuilder>;
+type DynamicBuilder = ReturnType<typeof getDynamicBuilder>;
 
 export interface MetadataBundle {
   unified: UnifiedMeta;
@@ -100,7 +100,7 @@ interface RuntimeVersionRpc {
   authoringVersion: number;
 }
 
-export async function getRuntimeFingerprint(
+async function getRuntimeFingerprint(
   clientHandle: ClientHandle,
   chainName: string,
 ): Promise<RuntimeFingerprint> {

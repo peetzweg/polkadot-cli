@@ -164,4 +164,4 @@ export function firstSentence(docs: string[]): string {
   return match ? match[0].trim() : text;
 }
 
-export { BOLD, CHECK_MARK, CYAN, DIM, GREEN, isTTY, MAGENTA, RED, RESET, Spinner, YELLOW };
+export { BOLD, CHECK_MARK, CYAN, DIM, GREEN, isTTY, RED, RESET, Spinner, YELLOW };

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { AccountsFile, StoredAccount } from "./accounts-types.ts";
 import { getConfigDir } from "./store.ts";
 
-export function getAccountsPath(): string {
+function getAccountsPath(): string {
   return join(getConfigDir(), "accounts.json");
 }
 
