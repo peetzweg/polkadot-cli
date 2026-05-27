@@ -4,6 +4,7 @@ import type { CAC } from "cac";
 import { findAccount, loadAccounts, saveAccounts } from "../config/accounts-store.ts";
 import {
   type AccountKind,
+  type AccountSource,
   classifyAccount,
   type EnvSecret,
   isEnvSecret,
@@ -416,7 +417,7 @@ async function accountAddWatchOnly(
     }
   }
 
-  let persistedSource: import("../config/accounts-types.ts").AccountSource | undefined;
+  let persistedSource: AccountSource | undefined;
   if (sovereignSource?.kind === "pallet") {
     persistedSource = {
       kind: "pallet",

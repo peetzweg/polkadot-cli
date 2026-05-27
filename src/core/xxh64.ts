@@ -42,7 +42,7 @@ function readU32LE(data: Uint8Array, p: number): bigint {
   );
 }
 
-export function xxh64(input: Uint8Array, seed: bigint = 0n): bigint {
+function xxh64(input: Uint8Array, seed: bigint = 0n): bigint {
   const len = input.length;
   let p = 0;
   let h: bigint;

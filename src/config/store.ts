@@ -11,15 +11,15 @@ export function getConfigDir(): string {
   return override && override.length > 0 ? override : join(homedir(), ".polkadot");
 }
 
-export function getChainsDir(): string {
+function getChainsDir(): string {
   return join(getConfigDir(), "chains");
 }
 
-export function getChainDir(chainName: string): string {
+function getChainDir(chainName: string): string {
   return join(getChainsDir(), chainName);
 }
 
-export function getMetadataPath(chainName: string): string {
+function getMetadataPath(chainName: string): string {
   return join(getChainDir(chainName), "metadata.bin");
 }
 
@@ -27,7 +27,7 @@ export function getMetadataFingerprintPath(chainName: string): string {
   return join(getChainDir(chainName), "metadata.fingerprint.json");
 }
 
-export function getRpcMethodsPath(chainName: string): string {
+function getRpcMethodsPath(chainName: string): string {
   return join(getChainDir(chainName), "rpc-methods.json");
 }
 

@@ -26,7 +26,7 @@ export type RpcFamily =
   | "archive"
   | "other";
 
-export interface RpcArg {
+interface RpcArg {
   name: string;
   type: string;
   optional?: boolean;
