@@ -186,6 +186,28 @@ describe("dot verifiable", { timeout: 15_000 }, () => {
     expect(JSON.parse(candidate.stdout).memberKey).not.toBe(JSON.parse(pps.stdout).memberKey);
   });
 
+  // Pins the exact member keys produced by the underlying verifiablejs WASM
+  // (verifiable crate v0.5.0). These bytes must match what the on-chain
+  // `verifiable` pallet expects, so a silent crypto/serialization change in the
+  // library — like the wire-incompatible bump from beta.2 — fails this test.
+  test("alice derives known member keys (verifiablejs wire format)", async () => {
+    const unkeyed = await runCli(["verifiable", "alice", "--output", "json"]);
+    const candidate = await runCli([
+      "verifiable",
+      "alice",
+      "--context",
+      "candidate",
+      "--output",
+      "json",
+    ]);
+    expect(JSON.parse(unkeyed.stdout).memberKey).toBe(
+      "0xbb6ee099b568f1844d62fc00e6305c2e83aa8da30ce59e664ef39e089204d43c",
+    );
+    expect(JSON.parse(candidate.stdout).memberKey).toBe(
+      "0x5f915576987547d3e55bb4129ac8cae1d338f8933073dc74272b4c825f738592",
+    );
+  });
+
   test("saves bandersnatch key for stored accounts", async () => {
     // First derive
     const derive = await runCli(["verifiable", "my-account", "--context", "candidate"], {
