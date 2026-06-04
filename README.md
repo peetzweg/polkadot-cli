@@ -1871,7 +1871,7 @@ dot verifiable alice
 # Bandersnatch Member Key
 #
 #   Account:    alice
-#   Member Key: 0x66813b70ba616b374c90ac92edff6e3be95e12adbc93ea7a6c37cbf334ab87e2
+#   Member Key: 0xbb6ee099b568f1844d62fc00e6305c2e83aa8da30ce59e664ef39e089204d43c
 
 # Derive keyed member key (full person — "candidate" context)
 dot verifiable alice --context candidate
@@ -1880,7 +1880,7 @@ dot verifiable alice --context candidate
 #
 #   Account:    alice
 #   Context:    candidate
-#   Member Key: 0x2fd5b74033d904cf5575b932507939c5d43811e488223229eaf5596565f15ae6
+#   Member Key: 0x5f915576987547d3e55bb4129ac8cae1d338f8933073dc74272b4c825f738592
 
 # Arbitrary context string
 dot verifiable alice --context pps

@@ -2497,7 +2497,7 @@ Bandersnatch Member Key
 
   Account:    alice
   Context:    candidate
-  Member Key: 0x2fd5b74033d904cf5575b932507939c5d43811e488223229eaf5596565f15ae6
+  Member Key: 0x5f915576987547d3e55bb4129ac8cae1d338f8933073dc74272b4c825f738592
 ```
 
 When `--context` is omitted, the "Context:" line is not shown.
@@ -2511,7 +2511,7 @@ dot verifiable alice --context candidate --json
 ```json
 {
   "account": "alice",
-  "memberKey": "0x2fd5b74033d904cf5575b932507939c5d43811e488223229eaf5596565f15ae6",
+  "memberKey": "0x5f915576987547d3e55bb4129ac8cae1d338f8933073dc74272b4c825f738592",
   "context": "candidate"
 }
 ```
