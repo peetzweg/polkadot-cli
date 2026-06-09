@@ -627,7 +627,7 @@ describe("keypairFromSecret", () => {
     expect(publicKey).toHaveLength(32);
   });
 
-  test("signs directly from a 64-byte expanded secret (path ignored)", async () => {
+  test("signs directly from a 64-byte expanded secret (no path)", async () => {
     const expanded = bytesToHex(await resolveAccountExpandedSecret("alice"));
     const kp = keypairFromSecret(expanded);
     expect(publicKeyToHex(kp.publicKey)).toBe(
@@ -635,6 +635,13 @@ describe("keypairFromSecret", () => {
     );
     const message = new TextEncoder().encode("via keypairFromSecret");
     expect(verify(message, kp.sign(message), kp.publicKey)).toBe(true);
+  });
+
+  test("throws on a 64-byte expanded secret with a derivation path", async () => {
+    const expanded = bytesToHex(await resolveAccountExpandedSecret("alice"));
+    expect(() => keypairFromSecret(expanded, "//staking")).toThrow(
+      /expanded secret with a derivation path/,
+    );
   });
 });
 
@@ -656,6 +663,13 @@ describe("expandedSecretFromStored", () => {
     const expanded = await resolveAccountExpandedSecret("alice");
     const hex = bytesToHex(expanded);
     expect(bytesToHex(expandedSecretFromStored(hex))).toBe(hex);
+  });
+
+  test("throws on an expanded secret carrying a derivation path (contradiction)", async () => {
+    const hex = bytesToHex(await resolveAccountExpandedSecret("alice"));
+    expect(() => expandedSecretFromStored(hex, "//staking")).toThrow(
+      /expanded secret with a derivation path/,
+    );
   });
 });
 

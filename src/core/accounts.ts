@@ -74,10 +74,28 @@ export function isHexSeed(secret: string): boolean {
 
 export type SecretKind = "mnemonic" | "seed" | "expanded";
 
+// Classify a stored secret string by its 0x-hex shape. This is a display/branch
+// helper, NOT a validator: anything that isn't a 128- or 64-hex-char string
+// falls through to "mnemonic" without checking the BIP39 wordlist. Callers are
+// expected to pass an already-validated secret (e.g. from a store written by
+// `importAccount`); don't rely on the "mnemonic" result as proof of validity.
 export function secretKind(secret: string): SecretKind {
   if (isExpandedSecret(secret)) return "expanded";
   if (isHexSeed(secret)) return "seed";
   return "mnemonic";
+}
+
+// A stored expanded secret carrying a derivation path is a contradiction: the
+// path can't be applied, so honoring the secret would silently sign with a key
+// that doesn't match the path the config claims. Only reachable via a
+// hand-edited accounts.json (import rejects --path for expanded secrets), so we
+// fail loudly rather than guess.
+function assertNoPathForExpandedSecret(derivationPath: string): void {
+  if (derivationPath) {
+    throw new Error(
+      "Stored account has a 64-byte expanded secret with a derivation path, which cannot be applied. An expanded secret cannot be HD-derived; remove the derivationPath from accounts.json.",
+    );
+  }
 }
 
 // Build a keypair directly from a 64-byte expanded secret, bypassing HDKD.
@@ -101,6 +119,7 @@ export function keypairFromSecret(
   derivationPath = "",
 ): { publicKey: Uint8Array; sign: (msg: Uint8Array) => Uint8Array } {
   if (isExpandedSecret(secret)) {
+    assertNoPathForExpandedSecret(derivationPath);
     return keypairFromExpandedSecret(hexToBytes(secret));
   }
   return isHexSeed(secret)
@@ -113,6 +132,7 @@ export function keypairFromSecret(
 // expanded and HD-derived along `derivationPath`.
 export function expandedSecretFromStored(secret: string, derivationPath = ""): Uint8Array {
   if (isExpandedSecret(secret)) {
+    assertNoPathForExpandedSecret(derivationPath);
     return hexToBytes(secret);
   }
   return deriveExpandedSecret(miniSecretFromSecret(secret), derivationPath);

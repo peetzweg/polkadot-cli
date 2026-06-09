@@ -473,10 +473,13 @@ dot account inspect 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
 dot account inspect alice --json | jq -r .h160
 # 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
 
-# --show-secret reveals the stored mnemonic/seed AND the 64-byte sr25519 private
-# key. Env-backed secrets stay redacted (only the $VAR reference is shown).
-dot account inspect dave --show-secret
-#   Private Key: 0x<128 hex chars>   (sr25519 expanded, 64 bytes — never share)
+# --show-secret reveals the 64-byte sr25519 private key, plus the stored
+# mnemonic/seed for accounts backed by a phrase or hex seed. Dev accounts and
+# raw-key imports show only the Private Key; env-backed secrets stay redacted
+# (only the $VAR reference is shown).
+dot account inspect my-validator --show-secret
+#   Mnemonic:    word1 word2 ... word12   (only for phrase-backed accounts)
+#   Private Key: 0x<128 hex chars>        (sr25519 expanded, 64 bytes — never share)
 
 # Round-trip: the printed Private Key re-imports as a usable signer
 SECRET=$(dot account inspect dave --show-secret --json | jq -r .privateKey)
