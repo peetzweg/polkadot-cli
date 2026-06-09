@@ -1,5 +1,48 @@
 # polkadot-cli
 
+## 1.20.0
+
+### Minor Changes
+
+- 5920098: feat(account): reveal mnemonic with `--show-secret` and import raw private keys
+
+  `dot account inspect <name> --show-secret` now also reveals the **stored
+  mnemonic** (or 32-byte hex seed) alongside the 64-byte sr25519 expanded private
+  key, in both text and `--json` output. Env-backed secrets stay redacted — only
+  the `$VAR` reference is shown.
+
+  `dot account add <name> --secret 0x<128 hex>` now imports an account directly
+  from a 64-byte sr25519 **expanded secret** — the exact value `--show-secret`
+  prints — making it round-trippable. Imported expanded-secret accounts sign and
+  resolve addresses like any other signer. A derivation path cannot be applied to
+  an expanded secret, so `--path` is rejected for this format.
+
+  Fixes a related bug: `--secret 0x...` was previously corrupted by `cac`'s
+  numeric coercion, so **32-byte hex seed import never worked from the command
+  line**. The raw argv value is now read directly, so both hex seeds and raw
+  private keys import correctly. The misleading "hex seed not supported" help text
+  has been corrected.
+
+### Patch Changes
+
+- 0dd979c: chore(deps): upgrade `polkadot-api` to `2.1.4` and sibling `@polkadot-api/*` packages
+
+  Bumps `polkadot-api` (2.0.1 → 2.1.4), `@polkadot-api/metadata-builders`
+  (0.14.1 → 0.14.3), `@polkadot-api/substrate-bindings` (0.20.1 → 0.20.3),
+  `@polkadot-api/view-builder` (0.5.1 → 0.5.3), and
+  `@polkadot-api/metadata-compatibility` (0.6.1 → 0.6.3, dev).
+  Minor/patch bumps with no API surface change in the parts consumed by the CLI.
+
+- 6535199: chore(deps): upgrade `verifiablejs` to `1.3.0`
+
+  Bumps `verifiablejs` from `1.3.0-beta.2` to the stable `1.3.0` release. The JS
+  API consumed by the CLI (`member_from_entropy`) is unchanged, but the release
+  bumps the underlying `verifiable` crate to v0.5.0 (ThinVRF, new ring proofs),
+  so derived Bandersnatch member keys are **wire-incompatible** with `beta.2` —
+  this is the intended alignment with the `verifiable` crate used on-chain by
+  `individuality`. Updated the documented example keys (README, docs) and added a
+  regression test pinning alice's derived member keys to the 1.3.0 wire format.
+
 ## 1.19.0
 
 ### Minor Changes
