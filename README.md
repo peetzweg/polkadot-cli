@@ -280,6 +280,10 @@ dot account create my-staking --path //staking
 # Add a keyed account from a BIP39 mnemonic
 dot account add treasury --secret "word1 word2 ... word12"
 
+# Add from a 32-byte hex seed or a 64-byte raw sr25519 private key
+dot account add seeded --secret 0x1111111111111111111111111111111111111111111111111111111111111111
+dot account add raw-key --secret 0x<128-hex-char expanded secret>   # no --path
+
 # Add with a derivation path
 dot account add hot-wallet --secret "word1 word2 ... word12" --path //hot
 
@@ -313,6 +317,7 @@ dot account inspect 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 dot account inspect 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
 dot account inspect alice --prefix 0         # Polkadot mainnet prefix
 dot account inspect alice --json             # JSON output
+dot account inspect dave --show-secret       # reveal mnemonic + sr25519 private key
 ```
 
 #### Watch-only accounts
@@ -484,16 +489,19 @@ dot account inspect --pallet-id py/trsry --json
 
 Constraints (will error): cannot combine a positional input with derivation flags; `--pallet-id` and `--parachain` are mutually exclusive; `--parachain` requires `--parachain-type child|sibling`; `--show-secret` doesn't apply (derived sovereigns have no key).
 
-#### Reveal the sr25519 private key
+#### Reveal the mnemonic and sr25519 private key
 
-For provisioning another signer (e.g. a server that expects a raw hex private key in an env var), add `--show-secret` to print the **64-byte sr25519 expanded secret** as `0x`-prefixed hex:
+For provisioning another signer (e.g. a server that expects a raw hex private key in an env var), add `--show-secret` to print the **64-byte sr25519 expanded secret** as `0x`-prefixed hex. It also reveals the **stored mnemonic** (or hex seed) so you can back it up:
 
 ```bash
-dot account inspect dave --show-secret
-# Private Key: 0x<128 hex chars>   (sr25519 expanded, 64 bytes — never share)
+dot account inspect my-validator --show-secret
+# Mnemonic:    word1 word2 ... word12   (only for accounts stored as a phrase)
+# Private Key: 0x<128 hex chars>        (sr25519 expanded, 64 bytes — never share)
 ```
 
-Works for dev accounts (derived on-the-fly from the standard dev mnemonic) and for stored accounts that have a secret (mnemonic or hex seed). Refuses on watch-only accounts, bare SS58 addresses, or hex public keys. The hex is the final secret after any derivation path is applied, so it can be fed directly to signers that don't accept a mnemonic+path (e.g. `@scure/sr25519`'s `sign`, or services like identity-backend that read a `PROXY_PRIVATE_KEY`). Combine with `--json` to include it under the `privateKey` field.
+Works for dev accounts (derived on-the-fly from the standard dev mnemonic) and for stored accounts that have a secret. Refuses on watch-only accounts, bare SS58 addresses, or hex public keys. The revealed line depends on how the account was stored: a phrase shows under `Mnemonic`, a 32-byte hex seed under `Seed`, and a raw private key shows only the `Private Key` (the stored secret already _is_ the expanded key). **Env-backed secrets are never resolved to disk output** — only the `$VAR` reference is shown. The expanded `Private Key` is the final secret after any derivation path is applied, so it can be fed directly to signers that don't accept a mnemonic+path (e.g. `@scure/sr25519`'s `sign`, or services like identity-backend that read a `PROXY_PRIVATE_KEY`). Combine with `--json` to include the values under the `mnemonic`/`seed` and `privateKey` fields.
+
+The revealed `Private Key` round-trips: you can re-import it as a usable account (see [Import a raw private key](#import-a-raw-private-key) below).
 
 #### Env-var-backed accounts
 
@@ -540,12 +548,29 @@ Signers
 
 **Supported secret formats for import:**
 
-| Format | Example | Status |
-|--------|---------|--------|
-| BIP39 mnemonic (12/24 words) | `"abandon abandon ... about"` | Supported |
-| Hex seed (`0x` + 64 hex chars) | `0xabcdef0123...` | Not supported via CLI (see below) |
+| Format | Example | `--path`? |
+|--------|---------|-----------|
+| BIP39 mnemonic (12/24 words) | `"abandon abandon ... about"` | Yes |
+| Hex seed (`0x` + 64 hex chars = 32 bytes) | `0x1111...1111` | Yes |
+| Raw private key (`0x` + 128 hex chars = 64-byte sr25519 expanded secret) | `0x20e0...5568` | No (cannot be HD-derived) |
 
-**Known limitation:** Hex seed import (`--secret 0x...`) does not work from the command line. The CLI argument parser (`cac`) interprets `0x`-prefixed values as JavaScript numbers, which loses precision for 32-byte seeds. Use a BIP39 mnemonic instead. If you need to import a raw seed programmatically, write it directly to `~/.polkadot/accounts.json`.
+All three formats work directly from the command line via `--secret` or via `--env`.
+
+#### Import a raw private key
+
+The 64-byte expanded secret that `--show-secret` prints can be re-imported as a fully usable, signing-capable account. This is the round-trip companion to `--show-secret` — handy when a key only exists in expanded form (e.g. exported from another tool or read from a `PROXY_PRIVATE_KEY` env var):
+
+```bash
+# Round-trip: reveal dave's expanded secret, then import it under a new name
+SECRET=$(dot account inspect dave --show-secret --json | jq -r .privateKey)
+dot account add raw-dave --secret "$SECRET"
+# raw-dave now has the same address as dave and can sign
+
+# Or from an environment variable (secret stays off disk)
+dot account add server-signer --env PROXY_PRIVATE_KEY
+```
+
+A raw private key cannot be HD-derived, so `--path` is rejected for this format. Imported expanded-secret accounts sign exactly like mnemonic-backed ones.
 
 #### Export/import accounts
 

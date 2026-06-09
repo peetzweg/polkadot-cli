@@ -21,6 +21,7 @@ import {
   isHexPublicKey,
   publicKeyToHex,
   resolveAccountExpandedSecret,
+  secretKind,
   toSs58,
   tryDerivePublicKey,
 } from "../core/accounts.ts";
@@ -52,7 +53,8 @@ import {
 const ACCOUNT_HELP = `
 ${BOLD}Usage:${RESET}
   $ dot account add <name> <ss58|hex>                                Add a watch-only address (no secret)
-  $ dot account add <name> --secret <s> [--path <derivation>]        Import from BIP39 mnemonic
+  $ dot account add <name> --secret <s> [--path <derivation>]        Import from BIP39 mnemonic or 32-byte hex seed
+  $ dot account add <name> --secret 0x<128 hex>                      Import a raw 64-byte sr25519 private key (no --path)
   $ dot account add <name> --env <VAR> [--path <derivation>]         Import account backed by env variable
   $ dot account add <name> --parachain <id> --parachain-type <t>     Derive a parachain sovereign (t = child|sibling)
   $ dot account add <name> --pallet-id <8 chars or 0x hex>           Derive a pallet sovereign (e.g. py/trsry)
@@ -69,6 +71,7 @@ ${BOLD}Usage:${RESET}
 ${BOLD}Examples:${RESET}
   $ dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
   $ dot account add treasury --secret "word1 word2 ... word12"
+  $ dot account add raw-key --secret 0x<128-hex-char sr25519 expanded secret>
   $ dot account add ci-signer --env MY_SECRET --path //ci
   $ dot account add Treasury --pallet-id py/trsry
   $ dot account add Bounties --pallet-id 0x70792f626f756e74
@@ -96,7 +99,9 @@ ${BOLD}Examples:${RESET}
 
 ${YELLOW}Note: Secrets are stored unencrypted in ~/.polkadot/accounts.json.
       Use --env to keep secrets off disk entirely.
-      Hex seed import (0x...) is not supported via CLI.${RESET}
+      --secret accepts a BIP39 mnemonic, a 0x 32-byte hex seed, or a
+      0x 64-byte raw sr25519 private key (the value --show-secret prints).
+      Raw private keys cannot be HD-derived, so --path is rejected for them.${RESET}
 `.trimStart();
 
 export function registerAccountCommands(cli: CAC) {
@@ -106,7 +111,10 @@ export function registerAccountCommands(cli: CAC) {
       "Manage local accounts (create, import, list, remove, export)",
     )
     .alias("accounts")
-    .option("--secret <value>", "Secret key (mnemonic or hex seed) for import")
+    .option(
+      "--secret <value>",
+      "Secret for import: BIP39 mnemonic, 0x 32-byte hex seed, or 0x 64-byte raw private key",
+    )
     .option("--env <varName>", "Environment variable name holding the secret")
     .option("--path <derivation>", "Derivation path (e.g. //staking, //polkadot//0/wallet)")
     .option("--parachain <id>", "Derive a parachain sovereign account (requires --parachain-type)")
@@ -146,6 +154,11 @@ export function registerAccountCommands(cli: CAC) {
           console.log(ACCOUNT_HELP);
           return;
         }
+        // cac coerces 0x-prefixed --secret values via Number() (hex seeds and
+        // 64-byte expanded secrets both look numeric), corrupting them. Recover
+        // the original string token straight from argv.
+        const rawSecret = rawArgValue("--secret");
+        if (rawSecret != null) opts.secret = rawSecret;
         switch (action) {
           case "new":
           case "create":
@@ -992,6 +1005,11 @@ async function accountInspect(
   const h160Hex = toEip55(accountIdToH160(nobleHexToBytes(publicKeyHex!.slice(2))));
 
   let privateKeyHex: string | undefined;
+  // The original stored secret revealed alongside the expanded private key.
+  // Only for stored accounts whose secret is a literal phrase/seed — env-backed
+  // secrets stay redacted (shown as `$VAR`), and an expanded secret is already
+  // printed as the Private Key, so we don't duplicate it.
+  let revealedSecret: { label: string; field: string; value: string } | undefined;
   if (opts.showSecret) {
     if (!name) {
       console.error(
@@ -1008,6 +1026,14 @@ async function accountInspect(
     } catch (err) {
       console.error((err as Error).message);
       process.exit(1);
+    }
+    if (storedAccount?.secret !== undefined && !isEnvSecret(storedAccount.secret)) {
+      const kind = secretKind(storedAccount.secret);
+      if (kind === "mnemonic") {
+        revealedSecret = { label: "Mnemonic", field: "mnemonic", value: storedAccount.secret };
+      } else if (kind === "seed") {
+        revealedSecret = { label: "Seed", field: "seed", value: storedAccount.secret };
+      }
     }
   }
 
@@ -1085,6 +1111,7 @@ async function accountInspect(
     if (derivationLine) result.derivationPath = derivationLine;
     if (envLine) result.env = envLine.replace(/^\$/, "");
     if (bandersnatch && Object.keys(bandersnatch).length > 0) result.bandersnatch = bandersnatch;
+    if (revealedSecret) result[revealedSecret.field] = revealedSecret.value;
     if (privateKeyHex) result.privateKey = privateKeyHex;
     console.log(formatJson(result));
   } else {
@@ -1110,6 +1137,11 @@ async function accountInspect(
       }
     }
     console.log(`  ${BOLD}Prefix:${RESET}      ${prefix}`);
+    if (revealedSecret) {
+      console.log(
+        `  ${BOLD}${`${revealedSecret.label}:`.padEnd(13)}${RESET}${revealedSecret.value}`,
+      );
+    }
     if (privateKeyHex) {
       console.log(`  ${BOLD}Private Key:${RESET} ${privateKeyHex}`);
       console.log(`               ${YELLOW}(sr25519 expanded, 64 bytes — never share)${RESET}`);

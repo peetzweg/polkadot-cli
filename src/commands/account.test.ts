@@ -1,7 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import type { StoredAccount } from "../config/accounts-types.ts";
-import { importAccount, publicKeyToHex } from "../core/accounts.ts";
+import {
+  bytesToHex,
+  importAccount,
+  publicKeyToHex,
+  resolveAccountExpandedSecret,
+} from "../core/accounts.ts";
 import { runCli, TEST_MNEMONIC } from "./__fixtures__/run-cli.ts";
+
+// Alice's known sr25519 keypair (derived from the dev phrase at //Alice).
+const ALICE_PUBKEY = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+const ALICE_SS58 = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
+// Her 64-byte expanded secret — the value `--show-secret` prints. Computed once
+// so the raw-private-key import tests exercise a real round-trip.
+const aliceExpandedSecret = bytesToHex(await resolveAccountExpandedSecret("alice"));
 
 const STORED_ACCOUNT: StoredAccount = {
   name: "my-account",
@@ -956,6 +968,146 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(exitCode).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(parsed.privateKey).toMatch(/^0x[0-9a-f]{128}$/);
+  });
+
+  // --show-secret: reveal the stored mnemonic / seed (issue #224, part 1)
+  test("inspect --show-secret reveals the stored mnemonic (text)", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "inspect", "my-account", "--show-secret"],
+      { accounts: [STORED_ACCOUNT] },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain(`Mnemonic:    ${TEST_MNEMONIC}`);
+    expect(stdout).toMatch(/Private Key:\s+0x[0-9a-f]{128}/);
+  });
+
+  test("inspect --show-secret reveals the stored mnemonic (json)", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "inspect", "my-account", "--show-secret", "--json"],
+      { accounts: [STORED_ACCOUNT] },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.mnemonic).toBe(TEST_MNEMONIC);
+    expect(parsed.privateKey).toMatch(/^0x[0-9a-f]{128}$/);
+  });
+
+  test("inspect --show-secret reveals a stored hex seed under the `seed` field", async () => {
+    const hexSeed = `0x${"11".repeat(32)}`;
+    const seedAcct: StoredAccount = {
+      name: "seed-acct",
+      secret: hexSeed,
+      publicKey: publicKeyToHex(importAccount(hexSeed).publicKey),
+      derivationPath: "",
+    };
+    const { stdout, exitCode } = await runCli(
+      ["account", "inspect", "seed-acct", "--show-secret", "--json"],
+      { accounts: [seedAcct] },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.seed).toBe(hexSeed);
+    expect(parsed.mnemonic).toBeUndefined();
+  });
+
+  test("inspect --show-secret does NOT reveal env-backed secrets (stays redacted)", async () => {
+    const envAcct: StoredAccount = {
+      name: "env-acct",
+      secret: { env: "MY_SECRET" },
+      publicKey: "",
+      derivationPath: "",
+    };
+    const { stdout, exitCode } = await runCli(
+      ["account", "inspect", "env-acct", "--show-secret", "--json"],
+      { accounts: [envAcct], env: { MY_SECRET: TEST_MNEMONIC } },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    // The resolved phrase must never appear; only the $VAR reference is shown.
+    expect(parsed.mnemonic).toBeUndefined();
+    expect(parsed.seed).toBeUndefined();
+    expect(parsed.env).toBe("MY_SECRET");
+    expect(stdout).not.toContain(TEST_MNEMONIC);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Raw private key import — 64-byte sr25519 expanded secret (issue #224, part 2)
+  // ---------------------------------------------------------------------------
+
+  test("add --secret 0x<128hex> imports a usable raw private key account", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "add", "raw-key", "--secret", aliceExpandedSecret, "--json"],
+      { noDefaultChain: true },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.address).toBe(ALICE_SS58);
+    expect(parsed.publicKey).toBe(ALICE_PUBKEY);
+  });
+
+  test("add --secret 0x<128hex> (text output) succeeds", async () => {
+    const { stdout, exitCode } = await runCli(
+      ["account", "add", "raw-key", "--secret", aliceExpandedSecret],
+      { noDefaultChain: true },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Account Imported");
+    expect(stdout).toContain(ALICE_SS58);
+  });
+
+  test("add --secret 0x<128hex> --path is rejected (no HD derivation)", async () => {
+    const { stderr, exitCode } = await runCli(
+      ["account", "add", "raw-key", "--secret", aliceExpandedSecret, "--path", "//staking"],
+      { noDefaultChain: true },
+    );
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Derivation paths are not supported");
+  });
+
+  test("a raw-private-key account can sign", async () => {
+    const rawAcct: StoredAccount = {
+      name: "raw-signer",
+      secret: aliceExpandedSecret,
+      publicKey: ALICE_PUBKEY,
+      derivationPath: "",
+    };
+    const { stdout, exitCode } = await runCli(["sign", "hello world", "--from", "raw-signer"], {
+      accounts: [rawAcct],
+      noDefaultChain: true,
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Signature:");
+    expect(stdout).toContain("Sr25519");
+  });
+
+  test("inspect --show-secret on a raw-key account round-trips to the same private key", async () => {
+    const rawAcct: StoredAccount = {
+      name: "raw-key",
+      secret: aliceExpandedSecret,
+      publicKey: ALICE_PUBKEY,
+      derivationPath: "",
+    };
+    const { stdout, exitCode } = await runCli(
+      ["account", "inspect", "raw-key", "--show-secret", "--json"],
+      { accounts: [rawAcct] },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    // The stored secret already IS the expanded key — printed as privateKey, not duplicated.
+    expect(parsed.privateKey).toBe(aliceExpandedSecret);
+    expect(parsed.mnemonic).toBeUndefined();
+    expect(parsed.seed).toBeUndefined();
+  });
+
+  test("32-byte hex seed import now works from the CLI (cac coercion fixed)", async () => {
+    const hexSeed = `0x${"11".repeat(32)}`;
+    const { stdout, exitCode } = await runCli(
+      ["account", "add", "seed-acct", "--secret", hexSeed, "--json"],
+      { noDefaultChain: true },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.publicKey).toBe(publicKeyToHex(importAccount(hexSeed).publicKey));
   });
 
   test("remove --json returns removed names", async () => {

@@ -426,6 +426,11 @@ dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 dot account add signer --secret "word1 word2 ... word12"
 dot account add ci --env SECRET_VAR
 
+# --secret also accepts a 0x 32-byte hex seed or a 0x 64-byte raw sr25519 private
+# key (the value `--show-secret` prints). Raw private keys reject --path.
+dot account add seeded --secret 0x1111111111111111111111111111111111111111111111111111111111111111
+dot account add raw-key --secret 0x<128-hex-char expanded secret>
+
 # Generate a new account
 dot account create new-key
 # Output:
@@ -467,6 +472,15 @@ dot account inspect 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
 # Script: extract just the H160 for a given account
 dot account inspect alice --json | jq -r .h160
 # 0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D
+
+# --show-secret reveals the stored mnemonic/seed AND the 64-byte sr25519 private
+# key. Env-backed secrets stay redacted (only the $VAR reference is shown).
+dot account inspect dave --show-secret
+#   Private Key: 0x<128 hex chars>   (sr25519 expanded, 64 bytes — never share)
+
+# Round-trip: the printed Private Key re-imports as a usable signer
+SECRET=$(dot account inspect dave --show-secret --json | jq -r .privateKey)
+dot account add raw-dave --secret "$SECRET"   # same address as dave, can sign
 ```
 
 Mapping rule (offline, matches current `polkadot-sdk` master): if the last 12 bytes of the AccountId32 are `0xEE` the H160 is the first 20 bytes (eth-derived); otherwise `keccak256(accountId32)` and take the last 20. The reverse direction always returns the `H160 || 0xEE * 12` fallback — the full mapping after `pallet_revive.map_account` lives in on-chain `AddressSuffix` storage and isn't recoverable offline. Older `stable2412` runtimes used plain `accountId32[..20]` truncation; if you target one, compute manually.

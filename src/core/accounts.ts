@@ -8,7 +8,7 @@ import {
   ss58Decode,
   validateMnemonic,
 } from "@polkadot-labs/hdkd-helpers";
-import { HDKD, secretFromSeed } from "@scure/sr25519";
+import { getPublicKey, HDKD, secretFromSeed, sign } from "@scure/sr25519";
 import type { PolkadotSigner } from "polkadot-api/signer";
 import { getPolkadotSigner } from "polkadot-api/signer";
 import { findAccount, loadAccounts } from "../config/accounts-store.ts";
@@ -51,6 +51,69 @@ function deriveFromHexSeed(
 function getDevKeypair(name: string) {
   const path = devDerivationPath(name);
   return deriveFromMnemonic(DEV_PHRASE, path);
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < clean.length; i += 2) {
+    bytes[i / 2] = parseInt(clean.substring(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+// A 64-byte sr25519 *expanded* secret (the value `--show-secret` prints), as
+// 0x-prefixed hex (128 hex chars). Distinct from a 32-byte mini-secret/seed.
+const EXPANDED_SECRET_RE = /^0x[0-9a-fA-F]{128}$/;
+
+export function isExpandedSecret(secret: string): boolean {
+  return EXPANDED_SECRET_RE.test(secret);
+}
+
+export type SecretKind = "mnemonic" | "seed" | "expanded";
+
+export function secretKind(secret: string): SecretKind {
+  if (isExpandedSecret(secret)) return "expanded";
+  if (/^0x[0-9a-fA-F]{64}$/.test(secret)) return "seed";
+  return "mnemonic";
+}
+
+// Build a keypair directly from a 64-byte expanded secret, bypassing HDKD.
+// Expanded secrets cannot be HD-derived, so there is no derivation path.
+function keypairFromExpandedSecret(secret: Uint8Array): {
+  publicKey: Uint8Array;
+  sign: (msg: Uint8Array) => Uint8Array;
+} {
+  return {
+    publicKey: getPublicKey(secret),
+    sign: (msg: Uint8Array) => sign(secret, msg),
+  };
+}
+
+// Build a signing keypair from an already-resolved secret string. Mnemonics and
+// 32-byte seeds are HD-derived along `derivationPath`; a 64-byte expanded secret
+// signs directly (the path is irrelevant — it cannot be HD-derived).
+export function keypairFromSecret(
+  secret: string,
+  derivationPath = "",
+): { publicKey: Uint8Array; sign: (msg: Uint8Array) => Uint8Array } {
+  if (isExpandedSecret(secret)) {
+    return keypairFromExpandedSecret(hexToBytes(secret));
+  }
+  const isHexSeed = /^0x[0-9a-fA-F]{64}$/.test(secret);
+  return isHexSeed
+    ? deriveFromHexSeed(secret, derivationPath)
+    : deriveFromMnemonic(secret, derivationPath);
+}
+
+// Resolve the 64-byte sr25519 expanded secret from an already-resolved secret
+// string. A stored expanded secret is returned as-is; mnemonics/seeds are
+// expanded and HD-derived along `derivationPath`.
+export function expandedSecretFromStored(secret: string, derivationPath = ""): Uint8Array {
+  if (isExpandedSecret(secret)) {
+    return hexToBytes(secret);
+  }
+  return deriveExpandedSecret(miniSecretFromSecret(secret), derivationPath);
 }
 
 // Mirrors @polkadot-labs/hdkd-helpers internals (parseDerivations.ts, createChainCode.ts)
@@ -110,7 +173,7 @@ export function miniSecretFromSecret(secret: string): Uint8Array {
   }
   if (!validateMnemonic(secret)) {
     throw new Error(
-      "Invalid secret. Expected a 0x-prefixed 32-byte hex seed or a valid BIP39 mnemonic.",
+      "Invalid secret. Expected a BIP39 mnemonic, a 0x-prefixed 32-byte hex seed, or a 0x-prefixed 64-byte sr25519 expanded secret.",
     );
   }
   return entropyToMiniSecret(mnemonicToEntropy(secret));
@@ -134,6 +197,16 @@ export function createNewAccount(path = ""): {
 }
 
 export function importAccount(secret: string, path = ""): { publicKey: Uint8Array } {
+  if (isExpandedSecret(secret)) {
+    if (path) {
+      throw new Error(
+        "Derivation paths are not supported for raw private key (64-byte expanded secret) import. An expanded secret cannot be HD-derived; omit --path.",
+      );
+    }
+    const keypair = keypairFromExpandedSecret(hexToBytes(secret));
+    return { publicKey: keypair.publicKey };
+  }
+
   const isHexSeed = /^0x[0-9a-fA-F]{64}$/.test(secret);
 
   if (isHexSeed) {
@@ -143,7 +216,7 @@ export function importAccount(secret: string, path = ""): { publicKey: Uint8Arra
 
   if (!validateMnemonic(secret)) {
     throw new Error(
-      "Invalid secret. Expected a 0x-prefixed 32-byte hex seed or a valid BIP39 mnemonic.",
+      "Invalid secret. Expected a BIP39 mnemonic, a 0x-prefixed 32-byte hex seed, or a 0x-prefixed 64-byte sr25519 expanded secret.",
     );
   }
 
@@ -230,11 +303,7 @@ export async function resolveAccountKeypair(
     );
   }
 
-  const secret = resolveSecret(account.secret);
-  const isHexSeed = /^0x[0-9a-fA-F]{64}$/.test(secret);
-  return isHexSeed
-    ? deriveFromHexSeed(secret, account.derivationPath)
-    : deriveFromMnemonic(secret, account.derivationPath);
+  return keypairFromSecret(resolveSecret(account.secret), account.derivationPath);
 }
 
 export async function resolveAccountSigner(name: string): Promise<PolkadotSigner> {
@@ -266,8 +335,7 @@ export async function resolveAccountExpandedSecret(name: string): Promise<Uint8A
     );
   }
 
-  const miniSecret = miniSecretFromSecret(resolveSecret(account.secret));
-  return deriveExpandedSecret(miniSecret, account.derivationPath);
+  return expandedSecretFromStored(resolveSecret(account.secret), account.derivationPath);
 }
 
 export function bytesToHex(bytes: Uint8Array): string {
