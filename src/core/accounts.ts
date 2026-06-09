@@ -40,12 +40,7 @@ function deriveFromHexSeed(
   hexSeed: string,
   path: string,
 ): { publicKey: Uint8Array; sign: (msg: Uint8Array) => Uint8Array } {
-  const clean = hexSeed.startsWith("0x") ? hexSeed.slice(2) : hexSeed;
-  const seed = new Uint8Array(clean.length / 2);
-  for (let i = 0; i < clean.length; i += 2) {
-    seed[i / 2] = parseInt(clean.substring(i, i + 2), 16);
-  }
-  const derive = sr25519CreateDerive(seed);
+  const derive = sr25519CreateDerive(hexToBytes(hexSeed));
   return derive(path);
 }
 
