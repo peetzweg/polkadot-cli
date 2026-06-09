@@ -401,25 +401,34 @@ Watch-only accounts appear in `dot account list` under a dedicated **Watch-only*
 
 The `add` subcommand is context-sensitive:
 - `add <name> <address>` — creates a watch-only entry (no secret)
-- `add <name> --secret "..."` — adds a keyed account from a BIP39 mnemonic
+- `add <name> --secret "..."` — adds a keyed account from a BIP39 mnemonic, 32-byte hex seed, or 64-byte raw private key
 - `add <name> --env VAR` — adds an env-backed account
 
 `dot account import` is reserved for file-based batch import only (see [Batch-import accounts](#batch-import-accounts) below).
 
 ### Add a keyed account
 
-Add an account from a BIP39 mnemonic or raw hex seed:
+`--secret` accepts three formats, all usable directly from the command line:
+
+| Format | Example | `--path`? |
+|--------|---------|-----------|
+| BIP39 mnemonic (12/24 words) | `"abandon abandon ... about"` | Yes |
+| Hex seed (`0x` + 64 hex chars = 32 bytes) | `0x1111...1111` | Yes |
+| Raw private key (`0x` + 128 hex chars = 64-byte sr25519 expanded secret) | `0x20e0...5568` | No |
 
 ```
 dot account add treasury --secret "word1 word2 ... word12"
-dot account add raw-key --secret 0xabcdef...
+dot account add seeded --secret 0x1111111111111111111111111111111111111111111111111111111111111111
+dot account add raw-key --secret 0x<128-hex-char expanded secret>
 ```
 
-Use `--path` to add with a derivation path:
+Use `--path` to add with a derivation path (mnemonic and hex seed only — a raw private key cannot be HD-derived):
 
 ```
 dot account add hot-wallet --secret "word1 word2 ... word12" --path //hot
 ```
+
+The raw private key is the same value `dot account inspect <name> --show-secret` prints, so a key revealed from one account can be re-imported under a new name — see [Reveal the mnemonic and private key](#reveal-the-mnemonic-and-private-key).
 
 ### Add an env-var-backed account
 
@@ -799,16 +808,21 @@ Constraints (will error): cannot combine a positional input with derivation flag
 
 To persist the derived address as a named account in `~/.polkadot/accounts.json` (so you can reuse the name in `--from`, in tx args, in `dot account list`), use `dot account add` with the same flags instead.
 
-### Reveal the sr25519 private key
+### Reveal the mnemonic and private key
 
-Add `--show-secret` to print the **64-byte sr25519 expanded secret** as `0x`-prefixed hex — useful for provisioning another signer (e.g. a server that expects a raw hex private key in an env var):
+Add `--show-secret` to print the **64-byte sr25519 expanded secret** as `0x`-prefixed hex — useful for provisioning another signer (e.g. a server that expects a raw hex private key in an env var). It also reveals the **stored mnemonic** (or hex seed) so you can back it up:
 
 ```
-dot account inspect dave --show-secret
-# Private Key: 0x<128 hex chars>   (sr25519 expanded, 64 bytes — never share)
+dot account inspect my-validator --show-secret
+# Mnemonic:    word1 word2 ... word12   (only for accounts stored as a phrase)
+# Private Key: 0x<128 hex chars>        (sr25519 expanded, 64 bytes — never share)
 ```
 
-Works for dev accounts (derived on-the-fly from the standard dev mnemonic) and for stored accounts that have a secret (mnemonic or hex seed). Refuses on watch-only accounts, bare SS58 addresses, or hex public keys. The hex is the final secret after any derivation path is applied, so it can be fed directly to signers that don't accept a mnemonic+path. Combine with `--json` to include it under the `privateKey` field.
+The revealed line depends on how the account is stored: a phrase shows under `Mnemonic`, a 32-byte hex seed under `Seed`, and a raw private key shows only the `Private Key` (the stored secret already _is_ the expanded key). Works for dev accounts (derived on-the-fly from the standard dev mnemonic) and for any stored account that has a secret. Refuses on watch-only accounts, bare SS58 addresses, or hex public keys. **Env-backed secrets are never resolved to output** — only the `$VAR` reference is shown.
+
+The expanded `Private Key` is the final secret after any derivation path is applied, so it can be fed directly to signers that don't accept a mnemonic+path. It also round-trips: re-import it with `dot account add <name> --secret 0x<128 hex>` to recreate a signing-capable account (see [Add a keyed account](#add-a-keyed-account)). Combine with `--json` to include the values under the `mnemonic`/`seed` and `privateKey` fields.
+
+If the account was stored with a derivation path, the revealed `Mnemonic`/`Seed` reproduces the original address **only when re-imported with the same `--path`** (shown on the `Derivation` line); the text reveal prints a reminder in that case. The `Private Key` bakes in the path, so it round-trips on its own.
 
 ## Chain Prefix
 

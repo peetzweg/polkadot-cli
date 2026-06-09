@@ -7,17 +7,21 @@ import {
   bytesToHex,
   createNewAccount,
   deriveExpandedSecret,
+  expandedSecretFromStored,
   fromSs58,
   getDevAddress,
   importAccount,
   isDevAccount,
+  isExpandedSecret,
   isHexPublicKey,
+  keypairFromSecret,
   miniSecretFromSecret,
   publicKeyToHex,
   resolveAccountExpandedSecret,
   resolveAccountKeypair,
   resolveAccountSigner,
   resolveSecret,
+  secretKind,
   toSs58,
   tryDerivePublicKey,
 } from "./accounts.ts";
@@ -534,5 +538,152 @@ describe("resolveAccountSigner – watch-only", () => {
     await expect(resolveAccountSigner("nonexistent_watch_only_xyz")).rejects.toThrow(
       /Unknown account/,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Raw private key (64-byte sr25519 expanded secret) support
+// ---------------------------------------------------------------------------
+
+describe("isExpandedSecret", () => {
+  test("accepts 0x + 128 hex chars", () => {
+    expect(isExpandedSecret(`0x${"ab".repeat(64)}`)).toBe(true);
+  });
+
+  test("rejects a 32-byte hex seed (64 hex chars)", () => {
+    expect(isExpandedSecret(`0x${"ab".repeat(32)}`)).toBe(false);
+  });
+
+  test("rejects without 0x prefix", () => {
+    expect(isExpandedSecret("ab".repeat(64))).toBe(false);
+  });
+
+  test("rejects mnemonics and garbage", () => {
+    expect(isExpandedSecret(TEST_MNEMONIC)).toBe(false);
+    expect(isExpandedSecret("")).toBe(false);
+    expect(isExpandedSecret(`0x${"zz".repeat(64)}`)).toBe(false);
+  });
+});
+
+describe("secretKind", () => {
+  test("classifies a BIP39 mnemonic", () => {
+    expect(secretKind(TEST_MNEMONIC)).toBe("mnemonic");
+  });
+
+  test("classifies a 32-byte hex seed", () => {
+    expect(secretKind(`0x${"11".repeat(32)}`)).toBe("seed");
+  });
+
+  test("classifies a 64-byte expanded secret", () => {
+    expect(secretKind(`0x${"11".repeat(64)}`)).toBe("expanded");
+  });
+});
+
+describe("importAccount – expanded secret", () => {
+  // Alice's 64-byte expanded secret, taken from `resolveAccountExpandedSecret("alice")`.
+  function aliceExpanded(): Promise<string> {
+    return resolveAccountExpandedSecret("alice").then(bytesToHex);
+  }
+
+  test("imports a raw 64-byte expanded secret and yields a 32-byte public key", async () => {
+    const expanded = await aliceExpanded();
+    const { publicKey } = importAccount(expanded);
+    expect(publicKey).toHaveLength(32);
+  });
+
+  test("reproduces the same public key as the source account (round-trip)", async () => {
+    const expanded = await aliceExpanded();
+    const { publicKey } = importAccount(expanded);
+    expect(publicKeyToHex(publicKey)).toBe(
+      "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+    );
+  });
+
+  test("rejects a derivation path (cannot HD-derive an expanded secret)", async () => {
+    const expanded = await aliceExpanded();
+    expect(() => importAccount(expanded, "//staking")).toThrow(
+      /Derivation paths are not supported/,
+    );
+  });
+
+  test("accepts an empty derivation path", async () => {
+    const expanded = await aliceExpanded();
+    expect(() => importAccount(expanded, "")).not.toThrow();
+  });
+});
+
+describe("keypairFromSecret", () => {
+  test("derives from a mnemonic along the path", () => {
+    const root = keypairFromSecret(TEST_MNEMONIC, "");
+    const derived = keypairFromSecret(TEST_MNEMONIC, "//a");
+    expect(publicKeyToHex(root.publicKey)).toBe(
+      "0x66933bd1f37070ef87bd1198af3dacceb095237f803f3d32b173e6b425ed7972",
+    );
+    expect(publicKeyToHex(root.publicKey)).not.toBe(publicKeyToHex(derived.publicKey));
+  });
+
+  test("derives from a 32-byte hex seed", () => {
+    const { publicKey } = keypairFromSecret(`0x${"11".repeat(32)}`);
+    expect(publicKey).toHaveLength(32);
+  });
+
+  test("signs directly from a 64-byte expanded secret (no path)", async () => {
+    const expanded = bytesToHex(await resolveAccountExpandedSecret("alice"));
+    const kp = keypairFromSecret(expanded);
+    expect(publicKeyToHex(kp.publicKey)).toBe(
+      "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+    );
+    const message = new TextEncoder().encode("via keypairFromSecret");
+    expect(verify(message, kp.sign(message), kp.publicKey)).toBe(true);
+  });
+
+  test("throws on a 64-byte expanded secret with a derivation path", async () => {
+    const expanded = bytesToHex(await resolveAccountExpandedSecret("alice"));
+    expect(() => keypairFromSecret(expanded, "//staking")).toThrow(
+      /expanded secret with a derivation path/,
+    );
+  });
+});
+
+describe("expandedSecretFromStored", () => {
+  test("expands and HD-derives a mnemonic", () => {
+    const sk = expandedSecretFromStored(TEST_MNEMONIC, "//a");
+    expect(sk).toHaveLength(64);
+    expect(publicKeyToHex(getPublicKey(sk))).toBe(
+      publicKeyToHex(importAccount(TEST_MNEMONIC, "//a").publicKey),
+    );
+  });
+
+  test("expands a 32-byte hex seed", () => {
+    const sk = expandedSecretFromStored(`0x${"11".repeat(32)}`);
+    expect(sk).toHaveLength(64);
+  });
+
+  test("returns a stored 64-byte expanded secret verbatim", async () => {
+    const expanded = await resolveAccountExpandedSecret("alice");
+    const hex = bytesToHex(expanded);
+    expect(bytesToHex(expandedSecretFromStored(hex))).toBe(hex);
+  });
+
+  test("throws on an expanded secret carrying a derivation path (contradiction)", async () => {
+    const hex = bytesToHex(await resolveAccountExpandedSecret("alice"));
+    expect(() => expandedSecretFromStored(hex, "//staking")).toThrow(
+      /expanded secret with a derivation path/,
+    );
+  });
+});
+
+describe("resolveAccountKeypair – expanded secret", () => {
+  // We cannot easily inject a stored account from here, so we verify the signing
+  // primitives directly: a keypair built from an expanded secret must sign and
+  // produce signatures that verify against the same public key.
+  test("a signature from an imported expanded secret verifies against its public key", async () => {
+    const expanded = await resolveAccountExpandedSecret("bob");
+    const pub = getPublicKey(expanded);
+    const message = new TextEncoder().encode("raw key signing");
+    const sig = sign(expanded, message);
+    expect(verify(message, sig, pub)).toBe(true);
+    // And the public key matches what importAccount derives from the hex form.
+    expect(publicKeyToHex(importAccount(bytesToHex(expanded)).publicKey)).toBe(publicKeyToHex(pub));
   });
 });
