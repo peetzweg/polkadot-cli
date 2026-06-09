@@ -503,6 +503,8 @@ Works for dev accounts (derived on-the-fly from the standard dev mnemonic) and f
 
 The revealed `Private Key` round-trips: you can re-import it as a usable account (see [Import a raw private key](#import-a-raw-private-key) below).
 
+> **Note:** if the account was stored with a derivation path, the revealed `Mnemonic`/`Seed` reproduces the original address **only when re-imported with the same `--path`** (shown on the `Derivation` line). The `Private Key` already bakes in the path, so it round-trips on its own.
+
 #### Env-var-backed accounts
 
 For CI/CD and security-conscious workflows, store a reference to an environment variable instead of the secret itself:

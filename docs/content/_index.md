@@ -822,6 +822,8 @@ The revealed line depends on how the account is stored: a phrase shows under `Mn
 
 The expanded `Private Key` is the final secret after any derivation path is applied, so it can be fed directly to signers that don't accept a mnemonic+path. It also round-trips: re-import it with `dot account add <name> --secret 0x<128 hex>` to recreate a signing-capable account (see [Add a keyed account](#add-a-keyed-account)). Combine with `--json` to include the values under the `mnemonic`/`seed` and `privateKey` fields.
 
+If the account was stored with a derivation path, the revealed `Mnemonic`/`Seed` reproduces the original address **only when re-imported with the same `--path`** (shown on the `Derivation` line); the text reveal prints a reminder in that case. The `Private Key` bakes in the path, so it round-trips on its own.
+
 ## Chain Prefix
 
 Prefix the dot-path with a chain name to target a specific chain instead of using the `--chain` flag. The prefix becomes the first segment of the dot-path:

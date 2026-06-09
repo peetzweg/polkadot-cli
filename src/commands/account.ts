@@ -1141,6 +1141,14 @@ async function accountInspect(
       console.log(
         `  ${BOLD}${`${revealedSecret.label}:`.padEnd(13)}${RESET}${revealedSecret.value}`,
       );
+      // The revealed phrase/seed alone reproduces the address only when no path
+      // was applied. With a derivation path, re-import must re-supply it — bind
+      // that warning to the secret so it can't be copied away from the hint.
+      if (derivationLine) {
+        console.log(
+          `               ${YELLOW}(derived with ${derivationLine} — re-import needs --path ${derivationLine})${RESET}`,
+        );
+      }
     }
     if (privateKeyHex) {
       console.log(`  ${BOLD}Private Key:${RESET} ${privateKeyHex}`);

@@ -979,6 +979,24 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain(`Mnemonic:    ${TEST_MNEMONIC}`);
     expect(stdout).toMatch(/Private Key:\s+0x[0-9a-f]{128}/);
+    // No derivation path → the bare phrase reproduces the address, so no hint.
+    expect(stdout).not.toContain("re-import needs --path");
+  });
+
+  test("inspect --show-secret warns that a derived mnemonic needs --path on re-import", async () => {
+    const derivedAcct: StoredAccount = {
+      name: "hot-wallet",
+      secret: TEST_MNEMONIC,
+      publicKey: publicKeyToHex(importAccount(TEST_MNEMONIC, "//hot").publicKey),
+      derivationPath: "//hot",
+    };
+    const { stdout, exitCode } = await runCli(
+      ["account", "inspect", "hot-wallet", "--show-secret"],
+      { accounts: [derivedAcct] },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain(`Mnemonic:    ${TEST_MNEMONIC}`);
+    expect(stdout).toContain("derived with //hot — re-import needs --path //hot");
   });
 
   test("inspect --show-secret reveals the stored mnemonic (json)", async () => {
