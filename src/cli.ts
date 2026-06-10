@@ -20,7 +20,6 @@ import { handleQuery } from "./commands/query.ts";
 import { handleRpc } from "./commands/rpc.ts";
 import { registerSignCommand } from "./commands/sign.ts";
 import { handleTx } from "./commands/tx.ts";
-import { registerVerifiableCommands } from "./commands/verifiable.ts";
 import { loadConfig } from "./config/store.ts";
 import { isFilePath, loadCommandFile, parseVarFlags } from "./core/file-loader.ts";
 import {
@@ -28,6 +27,8 @@ import {
   startBackgroundCheck,
   waitForPendingCheck,
 } from "./core/update-notifier.ts";
+import { registerVerifiableCommands } from "./features/verifiable/register.ts";
+import { readRawOptionValue, registerGlobalOptions } from "./platform/cli.ts";
 import { CliError, formatRuntimeError, isPapiCleanupError } from "./utils/errors.ts";
 import { parseDotPath } from "./utils/parse-dot-path.ts";
 
@@ -54,12 +55,7 @@ if (process.argv[2] === "__complete") {
 
   const cli = cac("dot");
 
-  cli.option("--chain <name>", "Target chain (required)");
-  cli.option("--rpc <url>", "Override RPC endpoint for this call");
-  cli.option("--output <format>", "Output format: pretty or json", {
-    default: "pretty",
-  });
-  cli.option("--json", "Output as JSON (shorthand for --output json)");
+  registerGlobalOptions(cli);
 
   registerChainCommands(cli);
   registerInspectCommand(cli);
@@ -133,7 +129,7 @@ if (process.argv[2] === "__complete") {
 
         // Read --at from raw argv to bypass CAC/mri's numeric coercion of
         // hex block hashes. opts.at is unreliable for hex strings.
-        const atRaw = readAtFromArgv(process.argv);
+        const atRaw = readRawOptionValue("at");
 
         // --- File-based command input ---
         if (isFilePath(dotpath)) {
@@ -322,19 +318,6 @@ if (process.argv[2] === "__complete") {
   cli.option("--help, -h", "Display this message");
   cli.version(version);
 
-  /**
-   * Read `--at <value>` from raw argv. CAC delegates to mri, which silently
-   * coerces 0x-hex block hashes to JS Numbers and loses precision. Falling
-   * back to argv keeps the original string intact.
-   */
-  function readAtFromArgv(argv: string[]): string | undefined {
-    for (let i = 0; i < argv.length; i++) {
-      if (argv[i] === "--at" && i + 1 < argv.length) return argv[i + 1];
-      if (argv[i]!.startsWith("--at=")) return argv[i]!.slice(5);
-    }
-    return undefined;
-  }
-
   /** Collect all --var KEY=VALUE flags from argv (CAC only keeps the last for repeated options) */
   function collectVarFlags(argv: string[]): Record<string, string> {
     const vars: string[] = [];
@@ -408,7 +391,7 @@ if (process.argv[2] === "__complete") {
     console.log(
       "  parachain          Derive parachain sovereign accounts (deprecated — use `account inspect --parachain`)",
     );
-    console.log("  verifiable         Derive Bandersnatch member key from mnemonic");
+    console.log("  verifiable         Bandersnatch member keys, ring-VRF proofs, sign/verify");
     console.log("  completions <sh>   Generate shell completions (zsh, bash, fish)");
     console.log();
     console.log("Global options:");

@@ -1,44 +1,15 @@
-import { readFile } from "node:fs/promises";
 import type { CAC } from "cac";
 import {
   ALGORITHMS,
   computeHash,
   getAlgorithmNames,
   isValidAlgorithm,
-  parseInputData,
   toHex,
 } from "../core/hash.ts";
+import { resolveDataInput } from "../core/input.ts";
 import { BOLD, CYAN, DIM, isJsonOutput, printResult, RESET } from "../core/output.ts";
 import { CliError } from "../utils/errors.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
-
-async function resolveInput(
-  data: string | undefined,
-  opts: { file?: string; stdin?: boolean },
-): Promise<Uint8Array> {
-  const sources = [data !== undefined, !!opts.file, !!opts.stdin].filter(Boolean).length;
-  if (sources > 1) {
-    throw new CliError("Provide only one of: inline data, --file, or --stdin");
-  }
-  if (sources === 0) {
-    throw new CliError("No input provided. Pass data as argument, or use --file or --stdin");
-  }
-
-  if (opts.file) {
-    const buf = await readFile(opts.file);
-    return new Uint8Array(buf);
-  }
-
-  if (opts.stdin) {
-    const chunks: Buffer[] = [];
-    for await (const chunk of process.stdin) {
-      chunks.push(chunk);
-    }
-    return new Uint8Array(Buffer.concat(chunks));
-  }
-
-  return parseInputData(data!);
-}
 
 function printAlgorithmHelp(): void {
   console.log(`${BOLD}Usage:${RESET} dot hash <algorithm> <data> [options]\n`);
@@ -79,7 +50,7 @@ export function registerHashCommand(cli: CAC) {
           throw new CliError(suggestMessage("algorithm", algorithm, getAlgorithmNames()));
         }
 
-        const input = await resolveInput(data, opts);
+        const input = await resolveDataInput(data, opts);
         const hash = computeHash(algorithm, input);
         const hexHash = toHex(hash);
 

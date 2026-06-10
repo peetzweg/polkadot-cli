@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
 import type { CAC } from "cac";
 import { resolveAccountKeypair } from "../core/accounts.ts";
-import { parseInputData, toHex } from "../core/hash.ts";
+import { toHex } from "../core/hash.ts";
+import { resolveDataInput } from "../core/input.ts";
 import { BOLD, CYAN, DIM, isJsonOutput, printResult, RESET } from "../core/output.ts";
 import { CliError } from "../utils/errors.ts";
 
@@ -17,34 +17,6 @@ function variantName(type: SignatureType): string {
     case "sr25519":
       return "Sr25519";
   }
-}
-
-async function resolveInput(
-  data: string | undefined,
-  opts: { file?: string; stdin?: boolean },
-): Promise<Uint8Array> {
-  const sources = [data !== undefined, !!opts.file, !!opts.stdin].filter(Boolean).length;
-  if (sources > 1) {
-    throw new CliError("Provide only one of: inline data, --file, or --stdin");
-  }
-  if (sources === 0) {
-    throw new CliError("No input provided. Pass data as argument, or use --file or --stdin");
-  }
-
-  if (opts.file) {
-    const buf = await readFile(opts.file);
-    return new Uint8Array(buf);
-  }
-
-  if (opts.stdin) {
-    const chunks: Buffer[] = [];
-    for await (const chunk of process.stdin) {
-      chunks.push(chunk);
-    }
-    return new Uint8Array(Buffer.concat(chunks));
-  }
-
-  return parseInputData(data!);
 }
 
 function printSignHelp(): void {
@@ -102,7 +74,7 @@ export function registerSignCommand(cli: CAC) {
           );
         }
 
-        const input = await resolveInput(message, opts);
+        const input = await resolveDataInput(message, opts);
         const keypair = await resolveAccountKeypair(opts.from);
         const signature = keypair.sign(input);
         const hexMessage = toHex(input);
