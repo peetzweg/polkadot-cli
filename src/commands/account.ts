@@ -228,7 +228,7 @@ async function accountCreate(
   const address = toSs58(publicKey);
 
   // Auto-derive Bandersnatch member keys (unkeyed + candidate)
-  const { deriveBandersnatchMember } = await import("../core/bandersnatch.ts");
+  const { deriveBandersnatchMember } = await import("../features/verifiable/lib.ts");
   const bandersnatch: Record<string, string> = {};
   bandersnatch[""] = publicKeyToHex(deriveBandersnatchMember(mnemonic));
   bandersnatch.candidate = publicKeyToHex(deriveBandersnatchMember(mnemonic, "candidate"));
