@@ -2776,13 +2776,52 @@ Config and metadata caches live in `~/.polkadot/` by default:
         └── metadata.fingerprint.json # runtime fingerprint (specVersion, codeHash, …) for stale-metadata detection
 ```
 
+### Local workspaces — `dot init`
+
+Create a self-contained, per-directory setup — like a Python `venv`, but for chains and accounts. A workspace is just a `.polkadot/` directory that `dot` discovers automatically:
+
+```bash
+mkdir -p ~/dot/paseo && cd ~/dot/paseo
+dot init
+# Initialized empty dot workspace at /Users/you/dot/paseo/.polkadot
+# Check which workspace is active with: dot which
+```
+
+From this directory (and any subdirectory), every `dot` command reads and writes **all** state — accounts, custom chains, metadata cache — under `./.polkadot/` instead of `~/.polkadot/`:
+
+```bash
+dot account create sudo                          # stored in ./.polkadot/accounts.json
+dot chain add mytestnet --rpc ws://localhost:9944
+dot which
+# /Users/you/dot/paseo/.polkadot
+# Source: local workspace (discovered from current directory)
+```
+
+**Discovery** is git-style: `dot` looks for a `.polkadot/` directory in the current directory, then in each parent, stopping at `$HOME` or the filesystem root. The nearest workspace wins. The global `~/.polkadot` is never treated as a workspace — it is only ever the fallback.
+
+**Precedence:** `DOT_HOME` env var → discovered local workspace → global `~/.polkadot`.
+
+**Full isolation:** while a workspace is active, the global config is invisible. An account named `sudo` in `~/dot/paseo` and one in `~/dot/mytestnet` are unrelated identities — lookups never fall back to the global config, and resolution errors name the config root that was searched, so running in the wrong directory self-diagnoses. Built-in chains (Polkadot, Paseo, and the system parachains) still work everywhere; they ship with the binary.
+
+`dot init` is deliberately minimal: it creates an empty `.polkadot/` directory and nothing else. It refuses to run in `$HOME`, errors if the directory already has a workspace, and warns when the new workspace shadows a parent workspace or when a set `DOT_HOME` masks discovery. Nothing is copied from the global config, and no `.gitignore` is written — whether to commit or ignore a workspace (remember: `accounts.json` holds plain-text secrets) is your decision to make.
+
+**Throwaway sessions** are just disposable workspaces:
+
+```bash
+tmp=$(mktemp -d) && cd "$tmp" && dot init
+# ... add throwaway accounts and chains, run txs ...
+cd - && rm -rf "$tmp"        # nothing ever touched ~/.polkadot
+```
+
+For secrets that should never hit disk at all, combine workspaces with `--env` secret sources.
+
 ### `DOT_TRUST_CACHED_METADATA` — skip the staleness check
 
 Set `DOT_TRUST_CACHED_METADATA=1` to disable the post-failure stale-metadata check on `dot tx`, `dot tx --dry-run`, and `dot query`. When set, errors propagate exactly as the runtime / RPC reported them, with no extra `state_getRuntimeVersion` / `state_getStorageHash` round-trip. Useful in CI loops where you've just refreshed metadata manually and don't want the overhead.
 
 ### `DOT_HOME` — redirect the config directory
 
-Set the `DOT_HOME` environment variable to point at a different directory. When set, the CLI reads and writes **everything** (config, accounts, metadata, update cache) under that path — no `.polkadot` suffix is appended.
+Set the `DOT_HOME` environment variable to point at a different directory. When set, the CLI reads and writes **everything** (config, accounts, metadata, update cache) under that path — no `.polkadot` suffix is appended. `DOT_HOME` takes precedence over both local workspace discovery and the global `~/.polkadot`.
 
 ```bash
 # Scratch directory for experimentation — never touches ~/.polkadot

@@ -13,7 +13,9 @@ import { getPublicKey, HDKD, secretFromSeed, sign } from "@scure/sr25519";
 import type { PolkadotSigner } from "polkadot-api/signer";
 import { getPolkadotSigner } from "polkadot-api/signer";
 import { findAccount, loadAccounts } from "../config/accounts-store.ts";
+import type { AccountsFile } from "../config/accounts-types.ts";
 import { type EnvSecret, isEnvSecret } from "../config/accounts-types.ts";
+import { describeConfigDir } from "../config/store.ts";
 import { findClosest } from "../utils/fuzzy-match.ts";
 
 export const DEV_NAMES = ["alice", "bob", "charlie", "dave", "eve", "ferdie"] as const;
@@ -288,6 +290,23 @@ export function tryDerivePublicKey(envVarName: string, path = ""): string | null
   }
 }
 
+/**
+ * Build the "Unknown account" error, naming the config root that was
+ * searched — with workspace discovery, "wrong directory" is the most likely
+ * cause of a missing account and the root makes that self-diagnosing.
+ */
+function unknownAccountError(name: string, accountsFile: AccountsFile): Error {
+  const available = [...DEV_NAMES, ...accountsFile.accounts.map((a) => a.name)].sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const suggestions = findClosest(name, available);
+  const hint = suggestions.length > 0 ? `\n  Did you mean: ${suggestions.join(", ")}?` : "";
+  const list = available.map((a) => `\n    - ${a}`).join("");
+  return new Error(
+    `Unknown account "${name}" in ${describeConfigDir()}.${hint}\n  Available accounts:${list}`,
+  );
+}
+
 export async function resolveAccountKeypair(
   name: string,
 ): Promise<{ publicKey: Uint8Array; sign: (msg: Uint8Array) => Uint8Array }> {
@@ -300,13 +319,7 @@ export async function resolveAccountKeypair(
   const accountsFile = await loadAccounts();
   const account = findAccount(accountsFile, name);
   if (!account) {
-    const available = [...DEV_NAMES, ...accountsFile.accounts.map((a) => a.name)].sort((a, b) =>
-      a.localeCompare(b),
-    );
-    const suggestions = findClosest(name, available);
-    const hint = suggestions.length > 0 ? `\n  Did you mean: ${suggestions.join(", ")}?` : "";
-    const list = available.map((a) => `\n    - ${a}`).join("");
-    throw new Error(`Unknown account "${name}".${hint}\n  Available accounts:${list}`);
+    throw unknownAccountError(name, accountsFile);
   }
 
   if (account.secret === undefined) {
@@ -332,13 +345,7 @@ export async function resolveAccountExpandedSecret(name: string): Promise<Uint8A
   const accountsFile = await loadAccounts();
   const account = findAccount(accountsFile, name);
   if (!account) {
-    const available = [...DEV_NAMES, ...accountsFile.accounts.map((a) => a.name)].sort((a, b) =>
-      a.localeCompare(b),
-    );
-    const suggestions = findClosest(name, available);
-    const hint = suggestions.length > 0 ? `\n  Did you mean: ${suggestions.join(", ")}?` : "";
-    const list = available.map((a) => `\n    - ${a}`).join("");
-    throw new Error(`Unknown account "${name}".${hint}\n  Available accounts:${list}`);
+    throw unknownAccountError(name, accountsFile);
   }
 
   if (account.secret === undefined) {

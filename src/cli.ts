@@ -21,6 +21,7 @@ import { handleRpc } from "./commands/rpc.ts";
 import { registerSignCommand } from "./commands/sign.ts";
 import { handleTx } from "./commands/tx.ts";
 import { registerVerifiableCommands } from "./commands/verifiable.ts";
+import { registerWorkspaceCommands } from "./commands/workspace.ts";
 import { loadConfig } from "./config/store.ts";
 import { isFilePath, loadCommandFile, parseVarFlags } from "./core/file-loader.ts";
 import {
@@ -70,6 +71,7 @@ if (process.argv[2] === "__complete") {
   registerParachainCommand(cli);
   registerCompletionsCommand(cli);
   registerVerifiableCommands(cli);
+  registerWorkspaceCommands(cli);
 
   // Default command: dot-path syntax for query, tx, const, events, errors
   cli
@@ -410,6 +412,10 @@ if (process.argv[2] === "__complete") {
     );
     console.log("  verifiable         Derive Bandersnatch member key from mnemonic");
     console.log("  completions <sh>   Generate shell completions (zsh, bash, fish)");
+    console.log("  init               Initialize a local .polkadot workspace in this directory");
+    console.log(
+      "  which              Show the active config root (workspace, DOT_HOME, or global)",
+    );
     console.log();
     console.log("Global options:");
     console.log("  --chain <name>     Target chain (required)");

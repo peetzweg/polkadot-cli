@@ -25,9 +25,9 @@ describe("resolveChain", () => {
     });
   });
 
-  test("throws with descriptive error for unknown chain name", () => {
+  test("throws with descriptive error naming the config root for unknown chain name", () => {
     expect(() => resolveChain(config, "westend")).toThrow(
-      'Unknown chain "westend". Available chains: polkadot, kusama',
+      /Unknown chain "westend" in .+\. Available chains: polkadot, kusama/,
     );
   });
 

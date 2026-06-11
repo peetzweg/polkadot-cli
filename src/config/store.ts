@@ -5,10 +5,42 @@ import { CliError } from "../utils/errors.ts";
 import { isRuntimeFingerprint, type RuntimeFingerprint } from "../utils/runtime-fingerprint.ts";
 import type { ChainConfig, Config } from "./types.ts";
 import { DEFAULT_CONFIG } from "./types.ts";
+import { findWorkspace } from "./workspace.ts";
+
+export type ConfigDirSource = "env" | "workspace" | "global";
+
+export interface ResolvedConfigDir {
+  path: string;
+  source: ConfigDirSource;
+}
+
+/**
+ * Resolve the active config root and how it was chosen.
+ * Precedence: DOT_HOME env var → discovered local workspace (`.polkadot/`
+ * in cwd or a parent, see findWorkspace) → global ~/.polkadot.
+ */
+export function resolveConfigDir(cwd: string = process.cwd()): ResolvedConfigDir {
+  const override = process.env.DOT_HOME;
+  if (override && override.length > 0) return { path: override, source: "env" };
+  const workspace = findWorkspace(cwd);
+  if (workspace) return { path: workspace, source: "workspace" };
+  return { path: join(homedir(), ".polkadot"), source: "global" };
+}
+
+/** Human-readable label of the active config root, for error messages. */
+export function describeConfigDir(resolved: ResolvedConfigDir = resolveConfigDir()): string {
+  switch (resolved.source) {
+    case "env":
+      return `DOT_HOME ${resolved.path}`;
+    case "workspace":
+      return `workspace ${resolved.path}`;
+    case "global":
+      return `global config ${resolved.path}`;
+  }
+}
 
 export function getConfigDir(): string {
-  const override = process.env.DOT_HOME;
-  return override && override.length > 0 ? override : join(homedir(), ".polkadot");
+  return resolveConfigDir().path;
 }
 
 export function getChainsDir(): string {
@@ -174,7 +206,9 @@ export function resolveChain(
   }
   const name = findChainName(config, chainFlag);
   if (!name) {
-    throw new CliError(`Unknown chain "${chainFlag}". Available chains: ${available}`);
+    throw new CliError(
+      `Unknown chain "${chainFlag}" in ${describeConfigDir()}. Available chains: ${available}`,
+    );
   }
   return { name, chain: config.chains[name]! };
 }
