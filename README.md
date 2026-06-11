@@ -2040,6 +2040,8 @@ eval "$(dot completions bash)"
 dot completions fish > ~/.config/fish/completions/dot.fish
 ```
 
+Running `dot completions <shell>` directly in a terminal prints these setup instructions to stderr. When the output is captured by `eval "$(...)"` or redirected to a file, only the script is emitted — nothing is printed on shell startup.
+
 Once installed, press Tab to complete:
 
 ```bash

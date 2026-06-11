@@ -719,9 +719,14 @@ describe("completions command — shell scripts", () => {
     expect(stderr).toContain("Unsupported shell");
   });
 
-  test("setup instructions go to stderr", async () => {
-    const { stderr } = await runCli(["completions", "zsh"]);
-    expect(stderr).toContain("~/.zshrc");
+  test("setup instructions are suppressed when stdout is not a TTY", async () => {
+    // runCli pipes stdout, matching `eval "$(dot completions zsh)"` — the
+    // instructions must not leak to stderr on every shell startup.
+    for (const shell of ["zsh", "bash", "fish"]) {
+      const { stderr } = await runCli(["completions", shell]);
+      expect(stderr).not.toContain("Add this to your");
+      expect(stderr).not.toContain("Save this to");
+    }
   });
 
   test("zsh script uses zsh-native array slicing for preceding words", async () => {
