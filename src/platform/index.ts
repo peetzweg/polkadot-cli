@@ -12,19 +12,15 @@
  */
 export { findAccount, loadAccounts, saveAccounts } from "../config/accounts-store.ts";
 export { isWatchOnly } from "../config/accounts-types.ts";
-export { loadConfig, resolveChain } from "../config/store.ts";
 export {
   DEV_NAMES,
-  fromSs58,
   isDevAccount,
   isHexPublicKey,
   publicKeyToHex,
   resolveSecret,
 } from "../core/accounts.ts";
-export { createChainClient } from "../core/client.ts";
 export { parseInputData, toHex } from "../core/hash.ts";
 export { resolveDataInput } from "../core/input.ts";
-export { getOrFetchMetadata } from "../core/metadata.ts";
 export { BOLD, formatJson, isJsonOutput, printHeading, RESET } from "../core/output.ts";
 export { CliError } from "../utils/errors.ts";
 export { findClosest } from "../utils/fuzzy-match.ts";

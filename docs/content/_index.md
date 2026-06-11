@@ -2467,72 +2467,61 @@ dot parachain 1000 --type child --json
 dot account inspect --parachain 1000 --parachain-type child --json
 ```
 
-## Bandersnatch Member Keys
+## Verifiable (Bandersnatch / Ring-VRF)
 
-Derive Bandersnatch member keys from account mnemonics for on-chain member set registration. Uses the [`verifiablejs`](https://github.com/paritytech/verifiablejs) WASM library (Ring VRF on the Bandersnatch elliptic curve). Runs offline — no chain connection required.
+`dot verifiable` is a set of composable, unopinionated primitives over the [`verifiablejs`](https://github.com/paritytech/verifiablejs) WASM library (Ring VRF on the Bandersnatch curve): derive member keys, sign, generate and verify ring-VRF proofs, and encode member sets. Every action is **bytes-in, bytes-out** — it takes hex / `--file` / `--stdin` input and supports `--output json`, so it pipes together and composes with any data (for example values you fetched on-chain with `dot` beforehand). It does no automated fetching or selection and assumes nothing about how the bytes were produced or where they go — feed the resulting signature/proof into a `dot` extrinsic or signed extension, or use it elsewhere. Runs offline.
 
-### How it works
-
-The derivation converts a BIP39 mnemonic into a 32-byte Bandersnatch public key ("member key") that can be registered in on-chain member sets for anonymous membership proofs:
+### Two concepts you must not conflate
 
 ```
-Mnemonic (12 or 24 words)
-    │  mnemonicToEntropy()  (raw BIP39 entropy, NOT miniSecret)
-    ▼
-blake2b256(entropy, context?)   keyed or unkeyed
-    ▼
-member_from_entropy()           verifiablejs WASM (Bandersnatch curve)
-    ▼
-32-byte member key              for on-chain member set registration
+Mnemonic ─BIP39─▶ entropy ─keyed blake2b─▶ member entropy ─▶ member key / secret
+                           (key = --entropy-key)                  │
+                                       ring proof: one_shot(…, --context, --message)
 ```
 
-- **Unkeyed** (no `--context`): `blake2b256(entropy)` — the blake2b key parameter is omitted
-- **With context** (e.g. `--context candidate`): `blake2b256(entropy, key="candidate")` — the `--context` value is passed as the raw UTF-8 bytes of the blake2b key parameter
+- **`--entropy-key <text|0xhex>`** — the key mixed into the keyed-blake2b that turns your mnemonic into the Bandersnatch member entropy. **Omit** it for a **lite** person (unkeyed); use **`candidate`** for a **full** person. It must match the key used when the member was recognised on-chain, or you derive a different (unrecognised) member key. It is **not** an sr25519 derivation path and **not** the ring `--context`. (The value is the raw UTF-8 — or hex — bytes of the blake2b key.)
+- **`--context <text|0xhex>`** — the **32-byte ring/proof namespace** (e.g. `"dotns"`), zero-padded right to 32 bytes like Solidity `bytes32()`. It determines the alias and is the verifiablejs `context` parameter. Used by `alias` / `prove` / `verify`.
 
-These produce different member keys from the same mnemonic. The unkeyed derivation is used for lite person registration, while the `candidate` context is used for full person registration.
+> **Migration (breaking):** previously `dot verifiable <account> --context candidate` used `--context` as the entropy-derivation key. That key is now `--entropy-key`, and `--context` means the ring context. For one release the old form still works on the member command (with a deprecation warning); switch to `--entropy-key`.
 
-### Derive a member key
+### Member keys
 
 ```
-# Unkeyed derivation (lite person)
+# Lite person (unkeyed)
 dot verifiable alice
+#   Account:    alice
+#   Member Key: 0xbb6ee099b568f1844d62fc00e6305c2e83aa8da30ce59e664ef39e089204d43c
 
-# With "candidate" context (full person)
-dot verifiable alice --context candidate
-
-# Arbitrary context string
-dot verifiable alice --context pps
+# Full person (candidate-keyed)
+dot verifiable alice --entropy-key candidate
+#   Account:     alice
+#   Entropy Key: candidate
+#   Member Key:  0x5f915576987547d3e55bb4129ac8cae1d338f8933073dc74272b4c825f738592
 ```
 
-Output:
+### Alias, sign, prove, verify
 
 ```
-Bandersnatch Member Key
+# Alias for a ring context (deterministic in entropy + context)
+dot verifiable alias alice --entropy-key candidate --context dotns
 
-  Account:    alice
-  Context:    candidate
-  Member Key: 0x5f915576987547d3e55bb4129ac8cae1d338f8933073dc74272b4c825f738592
+# Standalone Bandersnatch signature (64 bytes), and verify it
+dot verifiable sign alice --message "hello" --entropy-key candidate
+dot verifiable verify-sig --signature 0x… --member 0x… --message "hello"
+
+# SCALE-encode a ring, prove membership bound to a challenge, verify locally
+dot verifiable members 0x<key> 0x<key> --output json
+dot verifiable prove alice --entropy-key candidate --context dotns \
+    --message 0x… --members 0x… --output json
+dot verifiable verify --proof 0x… --context dotns --message 0x… --members 0x…
+# verify / verify-sig exit non-zero if the proof / signature does not validate
 ```
 
-When `--context` is omitted, the "Context:" line is not shown.
+`prove` and `verify` accept the ring either as SCALE-encoded `--members` or as a 768-byte `--root` (commitment). `--members`/`--root`/`--proof` also accept a file path instead of inline hex.
 
-### JSON output
+### Saved member keys
 
-```
-dot verifiable alice --context candidate --json
-```
-
-```json
-{
-  "account": "alice",
-  "memberKey": "0x5f915576987547d3e55bb4129ac8cae1d338f8933073dc74272b4c825f738592",
-  "context": "candidate"
-}
-```
-
-### Saved keys
-
-Derived keys are automatically saved to the account store for stored accounts. They appear in `dot account inspect` output:
+Member-key derivation saves the result to the account store for stored accounts. They appear in `dot account inspect` output:
 
 ```
 Account Info
@@ -2545,15 +2534,15 @@ Account Info
   Prefix:           42
 ```
 
-When creating a new account with `dot account create`, both unkeyed and `candidate` keys are automatically derived and saved. For dev accounts (alice, bob, etc.), use `dot verifiable` directly to derive keys.
+When creating a new account with `dot account create`, both the unkeyed and `candidate` member keys are derived and saved. For dev accounts (alice, bob, etc.), use `dot verifiable` directly.
 
 ### Requirements
 
 - Account must have a BIP39 mnemonic (not a hex seed or watch-only)
-- Dev accounts share the same mnemonic and therefore produce the same Bandersnatch keys
+- Dev accounts share the same mnemonic and therefore produce the same member keys
 - Both 12-word and 24-word mnemonics are supported — blake2b256 normalizes any input to 32 bytes
 
-Run `dot verifiable` with no arguments to see usage, examples, and the full derivation diagram.
+Run `dot verifiable` with no arguments to see the full action/option list and the derivation diagram.
 
 ## Shell Completions
 

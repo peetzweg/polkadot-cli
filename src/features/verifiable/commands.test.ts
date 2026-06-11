@@ -421,33 +421,6 @@ describe("dot verifiable alias / sign / prove / verify", { timeout: 20_000 }, ()
     expect(bad.exitCode).toBe(1);
   });
 
-  test("msg alias builds a 32-byte message and is deterministic", async () => {
-    const pubkey = `0x${"07".repeat(32)}`;
-    const run = () =>
-      runCli([
-        "verifiable",
-        "msg",
-        "alias",
-        "--account",
-        pubkey,
-        "--valid-at",
-        "1717000000",
-        "--output",
-        "json",
-      ]);
-    const a = JSON.parse((await run()).stdout);
-    const b = JSON.parse((await run()).stdout);
-    expect(a.message).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(a.validAt).toBe("1717000000");
-    expect(a.message).toBe(b.message);
-  });
-
-  test("msg alias requires --account and --valid-at", async () => {
-    const missing = await runCli(["verifiable", "msg", "alias", "--valid-at", "1"]);
-    expect(missing.exitCode).toBe(1);
-    expect(missing.stderr).toContain("--account");
-  });
-
   test("members encode reports count and hex", async () => {
     const { stdout, exitCode } = await runCli([
       "verifiable",

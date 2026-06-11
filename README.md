@@ -1889,12 +1889,13 @@ dot account inspect --parachain 1000 --parachain-type child --json
 
 ### Bandersnatch / verifiable (member keys, ring-VRF proofs, signing)
 
-`dot verifiable` is a set of composable primitives over the
-[`verifiablejs`](https://github.com/paritytech/verifiablejs) WASM library for
-personhood / Ring-VRF flows: derive member keys, sign, generate and verify
-ring-VRF proofs, encode member sets, and build proof messages. Every action
-takes hex / `--file` / `--stdin` input and supports `--output json`, so they
-pipe together.
+`dot verifiable` is a set of composable, unopinionated primitives over the
+[`verifiablejs`](https://github.com/paritytech/verifiablejs) WASM library: derive
+member keys, sign, generate and verify ring-VRF proofs, and encode member sets.
+Every action is bytes-in, bytes-out — it takes hex / `--file` / `--stdin` input
+and supports `--output json`, so it pipes together and composes with any data
+(for example values you fetched on-chain with `dot` beforehand). It makes no
+assumptions and does no fetching or selection of its own.
 
 #### Two concepts you must not conflate
 
@@ -1959,16 +1960,13 @@ dot verifiable verify --proof 0x… --context dotns --message 0x… --members 0x
 # verify exits non-zero if the proof does not validate
 ```
 
-#### Proof messages and chain sourcing
-
-```bash
-# Build the set_alias_account / reprove_alias_account proof message
-dot verifiable msg alias --account <ss58> --valid-at 1717000000
-
-# Fetch a ring's members (People) and its latest root + exponent (Asset Hub)
-dot verifiable ring members <collection> --chain people --output json
-dot verifiable ring root    <collection> --chain asset-hub --output json
-```
+`dot verifiable` is deliberately scoped to **raw verifiable crypto** — bytes in,
+bytes out, with no knowledge of Polkadot chains, pallets, or collections (the
+same way `dot sign` is just sr25519). It does no automated fetching or selection
+and assumes nothing about how the bytes were produced or where they go: supply
+the members/context/message yourself (e.g. read from chain with `dot` first), and
+use the resulting signature or proof however you need — as a value in a `dot`
+extrinsic or signed extension, or anywhere else.
 
 Run `dot verifiable` with no arguments for the full action/option list and the
 derivation diagram. Both 12- and 24-word mnemonics are supported.

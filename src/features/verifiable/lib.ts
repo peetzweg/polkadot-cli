@@ -1,5 +1,5 @@
 import { blake2b } from "@noble/hashes/blake2.js";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { hexToBytes } from "@noble/hashes/utils.js";
 import { compact } from "@polkadot-api/substrate-bindings";
 import { mnemonicToEntropy } from "@polkadot-labs/hdkd-helpers";
 import {
@@ -217,82 +217,4 @@ export function encodeContext(input: string): Uint8Array {
   const out = new Uint8Array(32);
   out.set(bytes, 0);
   return out;
-}
-
-/** One `People.Members.RingKeys` storage entry: keyArgs (collection, ring, page) + member keys. */
-export interface RingKeyPageEntry {
-  collection: Uint8Array;
-  ring: number;
-  page: number;
-  keys: Uint8Array[];
-}
-
-/**
- * Assemble and SCALE-encode the ordered ring members for a (collection, ring)
- * from paginated `RingKeys` entries. `RingKeys` is paginated — a single ring can
- * be split across multiple page-index entries — and the pages MUST be
- * concatenated in page order because the ring root is computed over the
- * concatenated list. Entries for other collections/rings are ignored.
- */
-export function assembleRingMembers(
-  entries: RingKeyPageEntry[],
-  collection: Uint8Array,
-  ring: number,
-): { members: Uint8Array; count: number } {
-  const collHex = bytesToHex(collection);
-  const pages = entries
-    .filter((e) => bytesToHex(e.collection) === collHex && e.ring === ring)
-    .sort((a, b) => a.page - b.page);
-  const keys = pages.flatMap((p) => p.keys);
-  return { members: encodeMembers(keys), count: keys.length };
-}
-
-/** One revision of a ring root stored in `MembersSubscriber.RingRoots[collection, ring]`. */
-export interface RingRootRecord {
-  revision: number;
-  root: Uint8Array;
-}
-
-/**
- * Pick the newest revision from a chain's `RingRoots` list for a (collection,
- * ring). The chain retains a small window (3 revisions on nextv2-ah); a proof
- * must be built against a revision the chain still has, so callers submit
- * against the latest.
- */
-export function pickLatestRingRoot(records: RingRootRecord[]): RingRootRecord {
-  if (records.length === 0) {
-    throw new Error("no ring roots found for this (collection, ring)");
-  }
-  return records.reduce((latest, r) => (r.revision > latest.revision ? r : latest));
-}
-
-const ALIAS_ACCOUNTS_TAG = new TextEncoder().encode("alias-accounts");
-
-/**
- * Build the 32-byte msg the runtime binds for `AliasAccounts.set_alias_account`
- * and `reprove_alias_account` (the challenge fed to {@link ringProve} as
- * `message`). Mirrors the runtime `proof_message`
- * (`pallets/alias-accounts/src/lib.rs:633`):
- *
- *   blake2_256( SCALE("alias-accounts", account, proof_valid_at) )
- *   = blake2_256( "alias-accounts"(14b) || account(32b) || u64_LE(valid_at)(8b) )
- *
- * `proofValidAt` is bounded by the pallet's `ProofValidityWindow` (300s on AH),
- * so the proof must be submitted within that window of the supplied time.
- */
-export function aliasProofMessage(accountPubkey: Uint8Array, proofValidAt: bigint): Uint8Array {
-  if (accountPubkey.length !== 32) {
-    throw new Error(`account public key must be 32 bytes (got ${accountPubkey.length})`);
-  }
-  if (proofValidAt < 0n || proofValidAt > 0xffffffffffffffffn) {
-    // setBigUint64 would silently wrap modulo 2^64, hashing a different time.
-    throw new Error(`proof_valid_at must be a u64 (got ${proofValidAt})`);
-  }
-  const u64 = new Uint8Array(8);
-  new DataView(u64.buffer).setBigUint64(0, proofValidAt, true);
-  const input = new Uint8Array(ALIAS_ACCOUNTS_TAG.length + 32 + 8);
-  input.set(ALIAS_ACCOUNTS_TAG, 0);
-  input.set(accountPubkey, ALIAS_ACCOUNTS_TAG.length);
-  input.set(u64, ALIAS_ACCOUNTS_TAG.length + 32);
-  return blake2b(input, { dkLen: 32 });
 }

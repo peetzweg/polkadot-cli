@@ -21,9 +21,9 @@ ${BOLD}Actions:${RESET}
   verify                Locally verify a ring-VRF proof against members/root
   verify-sig            Verify a standalone Bandersnatch signature
   members <key…>        SCALE-encode member keys as Vec<[u8;32]>
-  msg alias             Build the set_alias_account / reprove proof message
-  ring members <coll>   Fetch + encode a ring's members from a chain (People)
-  ring root <coll>      Fetch the latest ring root + exponent from a chain (Asset Hub)
+
+  verify / verify-sig exit non-zero on failure (the verdict is the exit code);
+  on success they print the recovered alias / {"valid":true}.
 
 ${BOLD}Key concepts (do not conflate these):${RESET}
   --entropy-key <text|0xhex>
@@ -48,10 +48,6 @@ ${BOLD}Options:${RESET}
   --signature <hex>     Bandersnatch signature (verify-sig)
   --member <hex>        32-byte member public key (verify-sig)
   --ring-exponent <n>   Ring exponent: 9 (default), 10, or 14
-  --account <ss58|hex>  Account for msg builders (msg alias)
-  --valid-at <u64>      proof_valid_at seconds (msg alias)
-  --ring <n>            Ring index for ring sourcing (default 0)
-  --chain <name>        Target chain (ring sourcing)
   --output json         Output as JSON
 
 ${BOLD}Examples:${RESET}
@@ -85,11 +81,6 @@ export interface VerifiableOpts {
   signature?: string;
   member?: string;
   ringExponent?: string;
-  account?: string;
-  validAt?: string;
-  chain?: string;
-  rpc?: string;
-  ring?: string;
 }
 
 /** Flags whose values may be 0x-hex and must survive mri's numeric coercion. */
@@ -102,8 +93,6 @@ const RAW_STRING_FLAGS: Array<[string, keyof VerifiableOpts]> = [
   ["proof", "proof"],
   ["signature", "signature"],
   ["member", "member"],
-  ["account", "account"],
-  ["valid-at", "validAt"],
 ];
 
 export function registerVerifiableCommands(cli: CAC) {
@@ -123,9 +112,6 @@ export function registerVerifiableCommands(cli: CAC) {
     .option("--signature <hex>", "Bandersnatch signature (verify-sig)")
     .option("--member <hex>", "32-byte member public key (verify-sig)")
     .option("--ring-exponent <n>", "Ring exponent: 9 (default), 10, or 14")
-    .option("--account <ss58|0xhex>", "Account for msg builders (msg alias)")
-    .option("--valid-at <u64>", "proof_valid_at seconds (msg alias)")
-    .option("--ring <n>", "Ring index for ring sourcing (default 0)")
     .action(async (action: string | undefined, rest: string[], opts: VerifiableOpts) => {
       if (!action) {
         console.log(VERIFIABLE_HELP);

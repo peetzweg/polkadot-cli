@@ -11,10 +11,12 @@ Adds composable `dot verifiable` subcommands over `verifiablejs`:
 - `verifiable prove` / `verify` — ring-VRF proofs (`one_shot`) and local
   verification against a members set or a 768-byte ring root.
 - `verifiable members` — SCALE-encode member keys as `Vec<[u8;32]>`.
-- `verifiable msg alias` — build the `set_alias_account` / `reprove_alias_account`
-  proof message.
-- `verifiable ring members|root` — fetch a ring's members (People) or its latest
-  root + exponent (Asset Hub) from a chain.
+
+The command is scoped to raw verifiable crypto only — bytes in, bytes out, with
+no chain/pallet knowledge and no automated fetching or selection (the same way
+`dot sign` is just sr25519). Supply the members/context/message yourself (e.g.
+read from chain with `dot` first) and use the resulting signature/proof however
+you need — in a `dot` extrinsic or signed extension, or elsewhere.
 
 All actions accept hex / `--file` / `--stdin` input and `--output json`, and a
 new `src/features/verifiable/lib.ts` exposes the underlying primitives for reuse.

@@ -1,35 +1,27 @@
 import { readFile } from "node:fs/promises";
 import { DEV_PHRASE } from "@polkadot-labs/hdkd-helpers";
-import { Binary } from "polkadot-api";
 import {
   BOLD,
   CliError,
-  createChainClient,
   DEV_NAMES,
   findAccount,
   findClosest,
   formatJson,
-  fromSs58,
-  getOrFetchMetadata,
   isDevAccount,
   isHexPublicKey,
   isJsonOutput,
   isWatchOnly,
   loadAccounts,
-  loadConfig,
   parseInputData,
   printHeading,
   publicKeyToHex,
   RESET,
-  resolveChain,
   resolveDataInput,
   resolveSecret,
   saveAccounts,
   toHex,
 } from "../../platform/index.ts";
 import {
-  aliasProofMessage,
-  assembleRingMembers,
   bandersnatchSign,
   DEFAULT_RING_EXPONENT,
   deriveAlias,
@@ -39,10 +31,6 @@ import {
   encodeContext,
   encodeMembers,
   isRingExponent,
-  pickLatestRingRoot,
-  type RingExponent,
-  type RingKeyPageEntry,
-  type RingRootRecord,
   resolveEntropyKey,
   ringProve,
   verifyBandersnatchSig,
@@ -67,10 +55,6 @@ export async function runVerifiable(action: string, rest: string[], opts: Verifi
       return verifySigCmd(opts);
     case "members":
       return membersCmd(rest, opts);
-    case "msg":
-      return msgCmd(rest, opts);
-    case "ring":
-      return ringCmd(rest, opts);
     default:
       // Back-compat: `dot verifiable <account>` derives the member key.
       return deriveMember(action, opts);
@@ -387,12 +371,10 @@ async function verifySigCmd(opts: VerifiableOpts) {
 }
 
 async function membersCmd(rest: string[], opts: VerifiableOpts) {
-  // Allow an optional `encode` verb: `dot verifiable members encode 0x… 0x…`.
-  const keys = rest[0] === "encode" ? rest.slice(1) : rest;
-  if (keys.length === 0) {
+  if (rest.length === 0) {
     throw new CliError("dot verifiable members requires one or more 0x-hex member keys.");
   }
-  const memberBytes = keys.map((k) => {
+  const memberBytes = rest.map((k) => {
     const bytes = parseInputData(k);
     if (bytes.length !== 32) {
       throw new CliError(`member key must be 32 bytes (got ${bytes.length}): ${k}`);
@@ -402,197 +384,11 @@ async function membersCmd(rest: string[], opts: VerifiableOpts) {
   const encoded = toHex(encodeMembers(memberBytes));
 
   if (isJsonOutput(opts)) {
-    console.log(formatJson({ count: keys.length, members: encoded }));
+    console.log(formatJson({ count: rest.length, members: encoded }));
   } else {
     printHeading("Encoded Members");
-    console.log(`  ${BOLD}Count:${RESET}   ${keys.length}`);
+    console.log(`  ${BOLD}Count:${RESET}   ${rest.length}`);
     console.log(`  ${BOLD}Members:${RESET} ${encoded}`);
     console.log();
-  }
-}
-
-async function msgCmd(rest: string[], opts: VerifiableOpts) {
-  const kind = rest[0];
-  if (kind !== "alias") {
-    throw new CliError(
-      `Unknown msg type "${kind ?? ""}". Supported: alias (set_alias_account / reprove_alias_account).`,
-    );
-  }
-  const accountArg = requireOption(opts.account, "--account", "msg alias");
-  const validAtStr = requireOption(opts.validAt, "--valid-at", "msg alias");
-
-  const pubkey = accountArg.startsWith("0x") ? parseInputData(accountArg) : fromSs58(accountArg);
-  if (pubkey.length !== 32) {
-    throw new CliError("--account must be a 32-byte SS58 address or 0x-hex public key");
-  }
-  let validAt: bigint;
-  try {
-    validAt = BigInt(validAtStr);
-  } catch {
-    throw new CliError(`--valid-at must be an integer (got "${validAtStr}")`);
-  }
-  if (validAt < 0n || validAt > 0xffffffffffffffffn) {
-    throw new CliError(`--valid-at must be a u64 (0 ≤ value < 2^64, got "${validAtStr}")`);
-  }
-
-  const message = toHex(aliasProofMessage(pubkey, validAt));
-
-  if (isJsonOutput(opts)) {
-    console.log(formatJson({ account: accountArg, validAt: validAtStr, message }));
-  } else {
-    printHeading("Alias Proof Message");
-    console.log(`  ${BOLD}Account:${RESET}  ${accountArg}`);
-    console.log(`  ${BOLD}Valid at:${RESET} ${validAtStr}`);
-    console.log(`  ${BOLD}Message:${RESET}  ${message}`);
-    console.log();
-  }
-}
-
-/** papi's getUnsafeApi is intentionally untyped. */
-type UnsafeApi = any;
-
-/** Wrap a 32-byte collection identifier as the Binary papi expects for a sized-binary storage key. */
-function collectionKey(collection: Uint8Array) {
-  return Binary.fromHex(toHex(collection) as `0x${string}`);
-}
-
-function parseRingIndex(opts: VerifiableOpts): number {
-  if (opts.ring === undefined) return 0;
-  const n = Number(opts.ring);
-  if (!Number.isInteger(n) || n < 0) {
-    throw new CliError(`--ring must be a non-negative integer (got "${opts.ring}")`);
-  }
-  return n;
-}
-
-/** Resolve a 32-byte collection identifier from a 0x-hex arg, or the chain's
- *  AliasAccounts.PeopleCollectionIdentifier constant when omitted. */
-async function resolveCollection(
-  arg: string | undefined,
-  api: UnsafeApi,
-  allowConstant: boolean,
-): Promise<Uint8Array> {
-  if (arg !== undefined) {
-    const bytes = parseInputData(arg);
-    if (bytes.length !== 32) {
-      throw new CliError(`collection identifier must be 32 bytes (got ${bytes.length})`);
-    }
-    return bytes;
-  }
-  if (allowConstant) {
-    try {
-      const ident = await api.constants.AliasAccounts.PeopleCollectionIdentifier();
-      return ident.asBytes();
-    } catch {
-      throw new CliError(
-        "No collection given and AliasAccounts.PeopleCollectionIdentifier constant is unavailable on this chain. Pass the 32-byte collection explicitly.",
-      );
-    }
-  }
-  throw new CliError("A 32-byte collection identifier is required.");
-}
-
-async function readRingExponent(api: UnsafeApi, collection: Uint8Array): Promise<RingExponent> {
-  try {
-    const value = await api.query.MembersSubscriber.RingCollectionExponents.getValue(
-      collectionKey(collection),
-    );
-    // papi decodes the RingExponent enum as { type: "R2e9" | "R2e10" | "R2e14" }.
-    const match = /R2e(\d+)/.exec(String(value?.type ?? ""));
-    if (match) {
-      const n = Number(match[1]);
-      if (isRingExponent(n)) return n;
-    }
-  } catch {
-    // fall through to the warning + default
-  }
-  process.stderr.write(
-    `Warning: could not read the ring exponent from the chain; assuming ${DEFAULT_RING_EXPONENT}.\n`,
-  );
-  return DEFAULT_RING_EXPONENT;
-}
-
-async function ringCmd(rest: string[], opts: VerifiableOpts) {
-  const kind = rest[0];
-  if (kind !== "members" && kind !== "root") {
-    throw new CliError(
-      `Unknown ring source "${kind ?? ""}". Supported: members (People), root (Asset Hub).`,
-    );
-  }
-  const ring = parseRingIndex(opts);
-  const config = await loadConfig();
-  const { name: chainName, chain: chainConfig } = resolveChain(config, opts.chain);
-  const clientHandle = await createChainClient(chainName, chainConfig, opts.rpc);
-
-  try {
-    await getOrFetchMetadata(chainName, clientHandle);
-    const api: UnsafeApi = clientHandle.client.getUnsafeApi();
-
-    if (kind === "members") {
-      const collection = await resolveCollection(rest[1], api, false);
-      // Partial key args filter to this (collection, ring) server-side; only
-      // the matching pages are transferred and decoded.
-      const entries = await api.query.Members.RingKeys.getEntries(collectionKey(collection), ring);
-      const mapped: RingKeyPageEntry[] = entries.map((e: UnsafeApi) => ({
-        collection: e.keyArgs[0].asBytes(),
-        ring: Number(e.keyArgs[1]),
-        page: Number(e.keyArgs[2]),
-        keys: (e.value as UnsafeApi[]).map((k) => k.asBytes()),
-      }));
-      const { members, count } = assembleRingMembers(mapped, collection, ring);
-      const result = {
-        chain: chainName,
-        collection: toHex(collection),
-        ring,
-        count,
-        members: toHex(members),
-      };
-      if (isJsonOutput(opts)) {
-        console.log(formatJson(result));
-      } else {
-        printHeading("Ring Members");
-        console.log(`  ${BOLD}Chain:${RESET}      ${chainName}`);
-        console.log(`  ${BOLD}Collection:${RESET} ${result.collection}`);
-        console.log(`  ${BOLD}Ring:${RESET}       ${ring}`);
-        console.log(`  ${BOLD}Count:${RESET}      ${count}`);
-        console.log(`  ${BOLD}Members:${RESET}    ${result.members}`);
-        console.log();
-      }
-      return;
-    }
-
-    // kind === "root" — the roots and the exponent are independent reads.
-    const collection = await resolveCollection(rest[1], api, true);
-    const [records, ringExponent] = await Promise.all([
-      api.query.MembersSubscriber.RingRoots.getValue(collectionKey(collection), ring),
-      readRingExponent(api, collection),
-    ]);
-    const mapped: RingRootRecord[] = ((records as UnsafeApi[]) ?? []).map((r: UnsafeApi) => ({
-      revision: Number(r.revision),
-      root: r.root.asBytes(),
-    }));
-    const latest = pickLatestRingRoot(mapped);
-    const result = {
-      chain: chainName,
-      collection: toHex(collection),
-      ring,
-      revision: latest.revision,
-      ringExponent,
-      root: toHex(latest.root),
-    };
-    if (isJsonOutput(opts)) {
-      console.log(formatJson(result));
-    } else {
-      printHeading("Ring Root");
-      console.log(`  ${BOLD}Chain:${RESET}         ${chainName}`);
-      console.log(`  ${BOLD}Collection:${RESET}    ${result.collection}`);
-      console.log(`  ${BOLD}Ring:${RESET}          ${ring}`);
-      console.log(`  ${BOLD}Revision:${RESET}      ${latest.revision}`);
-      console.log(`  ${BOLD}Ring exponent:${RESET} ${ringExponent}`);
-      console.log(`  ${BOLD}Root:${RESET}          ${result.root}`);
-      console.log();
-    }
-  } finally {
-    clientHandle.destroy();
   }
 }

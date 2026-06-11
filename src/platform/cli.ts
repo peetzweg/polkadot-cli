@@ -18,7 +18,9 @@ export function registerGlobalOptions(cli: CAC): void {
  * to mri, which silently coerces 0x-hex option values to JS Numbers (losing
  * bytes / precision) — re-reading from argv keeps the original string intact.
  * Mirrors mri's rules where it matters: scanning stops at the `--` terminator
- * and the last occurrence wins.
+ * and the last occurrence wins. Matching is exact (`--name` or `--name=`), so
+ * sibling flags that share a prefix (e.g. `--member` vs `--members`) never
+ * collide.
  */
 export function readRawOptionValue(
   name: string,
