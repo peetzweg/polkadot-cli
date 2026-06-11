@@ -1,6 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+// Installs spread-based polkadot-api mocks and captures the real
+// createChainClient BEFORE this file stubs the whole client.ts module —
+// client.test.ts depends on that capture regardless of file order.
+import "../core/__fixtures__/papi-mocks.ts";
 
 // ---------------------------------------------------------------------------
 // Load fixture metadata and actual metadata functions before mocking.
