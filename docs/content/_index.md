@@ -13,6 +13,7 @@ A command-line tool for interacting with Polkadot-ecosystem chains. Manage chain
 - ✅ Built with agent use in mind — structured JSON output on every command (`--json`)
 - ✅ Fuzzy matching with typo suggestions
 - ✅ Account management — BIP39 mnemonics, derivation paths, env-backed secrets, watch-only, dev accounts
+- ✅ Local workspaces — `dot init` creates a `.polkadot/` in any directory, auto-discovered git-style and fully isolated from your global `~/.polkadot`
 - ✅ Named address resolution across all commands
 - ✅ Runtime API calls — `dot polkadot.apis.Core.version`
 - ✅ Raw JSON-RPC calls — `dot polkadot.rpc.system_health`, with discovery via `rpc_methods` and tab-completion
@@ -2767,7 +2768,7 @@ Config and metadata caches live in `~/.polkadot/` by default:
 
 ### Local workspaces — `dot init`
 
-Create a self-contained, per-directory setup — like a Python `venv`, but for chains and accounts. A workspace is just a `.polkadot/` directory that `dot` discovers automatically:
+Create a self-contained, per-directory setup for chains and accounts. A workspace is just a `.polkadot/` directory that `dot` discovers automatically:
 
 ```bash
 mkdir -p ~/dot/paseo && cd ~/dot/paseo

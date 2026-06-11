@@ -6,7 +6,8 @@ description: >
   transactions, calling runtime APIs, raw JSON-RPC calls, managing chain connections, or
   scripting multi-chain setups. Triggers: user mentions `dot` CLI, polkadot-cli,
   Substrate chain queries, extrinsic submission, runtime APIs, JSON-RPC, `system_health`
-  / `chain_getBlock` / `rpc_methods`, XCM, asset pools, or chain setup scripts using `dot`.
+  / `chain_getBlock` / `rpc_methods`, XCM, asset pools, chain setup scripts using `dot`,
+  or isolated per-directory `dot` workspaces (`dot init`, `dot which`, `.polkadot/`).
 ---
 
 # dot CLI (polkadot-cli)
@@ -22,6 +23,8 @@ dot [chain.]<category>[.Pallet[.Item]] [args] [options]
 Categories: `query`, `tx`, `apis`, `const`, `events`, `errors`, `extensions`, `rpc`
 
 Top-level commands: `dot inspect`, `dot metadata`, `dot chain`, `dot account`, `dot sign`, `dot hash`, `dot verifiable`, `dot init`, `dot which`.
+
+State (accounts, custom chains, metadata cache) lives in a config root resolved per run: `DOT_HOME` env var → a local `.polkadot/` workspace discovered from cwd → global `~/.polkadot`. Run `dot which` to see which one is active, and see [Local Workspaces](#local-workspaces) for isolated per-directory setups.
 
 Omit deeper levels to discover what's available. Always include the chain prefix:
 
@@ -582,7 +585,7 @@ dot which
 # Source: local workspace (discovered from current directory)
 dot which --json          # {"path":"...","source":"workspace"} — source: workspace | env | global
 
-# Create an isolated per-network setup (like a Python venv)
+# Create an isolated per-network setup
 mkdir -p ~/dot/mytestnet && cd ~/dot/mytestnet
 dot init
 # Output:
