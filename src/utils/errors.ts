@@ -34,9 +34,17 @@ export function isPapiCleanupError(err: unknown): boolean {
 }
 
 // Errors that smell like the runtime saw a SCALE-encoded extrinsic / storage
-// key produced from out-of-date type tables. These are the symptoms of stale
-// local metadata. User-typo errors ("pallet not found", "call not found") are
-// deliberately NOT in this set — they propagate immediately.
+// key produced from out-of-date type tables, or signed-extension fields that
+// disagree with the live runtime. These are the symptoms of stale local
+// metadata. User-typo errors ("pallet not found", "call not found") are
+// deliberately NOT in this set — they propagate immediately. BadProof /
+// AncientBirthBlock come from TransactionValidityError after a runtime
+// upgrade: CheckSpecVersion / CheckTxVersion / CheckGenesis / CheckMortality
+// fields are part of the signed payload, so a signer using stale values
+// produces a payload the runtime won't reconstruct identically. The
+// withStalenessSuggestion fingerprint check is the safety net for the
+// false-positive cases (wrong key, wrong chain) — if cached fingerprint
+// matches live, the raw error passes through unchanged.
 const STALE_METADATA_PATTERNS: RegExp[] = [
   /wasm trap/i,
   /wasm `?unreachable`? instruction/i,
@@ -45,6 +53,8 @@ const STALE_METADATA_PATTERNS: RegExp[] = [
   /decod(e|ing)/i,
   /Lookup failed/i,
   /metadata.*mismatch/i,
+  /BadProof/,
+  /AncientBirthBlock/,
 ];
 
 export function isLikelyStaleMetadataError(err: unknown): boolean {

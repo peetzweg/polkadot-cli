@@ -92,6 +92,33 @@ describe("isLikelyStaleMetadataError", () => {
     expect(isLikelyStaleMetadataError(new Error("metadata mismatch detected"))).toBe(true);
   });
 
+  test("matches BadProof from papi InvalidTxError (JSON-stringified payload)", () => {
+    // What polkadot-api throws when validate_transaction returns Invalid::BadProof:
+    // the message is JSON.stringify of the TransactionValidityError enum.
+    const papiMsg = '{\n  "type": "Invalid",\n  "value": {\n    "type": "BadProof"\n  }\n}';
+    expect(isLikelyStaleMetadataError(new Error(papiMsg))).toBe(true);
+  });
+
+  test("matches BadProof from a substrate JSON-RPC text error", () => {
+    expect(isLikelyStaleMetadataError(new Error("Invalid Transaction: BadProof"))).toBe(true);
+  });
+
+  test("matches AncientBirthBlock (signed-payload era hash diverged)", () => {
+    const papiMsg =
+      '{\n  "type": "Invalid",\n  "value": {\n    "type": "AncientBirthBlock"\n  }\n}';
+    expect(isLikelyStaleMetadataError(new Error(papiMsg))).toBe(true);
+    expect(isLikelyStaleMetadataError(new Error("Invalid Transaction: AncientBirthBlock"))).toBe(
+      true,
+    );
+  });
+
+  test("does NOT match nonce-mismatch variants (Future / Stale)", () => {
+    // These are account-nonce errors, not stale-metadata symptoms. Asking the
+    // user to refresh metadata here would be misleading.
+    expect(isLikelyStaleMetadataError(new Error("Invalid Transaction: Future"))).toBe(false);
+    expect(isLikelyStaleMetadataError(new Error("Invalid Transaction: Stale"))).toBe(false);
+  });
+
   test("does NOT match user-typo errors", () => {
     expect(isLikelyStaleMetadataError(new Error("pallet 'Foo' not found"))).toBe(false);
     expect(isLikelyStaleMetadataError(new Error("call 'bar' not found in pallet System"))).toBe(
