@@ -87,9 +87,12 @@ export function registerCompletionsCommand(cli: CAC) {
         process.exit(1);
       }
 
-      // Print setup instructions to stderr so they don't pollute the script
+      // Print setup instructions to stderr so they don't pollute the script,
+      // and only when stdout is a TTY — inside `eval "$(dot completions zsh)"`
+      // or a redirect, stderr still reaches the terminal and would print the
+      // instructions on every shell startup.
       const instructions = SETUP_INSTRUCTIONS[shell];
-      if (instructions) {
+      if (instructions && process.stdout.isTTY) {
         process.stderr.write(`${instructions}\n`);
       }
 

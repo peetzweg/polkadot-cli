@@ -227,6 +227,111 @@ describe("withStalenessSuggestion", () => {
     }
   });
 
+  test("wraps a BadProof error with the staleness hint when spec diverged", async () => {
+    // Reproduces the original bug: nextv2-ah moved spec 2000011 → 2000014,
+    // signer used the cached spec, runtime rejected with Invalid::BadProof.
+    // The post-error path should detect the fingerprint mismatch and append
+    // the "Run: dot chain update <chain>" hint instead of leaving the user
+    // staring at a bare BadProof.
+    const home = makeFreshHome();
+    const cached = {
+      specName: "polkadot",
+      specVersion: 2000011,
+      transactionVersion: 16,
+      implName: "parity-polkadot",
+      implVersion: 0,
+      authoringVersion: 0,
+      codeHash: "0xaaaa",
+      fetchedAt: "2026-04-27T12:00:00Z",
+    };
+    const client = makeMockClient((method) => {
+      if (method === "state_getRuntimeVersion") {
+        return {
+          specName: "polkadot",
+          specVersion: 2000014,
+          transactionVersion: 16,
+          implName: "parity-polkadot",
+          implVersion: 0,
+          authoringVersion: 0,
+        };
+      }
+      if (method === "state_getStorageHash") return "0xbbbb";
+      throw new Error(`unexpected method: ${method}`);
+    });
+    // The actual papi InvalidTxError carries a JSON-stringified payload.
+    const BAD_PROOF = new Error(
+      '{\n  "type": "Invalid",\n  "value": {\n    "type": "BadProof"\n  }\n}',
+    );
+    try {
+      await withDotHome(home, async () => {
+        withFingerprint(home, cached);
+        let captured: Error | undefined;
+        try {
+          await withStalenessSuggestion("polkadot", client as unknown as ClientHandle, async () => {
+            throw BAD_PROOF;
+          });
+        } catch (err) {
+          captured = err as Error;
+        }
+        expect(captured).toBeDefined();
+        expect(captured!.message).toContain('Local metadata for "polkadot" is out of date');
+        expect(captured!.message).toContain("spec 2000011 → 2000014");
+        expect(captured!.message).toContain("dot chain update polkadot");
+      });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("propagates BadProof unchanged when fingerprint matches (likely bad key)", async () => {
+    // If the signer's key really is wrong and metadata is current, we must
+    // NOT mislead the user into running `dot chain update`. The fingerprint
+    // gate is the safety net.
+    const home = makeFreshHome();
+    const fp = {
+      specName: "polkadot",
+      specVersion: 2000014,
+      transactionVersion: 16,
+      implName: "parity-polkadot",
+      implVersion: 0,
+      authoringVersion: 0,
+      codeHash: "0xfeed",
+      fetchedAt: "2026-04-27T12:00:00Z",
+    };
+    const client = makeMockClient((method) => {
+      if (method === "state_getRuntimeVersion") {
+        return {
+          specName: fp.specName,
+          specVersion: fp.specVersion,
+          transactionVersion: fp.transactionVersion,
+          implName: fp.implName,
+          implVersion: fp.implVersion,
+          authoringVersion: fp.authoringVersion,
+        };
+      }
+      if (method === "state_getStorageHash") return "0xfeed";
+      throw new Error(`unexpected method: ${method}`);
+    });
+    try {
+      await withDotHome(home, async () => {
+        withFingerprint(home, fp);
+        let captured: Error | undefined;
+        try {
+          await withStalenessSuggestion("polkadot", client as unknown as ClientHandle, async () => {
+            throw new Error("Invalid Transaction: BadProof");
+          });
+        } catch (err) {
+          captured = err as Error;
+        }
+        expect(captured).toBeDefined();
+        expect(captured!.message).toContain("BadProof");
+        expect(captured!.message).not.toContain("dot chain update");
+      });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   test("wraps with code-hash note when only codeHash differs (same spec)", async () => {
     const home = makeFreshHome();
     const cached = {

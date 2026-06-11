@@ -1887,48 +1887,89 @@ dot parachain 1000 --type child --json
 dot account inspect --parachain 1000 --parachain-type child --json
 ```
 
-### Bandersnatch member keys
+### Bandersnatch / verifiable (member keys, ring-VRF proofs, signing)
 
-Derive Bandersnatch member keys from account mnemonics for on-chain member set registration (personhood proofs, Ring VRF). Uses the [`verifiablejs`](https://github.com/paritytech/verifiablejs) WASM library.
+`dot verifiable` is a set of composable, unopinionated primitives over the
+[`verifiablejs`](https://github.com/paritytech/verifiablejs) WASM library: derive
+member keys, sign, generate and verify ring-VRF proofs, and encode member sets.
+Every action is bytes-in, bytes-out — it takes hex / `--file` / `--stdin` input
+and supports `--output json`, so it pipes together and composes with any data
+(for example values you fetched on-chain with `dot` beforehand). It makes no
+assumptions and does no fetching or selection of its own.
+
+#### Two concepts you must not conflate
+
+```
+Mnemonic ─BIP39─▶ entropy ─keyed blake2b─▶ member entropy ─▶ member key / secret
+                           (key = --entropy-key)                  │
+                                       ring proof: one_shot(…, --context, --message)
+```
+
+- **`--entropy-key <text|0xhex>`** — the key mixed into the keyed-blake2b that
+  turns your mnemonic into the Bandersnatch member entropy. **Omit** it for a
+  **lite** person (unkeyed); use **`candidate`** for a **full** person. It must
+  match the key used when the member was recognised on-chain, or you derive a
+  different (unrecognised) member key. It is **not** an sr25519 derivation path
+  and **not** the ring `--context`. (The value is the raw UTF-8 — or hex — bytes
+  of the blake2b key; this matches the iOS/Android clients, which key the
+  "full person" deriver with `"candidate"`.)
+- **`--context <text|0xhex>`** — the **32-byte ring/proof namespace** (e.g.
+  `"dotns"`), zero-padded right to 32 bytes like Solidity `bytes32()`. It
+  determines the alias and is named `context` across the runtime
+  (`type Context = [u8;32]`), the iOS client, and verifiablejs. Used by
+  `alias` / `prove` / `verify`.
+
+> **Migration (breaking):** previously `dot verifiable <account> --context
+> candidate` used `--context` as the entropy-derivation key. That key is now
+> `--entropy-key`, and `--context` means the ring context. For one release the
+> old form still works on the member command (with a deprecation warning); use
+> `--entropy-key` going forward.
+
+#### Member keys
 
 ```bash
-# Derive unkeyed member key (lite person)
+# Lite person (unkeyed)
 dot verifiable alice
-# Output:
-# Bandersnatch Member Key
-#
 #   Account:    alice
 #   Member Key: 0xbb6ee099b568f1844d62fc00e6305c2e83aa8da30ce59e664ef39e089204d43c
 
-# Derive keyed member key (full person — "candidate" context)
-dot verifiable alice --context candidate
-# Output:
-# Bandersnatch Member Key
-#
-#   Account:    alice
-#   Context:    candidate
-#   Member Key: 0x5f915576987547d3e55bb4129ac8cae1d338f8933073dc74272b4c825f738592
-
-# Arbitrary context string
-dot verifiable alice --context pps
-
-# JSON output (for scripting)
-dot verifiable alice --context candidate --json
+# Full person (candidate-keyed)
+dot verifiable alice --entropy-key candidate
+#   Account:     alice
+#   Entropy Key: candidate
+#   Member Key:  0x5f915576987547d3e55bb4129ac8cae1d338f8933073dc74272b4c825f738592
 ```
 
-The derivation flow:
+Derived keys are saved to the account store and shown in `dot account inspect`.
 
+#### Alias, sign, prove, verify
+
+```bash
+# Alias for a ring context (deterministic in entropy + context)
+dot verifiable alias alice --entropy-key candidate --context dotns
+
+# Standalone Bandersnatch signature (64 bytes)
+dot verifiable sign alice --message "hello" --entropy-key candidate
+dot verifiable verify-sig --signature 0x… --member 0x… --message "hello"
+
+# Ring-VRF proof over a members set, then verify it locally
+dot verifiable members 0x<key> 0x<key> --output json        # SCALE-encode the ring
+dot verifiable prove alice --entropy-key candidate --context dotns \
+    --message 0x… --members 0x… --output json
+dot verifiable verify --proof 0x… --context dotns --message 0x… --members 0x…
+# verify exits non-zero if the proof does not validate
 ```
-Mnemonic → mnemonicToEntropy() → blake2b256(entropy, context?) → member_from_entropy() → 32-byte member key
-```
 
-- **Unkeyed** (no `--context`): `blake2b256(entropy)` — used for lite person registration
-- **With context** (e.g. `--context candidate`): `blake2b256(entropy, key="candidate")` — used for full person registration. The `--context` value is passed as the raw UTF-8 bytes of the blake2b key parameter.
-- Both 12-word and 24-word mnemonics are supported
+`dot verifiable` is deliberately scoped to **raw verifiable crypto** — bytes in,
+bytes out, with no knowledge of Polkadot chains, pallets, or collections (the
+same way `dot sign` is just sr25519). It does no automated fetching or selection
+and assumes nothing about how the bytes were produced or where they go: supply
+the members/context/message yourself (e.g. read from chain with `dot` first), and
+use the resulting signature or proof however you need — as a value in a `dot`
+extrinsic or signed extension, or anywhere else.
 
-Derived keys are saved to the account store. For stored accounts, saved keys appear in `dot account inspect` output. When creating a new account with `dot account create`, both unkeyed and `candidate` keys are automatically derived and saved.
-
-Run `dot verifiable` with no arguments to see usage and the full derivation diagram.
+Run `dot verifiable` with no arguments for the full action/option list and the
+derivation diagram. Both 12- and 24-word mnemonics are supported.
 
 ### Getting help
 

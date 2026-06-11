@@ -21,7 +21,7 @@ dot [chain.]<category>[.Pallet[.Item]] [args] [options]
 
 Categories: `query`, `tx`, `apis`, `const`, `events`, `errors`, `extensions`, `rpc`
 
-Top-level commands: `dot inspect`, `dot metadata`, `dot chain`, `dot account`, `dot sign`, `dot hash`, `dot init`, `dot which`.
+Top-level commands: `dot inspect`, `dot metadata`, `dot chain`, `dot account`, `dot sign`, `dot hash`, `dot verifiable`, `dot init`, `dot which`.
 
 Omit deeper levels to discover what's available. Always include the chain prefix:
 
@@ -635,6 +635,34 @@ dot polkadot.tx.System.remark 0xdeadbeef --to-yaml
 #   System:
 #     remark:
 #       remark: "0xdeadbeef"
+```
+
+## Verifiable (Bandersnatch / Ring-VRF)
+
+`dot verifiable` is raw, unopinionated Bandersnatch/Ring-VRF crypto — bytes in, bytes out, no chain knowledge (like `dot sign` is just sr25519). It does no fetching: you supply the members/context/message (e.g. read from chain with `dot` first), and use the resulting signature/proof however you need — e.g. as a value in a `dot` extrinsic or signed extension. All actions take `--output json` and hex / `--file` / `--stdin` input, so they compose.
+
+Two distinct inputs — do not conflate:
+- `--entropy-key <text|0xhex>`: keyed-blake2b key turning the mnemonic into member entropy. Omit = lite person; `candidate` = full person. NOT a derivation path, NOT the ring context.
+- `--context <text|0xhex>`: the 32-byte ring/proof namespace (zero-padded right, like `bytes32()`). Determines the alias. Used by `alias`/`prove`/`verify`.
+
+```bash
+# Member key (who you are in a ring). Omit --entropy-key for a lite person.
+dot verifiable alice --entropy-key candidate --json   # { account, memberKey, entropyKey }
+
+# Alias = stable pseudonym for a context (deterministic in entropy + context)
+dot verifiable alias alice --entropy-key candidate --context dotns --json
+
+# Sign / verify a plain Bandersnatch signature (64 bytes)
+dot verifiable sign alice --message "gm" --entropy-key candidate --json   # { signature, member, ... }
+dot verifiable verify-sig --signature 0x… --member 0x… --message "gm"     # exit 0 = valid, 1 = invalid
+
+# Ring proof: encode a ring, prove membership bound to a challenge, verify locally
+dot verifiable members 0x<key> 0x<key> --json                             # { members } (SCALE Vec<[u8;32]>)
+dot verifiable prove alice --entropy-key candidate --context dotns \
+    --message 0x<challenge> --members 0x<members> --json                  # { alias, proof }
+dot verifiable verify --proof 0x<proof> --context dotns \
+    --message 0x<challenge> --members 0x<members>                         # exit 1 if invalid
+# prove/verify accept --root <768-byte commitment> instead of --members; all hex args also accept a file path.
 ```
 
 ## Key Flags

@@ -1,25 +1,13 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { ChainConfig } from "../config/types.ts";
 import { ConnectionError } from "../utils/errors.ts";
-
-// Capture calls to getWsProvider so we can inspect the config it receives
-const mockGetWsProvider = mock((_endpoints: any, _config?: any) => (() => {}) as any);
-const mockCreateClient = mock(
-  () =>
-    ({
-      destroy: () => {},
-    }) as any,
-);
-
-mock.module("polkadot-api/ws", () => ({
-  getWsProvider: mockGetWsProvider,
-}));
-mock.module("polkadot-api", () => ({
-  createClient: mockCreateClient,
-}));
-
-// Import after mocking so the mocks take effect
-const { createChainClient } = await import("./client.ts");
+// The shared fixture installs the polkadot-api mocks and captures the real
+// createChainClient before load-meta.test.ts can stub the client.ts module.
+import {
+  createChainClient,
+  mockCreateClient,
+  mockGetWsProvider,
+} from "./__fixtures__/papi-mocks.ts";
 
 describe("createChainClient", () => {
   test("passes timeout config to getWsProvider", async () => {

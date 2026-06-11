@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { StoredAccount } from "../config/accounts-types.ts";
-import { runCli, TEST_MNEMONIC } from "./__fixtures__/run-cli.ts";
+import { runCli, TEST_MNEMONIC } from "../../commands/__fixtures__/run-cli.ts";
+import type { StoredAccount } from "../../config/accounts-types.ts";
 
 const STORED_ACCOUNT: StoredAccount = {
   name: "my-account",
@@ -28,7 +28,7 @@ describe("dot verifiable", { timeout: 15_000 }, () => {
     const { stdout, exitCode } = await runCli(["verifiable"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("dot verifiable");
-    expect(stdout).toContain("member_from_entropy");
+    expect(stdout).toContain("--entropy-key");
   });
 
   test("alice (unkeyed) derives member key", async () => {
@@ -217,5 +217,223 @@ describe("dot verifiable", { timeout: 15_000 }, () => {
 
     // The key should be visible in the output
     expect(derive.stdout).toContain("Member Key:");
+  });
+});
+
+const ALICE_FULL_MEMBER = "0x5f915576987547d3e55bb4129ac8cae1d338f8933073dc74272b4c825f738592";
+
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("dot verifiable member (--entropy-key)", { timeout: 15_000 }, () => {
+  test("--entropy-key candidate matches the pinned full member key", async () => {
+    const { stdout, exitCode } = await runCli([
+      "verifiable",
+      "member",
+      "alice",
+      "--entropy-key",
+      "candidate",
+      "--output",
+      "json",
+    ]);
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(stdout);
+    expect(result.memberKey).toBe(ALICE_FULL_MEMBER);
+    expect(result.entropyKey).toBe("candidate");
+    expect(result.context).toBeUndefined();
+  });
+
+  test("bare account still derives (back-compat) and --context warns on stderr", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "verifiable",
+      "alice",
+      "--context",
+      "candidate",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Member Key:");
+    expect(stderr).toContain("--entropy-key");
+  });
+});
+
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("dot verifiable alias / sign / prove / verify", { timeout: 20_000 }, () => {
+  test("alias is deterministic for (account, entropy-key, context)", async () => {
+    const run = () =>
+      runCli([
+        "verifiable",
+        "alias",
+        "alice",
+        "--entropy-key",
+        "candidate",
+        "--context",
+        "dotns",
+        "--output",
+        "json",
+      ]);
+    const a = JSON.parse((await run()).stdout);
+    const b = JSON.parse((await run()).stdout);
+    expect(a.alias).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(a.context).toBe("dotns");
+    expect(a.alias).toBe(b.alias);
+  });
+
+  test("sign then verify-sig round-trips; wrong message fails", async () => {
+    const signed = JSON.parse(
+      (
+        await runCli([
+          "verifiable",
+          "sign",
+          "alice",
+          "--message",
+          "hello",
+          "--entropy-key",
+          "candidate",
+          "--output",
+          "json",
+        ])
+      ).stdout,
+    );
+    expect(signed.type).toBe("Bandersnatch");
+    expect(signed.signature).toMatch(/^0x[0-9a-f]{128}$/);
+
+    const ok = await runCli([
+      "verifiable",
+      "verify-sig",
+      "--signature",
+      signed.signature,
+      "--member",
+      signed.member,
+      "--message",
+      "hello",
+    ]);
+    expect(ok.exitCode).toBe(0);
+
+    const bad = await runCli([
+      "verifiable",
+      "verify-sig",
+      "--signature",
+      signed.signature,
+      "--member",
+      signed.member,
+      "--message",
+      "goodbye",
+    ]);
+    expect(bad.exitCode).toBe(1);
+    expect(bad.stderr).toContain("invalid");
+  });
+
+  test("prove then verify round-trips, alias matches the alias command", async () => {
+    const members = JSON.parse(
+      (await runCli(["verifiable", "members", ALICE_FULL_MEMBER, "--output", "json"])).stdout,
+    ).members;
+
+    const proved = JSON.parse(
+      (
+        await runCli([
+          "verifiable",
+          "prove",
+          "alice",
+          "--entropy-key",
+          "candidate",
+          "--context",
+          "dotns",
+          "--message",
+          "0xabcd",
+          "--members",
+          members,
+          "--output",
+          "json",
+        ])
+      ).stdout,
+    );
+    expect(proved.proof).toMatch(/^0x[0-9a-f]+$/);
+    expect(proved.alias).toMatch(/^0x[0-9a-f]{64}$/);
+
+    const aliasOut = JSON.parse(
+      (
+        await runCli([
+          "verifiable",
+          "alias",
+          "alice",
+          "--entropy-key",
+          "candidate",
+          "--context",
+          "dotns",
+          "--output",
+          "json",
+        ])
+      ).stdout,
+    );
+    expect(proved.alias).toBe(aliasOut.alias);
+
+    const verified = await runCli([
+      "verifiable",
+      "verify",
+      "--proof",
+      proved.proof,
+      "--context",
+      "dotns",
+      "--message",
+      "0xabcd",
+      "--members",
+      members,
+      "--output",
+      "json",
+    ]);
+    expect(verified.exitCode).toBe(0);
+    expect(JSON.parse(verified.stdout).alias).toBe(proved.alias);
+  });
+
+  test("verify fails (exit 1) on a tampered message", async () => {
+    const members = JSON.parse(
+      (await runCli(["verifiable", "members", ALICE_FULL_MEMBER, "--output", "json"])).stdout,
+    ).members;
+    const proved = JSON.parse(
+      (
+        await runCli([
+          "verifiable",
+          "prove",
+          "alice",
+          "--entropy-key",
+          "candidate",
+          "--context",
+          "dotns",
+          "--message",
+          "0xabcd",
+          "--members",
+          members,
+          "--output",
+          "json",
+        ])
+      ).stdout,
+    );
+    const bad = await runCli([
+      "verifiable",
+      "verify",
+      "--proof",
+      proved.proof,
+      "--context",
+      "dotns",
+      "--message",
+      "0xdead",
+      "--members",
+      members,
+    ]);
+    expect(bad.exitCode).toBe(1);
+  });
+
+  test("members encode reports count and hex", async () => {
+    const { stdout, exitCode } = await runCli([
+      "verifiable",
+      "members",
+      ALICE_FULL_MEMBER,
+      ALICE_FULL_MEMBER,
+      "--output",
+      "json",
+    ]);
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(stdout);
+    expect(result.count).toBe(2);
+    // compact(2)=0x08 prefix + 2*32 bytes => 65 bytes => 130 hex chars + "0x"
+    expect(result.members).toMatch(/^0x08[0-9a-f]{128}$/);
   });
 });
