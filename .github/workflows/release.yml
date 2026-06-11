@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "npm dist-tag for snapshot release (e.g. beta, next, canary)"
+        required: false
+        default: "beta"
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -13,9 +19,15 @@ permissions:
 
 jobs:
   release:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # npm trusted publishing requires npm >= 11.5.1 (Node >= 22.14)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
 
       - uses: oven-sh/setup-bun@v2
 
@@ -31,7 +43,6 @@ jobs:
           publish: bun run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           HUSKY: "0"
 
       - name: Create GitHub Release
@@ -74,3 +85,45 @@ jobs:
                 }
               }
             }
+
+  snapshot:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # npm trusted publishing requires npm >= 11.5.1 (Node >= 22.14)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run build
+
+      - name: Version (snapshot)
+        run: npx changeset version --snapshot ${{ inputs.tag }}
+        env:
+          HUSKY: "0"
+
+      - name: Publish (snapshot)
+        run: npx changeset publish --tag ${{ inputs.tag }}
+
+      - name: Report published version
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "## Snapshot Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** \`${{ inputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Install with:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "npx polkadot-cli@${{ inputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
