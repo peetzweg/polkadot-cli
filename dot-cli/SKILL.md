@@ -6,7 +6,8 @@ description: >
   transactions, calling runtime APIs, raw JSON-RPC calls, managing chain connections, or
   scripting multi-chain setups. Triggers: user mentions `dot` CLI, polkadot-cli,
   Substrate chain queries, extrinsic submission, runtime APIs, JSON-RPC, `system_health`
-  / `chain_getBlock` / `rpc_methods`, XCM, asset pools, or chain setup scripts using `dot`.
+  / `chain_getBlock` / `rpc_methods`, XCM, asset pools, chain setup scripts using `dot`,
+  or isolated per-directory `dot` workspaces (`dot init`, `dot which`, `.polkadot/`).
 ---
 
 # dot CLI (polkadot-cli)
@@ -21,7 +22,9 @@ dot [chain.]<category>[.Pallet[.Item]] [args] [options]
 
 Categories: `query`, `tx`, `apis`, `const`, `events`, `errors`, `extensions`, `rpc`
 
-Top-level commands: `dot inspect`, `dot metadata`, `dot chain`, `dot account`, `dot sign`, `dot hash`, `dot verifiable`.
+Top-level commands: `dot inspect`, `dot metadata`, `dot chain`, `dot account`, `dot sign`, `dot hash`, `dot verifiable`, `dot init`, `dot which`.
+
+State (accounts, custom chains, metadata cache) lives in a config root resolved per run: `DOT_HOME` env var → a local `.polkadot/` workspace discovered from cwd → global `~/.polkadot`. Run `dot which` to see which one is active, and see [Local Workspaces](#local-workspaces) for isolated per-directory setups.
 
 Omit deeper levels to discover what's available. Always include the chain prefix:
 
@@ -569,6 +572,39 @@ dot parachain 1000 --type child --json
 # New
 dot account inspect --parachain 1000 --parachain-type child --json
 ```
+
+## Local Workspaces
+
+A `.polkadot/` directory in the cwd (or any parent, git-style walk-up stopping at `$HOME`) becomes the config root for ALL state — accounts, custom chains, metadata cache. Full isolation: the global `~/.polkadot` is invisible while a workspace is active, so the same account name can mean different identities in different directories. Precedence: `DOT_HOME` env var → discovered workspace → global `~/.polkadot`.
+
+```bash
+# Orient FIRST: which config root is active here?
+dot which
+# Output:
+# /Users/you/dot/paseo/.polkadot
+# Source: local workspace (discovered from current directory)
+dot which --json          # {"path":"...","source":"workspace"} — source: workspace | env | global
+
+# Create an isolated per-network setup
+mkdir -p ~/dot/mytestnet && cd ~/dot/mytestnet
+dot init
+# Output:
+# Initialized empty dot workspace at /Users/you/dot/mytestnet/.polkadot
+# Check which workspace is active with: dot which
+dot chain add mytestnet --rpc ws://localhost:9944
+dot account create sudo   # this "sudo" exists ONLY in this workspace
+
+# Throwaway session that can never touch ~/.polkadot
+tmp=$(mktemp -d) && cd "$tmp" && dot init
+# ... scratch accounts, txs ...
+rm -rf "$tmp"
+```
+
+Gotchas:
+
+- An "Unknown account/chain" error names the config root it searched (`in workspace /path/.polkadot`) — if unexpected, you're in the wrong directory; check `dot which`.
+- `dot init` errors on re-init and refuses to run in `$HOME`; it warns when a parent workspace gets shadowed or when a set `DOT_HOME` masks discovery.
+- The workspace starts empty (built-in chains still work — they ship with the binary). Nothing is copied from the global config, and no `.gitignore` is written — `accounts.json` holds plain-text secrets, so decide deliberately whether to ignore it.
 
 ## Other Commands
 

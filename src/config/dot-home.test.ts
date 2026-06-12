@@ -12,9 +12,14 @@ const CLI_PATH = join(import.meta.dir, "../cli.ts");
 async function runWithEnv(
   args: string[],
   env: Record<string, string | undefined>,
+  cwd?: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn(["bun", CLI_PATH, ...args, "--chain", "polkadot"], {
     env: { ...process.env, ...env },
+    // Default cwd to the tmp root (no .polkadot ancestor): with a faked
+    // HOME, workspace discovery from the repo cwd would walk PAST the fake
+    // home and could land on the developer's real ~/.polkadot.
+    cwd: cwd ?? tmpdir(),
     stdout: "pipe",
     stderr: "pipe",
   });

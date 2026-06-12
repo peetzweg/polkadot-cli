@@ -103,6 +103,9 @@ export async function runCli(
   try {
     const spawnOpts: Parameters<typeof Bun.spawn>[1] = {
       env: { ...process.env, HOME: tmpHome, DOT_HOME: dotDir, ...options?.env },
+      // Pin cwd inside the fake HOME so workspace discovery (walk-up from
+      // cwd) can never escape into the developer's real ~/.polkadot.
+      cwd: tmpHome,
       stdout: "pipe",
       stderr: "pipe",
     };

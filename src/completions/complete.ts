@@ -41,7 +41,16 @@ const CATEGORY_ALIASES: Record<string, string> = {
   rpc: "rpc",
 };
 
-const NAMED_COMMANDS = ["chain", "account", "inspect", "hash", "sign", "completions"];
+const NAMED_COMMANDS = [
+  "chain",
+  "account",
+  "inspect",
+  "hash",
+  "sign",
+  "completions",
+  "init",
+  "which",
+];
 
 const CHAIN_SUBCOMMANDS = ["add", "info", "list", "remove", "update"];
 const ACCOUNT_SUBCOMMANDS = [
