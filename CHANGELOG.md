@@ -1,5 +1,81 @@
 # polkadot-cli
 
+## 1.21.0
+
+### Minor Changes
+
+- 5ac2b5e: Add directory-local workspaces: `dot init` creates a `.polkadot/` workspace in the current directory, discovered git-style (cwd and parents, stopping at `$HOME`) and fully isolating accounts, custom chains, and metadata cache from the global `~/.polkadot`. New `dot which` shows the active config root and how it was chosen. Precedence: `DOT_HOME` → local workspace → global. Account and chain resolution errors now name the config root that was searched.
+- a33128e: feat(verifiable): ring-VRF proof, signing, verification and members primitives
+
+  Adds composable `dot verifiable` subcommands over `verifiablejs`:
+
+  - `verifiable sign` / `verify-sig` — standalone Bandersnatch signatures.
+  - `verifiable alias` — derive the alias for a 32-byte ring context.
+  - `verifiable prove` / `verify` — ring-VRF proofs (`one_shot`) and local
+    verification against a members set or a 768-byte ring root.
+  - `verifiable members` — SCALE-encode member keys as `Vec<[u8;32]>`.
+
+  The command is scoped to raw verifiable crypto only — bytes in, bytes out, with
+  no chain/pallet knowledge and no automated fetching or selection (the same way
+  `dot sign` is just sr25519). Supply the members/context/message yourself (e.g.
+  read from chain with `dot` first) and use the resulting signature/proof however
+  you need — in a `dot` extrinsic or signed extension, or elsewhere.
+
+  All actions accept hex / `--file` / `--stdin` input and `--output json`, and a
+  new `src/features/verifiable/lib.ts` exposes the underlying primitives for reuse.
+
+  **Breaking:** the entropy-derivation key is now `--entropy-key` (was `--context`
+  on `dot verifiable`), and `--context` now means the 32-byte ring/proof namespace
+  — aligning with the runtime (`type Context = [u8;32]`) and the iOS/Android
+  clients. The old `--context <key>` form still works on the member command for one
+  release with a deprecation warning; switch to `--entropy-key`.
+
+### Patch Changes
+
+- 09aab3e: fix(tx): show stale-metadata hint on `BadProof` / `AncientBirthBlock`
+
+  `withStalenessSuggestion` already wraps every `signSubmitAndWatch` call
+  and, on error, compares cached `(specVersion, transactionVersion,
+codeHash)` against the live runtime — if they diverge it appends the
+  `⚠ Local metadata for "<chain>" is out of date … Run: dot chain update
+<chain>` hint. But the gating regex only matched wasm-trap / codec /
+  decode symptoms, not `Invalid::BadProof` or `Invalid::AncientBirthBlock`.
+
+  After a chain runtime upgrade the signer used the cached spec/tx
+  version, the runtime reconstructed a different payload, the signature
+  didn't verify and the tx was rejected with a bare `BadProof` — leaving
+  the user guessing. The fingerprint mismatch was right there but the
+  regex skipped over it.
+
+  `CheckSpecVersion` / `CheckTxVersion` / `CheckGenesis` /
+  `CheckMortality` are all in the signed payload, so `BadProof` and
+  `AncientBirthBlock` are exactly the variants that smell like stale
+  metadata. Adding them to the pattern list lets the existing fingerprint
+  gate run; if cached matches live (genuine bad key / wrong chain) the
+  raw error still passes through unchanged.
+
+  Nonce-mismatch variants (`Future`, `Stale`) are deliberately excluded —
+  those are account-state issues, not metadata.
+
+- c1ed560: fix(completions): only print setup instructions when stdout is a TTY
+
+  `dot completions <shell>` wrote its setup hint to stderr on every invocation.
+  Inside `eval "$(dot completions zsh)"` in `~/.zshrc`, stderr bypasses the
+  command substitution and reaches the terminal, so every new shell printed the
+  `# Add this to your ~/.zshrc` block. The hint is now only printed when stdout
+  is a TTY — i.e. when a human runs the command to look at the script — and
+  stays silent when the output is captured by `eval` or redirected to a file.
+
+- d9a27d7: fix(test): make polkadot-api module mocks ordering-safe across test files
+
+  No runtime behavior change — this fixes the flaky CI failures where
+  `createChainClient` tests failed depending on test-file scheduling order.
+  bun's `mock.module()` is global to the test process and not restored between
+  files, so `client.test.ts` and `load-meta.test.ts` clobbered each other's
+  mocks. Both now share a fixture that spreads the real module exports into
+  the mocks and captures the real `createChainClient` before any file can stub
+  the `client.ts` module.
+
 ## 1.20.0
 
 ### Minor Changes
