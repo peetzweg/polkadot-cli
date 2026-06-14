@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { isGlobalDryRun, resolveDryRun } from "./dry-run.ts";
+import {
+  __resetDryRunHintForTests,
+  isGlobalDryRun,
+  printGlobalDryRunHint,
+  resolveDryRun,
+} from "./dry-run.ts";
 
 describe("isGlobalDryRun", () => {
   const original = process.env.DOT_DRY_RUN;
@@ -69,5 +74,38 @@ describe("resolveDryRun", () => {
   test("decode-only still honors an explicit flag", () => {
     process.env.DOT_DRY_RUN = "1";
     expect(resolveDryRun(true, true)).toBe(true);
+  });
+});
+
+describe("printGlobalDryRunHint", () => {
+  let captured: string;
+  let originalWrite: typeof process.stderr.write;
+
+  beforeEach(() => {
+    __resetDryRunHintForTests();
+    captured = "";
+    originalWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string) => {
+      captured += chunk;
+      return true;
+    }) as typeof process.stderr.write;
+  });
+
+  afterEach(() => {
+    process.stderr.write = originalWrite;
+    __resetDryRunHintForTests();
+  });
+
+  test("writes the hint to stderr", () => {
+    printGlobalDryRunHint();
+    expect(captured).toContain("DOT_DRY_RUN is set");
+    expect(captured).toContain("simulated, not submitted");
+  });
+
+  test("is idempotent within a process (prints at most once)", () => {
+    printGlobalDryRunHint();
+    printGlobalDryRunHint();
+    const occurrences = captured.split("DOT_DRY_RUN is set").length - 1;
+    expect(occurrences).toBe(1);
   });
 });
