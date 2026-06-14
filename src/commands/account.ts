@@ -66,7 +66,7 @@ ${BOLD}Usage:${RESET}
   $ dot account inspect --pallet-id <id> [--prefix <N>]              Derive a pallet sovereign (no save — script-friendly)
   $ dot account inspect --parachain <id> --parachain-type <t>        Derive a parachain sovereign (no save — script-friendly)
   $ dot account list                                                 List all accounts
-  $ dot account remove|delete <name> [name2] ...                     Remove stored account(s)
+  $ dot account remove|delete|rm <name> [name2] ...                  Remove stored account(s)
 
 ${BOLD}Examples:${RESET}
   $ dot account add treasury 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
@@ -191,6 +191,7 @@ export function registerAccountCommands(cli: CAC) {
             return accountList(opts);
           case "delete":
           case "remove":
+          case "rm":
             return accountRemove(names, opts);
           case "inspect":
             return accountInspect(names[0], opts);

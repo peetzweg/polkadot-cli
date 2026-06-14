@@ -558,9 +558,10 @@ Remove one or more stored accounts in a single command. When multiple names are 
 ```
 dot account remove my-validator
 dot account delete my-validator stale-key
+dot account rm my-validator stale-key
 ```
 
-`delete` is an alias for `remove`.
+`delete` and `rm` are aliases for `remove`.
 
 ### Export accounts
 

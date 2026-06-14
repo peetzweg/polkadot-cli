@@ -168,6 +168,14 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(stdout).toContain("removed");
   });
 
+  test("rm is an alias for remove", async () => {
+    const { stdout, exitCode } = await runCli(["account", "rm", "my-account"], {
+      accounts: [STORED_ACCOUNT],
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('"my-account" removed');
+  });
+
   test("remove (no name) errors", async () => {
     const { stderr, exitCode } = await runCli(["account", "remove"]);
     expect(exitCode).toBe(1);
@@ -320,6 +328,16 @@ describe("dot account", { timeout: 15_000 }, () => {
   test("delete multiple (alias) succeeds", async () => {
     const accounts: StoredAccount[] = [STORED_ACCOUNT, { ...STORED_ACCOUNT, name: "acct-2" }];
     const { stdout, exitCode } = await runCli(["account", "delete", "my-account", "acct-2"], {
+      accounts,
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('"my-account" removed');
+    expect(stdout).toContain('"acct-2" removed');
+  });
+
+  test("rm multiple (alias) succeeds", async () => {
+    const accounts: StoredAccount[] = [STORED_ACCOUNT, { ...STORED_ACCOUNT, name: "acct-2" }];
+    const { stdout, exitCode } = await runCli(["account", "rm", "my-account", "acct-2"], {
       accounts,
     });
     expect(exitCode).toBe(0);
