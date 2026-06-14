@@ -34,6 +34,7 @@ import {
 } from "../core/output.ts";
 import { fetchRpcMethods } from "../core/rpc.ts";
 import { inferFamily, RPC_REGISTRY } from "../data/rpc-registry.ts";
+import { withHelp } from "../platform/cli.ts";
 
 const CHAIN_HELP = `
 ${BOLD}Usage:${RESET}
@@ -69,7 +70,7 @@ ${BOLD}Examples:${RESET}
 `.trimStart();
 
 export function registerChainCommands(cli: CAC) {
-  cli
+  const command = cli
     .command(
       "chain [action] [...names]",
       "Manage chains (add, remove, update, list, export, import)",
@@ -133,6 +134,7 @@ export function registerChainCommands(cli: CAC) {
         }
       },
     );
+  withHelp(command, () => console.log(CHAIN_HELP));
 }
 
 /**

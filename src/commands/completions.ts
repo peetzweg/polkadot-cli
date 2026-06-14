@@ -1,4 +1,5 @@
 import type { CAC } from "cac";
+import { withHelp } from "../platform/cli.ts";
 
 const ZSH_SCRIPT = `\
 _dot_completions() {
@@ -76,7 +77,7 @@ const SCRIPTS: Record<string, string> = {
 };
 
 export function registerCompletionsCommand(cli: CAC) {
-  cli
+  const command = cli
     .command("completions <shell>", "Generate shell completion script (zsh, bash, fish)")
     .action((shell: string) => {
       const script = SCRIPTS[shell];
@@ -99,4 +100,5 @@ export function registerCompletionsCommand(cli: CAC) {
       // Print the script to stdout
       console.log(script);
     });
+  withHelp(command);
 }

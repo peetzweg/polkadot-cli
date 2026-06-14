@@ -8,6 +8,7 @@ import {
 } from "../core/hash.ts";
 import { resolveDataInput } from "../core/input.ts";
 import { BOLD, CYAN, DIM, isJsonOutput, printResult, RESET } from "../core/output.ts";
+import { withHelp } from "../platform/cli.ts";
 import { CliError } from "../utils/errors.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 
@@ -31,7 +32,7 @@ function printAlgorithmHelp(): void {
 }
 
 export function registerHashCommand(cli: CAC) {
-  cli
+  const command = cli
     .command("hash [algorithm] [data]", "Compute cryptographic hashes")
     .option("--file <path>", "Hash file contents (raw bytes)")
     .option("--stdin", "Read data from stdin")
@@ -68,4 +69,5 @@ export function registerHashCommand(cli: CAC) {
         }
       },
     );
+  withHelp(command, printAlgorithmHelp);
 }
