@@ -2441,3 +2441,65 @@ describe("--unsigned with file-based input", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// DOT_DRY_RUN global flag (issue #234)
+// ---------------------------------------------------------------------------
+
+// @ts-expect-error Bun supports describe(label, options, fn) at runtime
+describe("DOT_DRY_RUN global flag", { timeout: 15_000 }, () => {
+  test("DOT_DRY_RUN=1 dry-runs an otherwise-submitting tx and prints the hint", async () => {
+    // An unsigned tx without --dry-run would attempt to broadcast (and, offline,
+    // fail to connect). With DOT_DRY_RUN set it must dry-run instead: print the
+    // unsigned dry-run output to stdout and never connect.
+    const { stdout, stderr, exitCode } = await runCli(
+      ["tx.System.remark", "0xdeadbeef", "--unsigned"],
+      { env: { DOT_DRY_RUN: "1" } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("unsigned (bare)");
+    expect(stdout).toContain("N/A (unsigned transaction)");
+    // Hint goes to stderr so it never corrupts stdout.
+    expect(stderr).toContain("DOT_DRY_RUN is set");
+  });
+
+  test("hint is written to stderr, never stdout (clean --json)", async () => {
+    const { stdout, stderr, exitCode } = await runCli(
+      ["tx.System.remark", "0xdeadbeef", "--unsigned", "--json"],
+      { env: { DOT_DRY_RUN: "1" } },
+    );
+    expect(exitCode).toBe(0);
+    // stdout must be valid JSON with no banner text mixed in.
+    expect(stdout).not.toContain("DOT_DRY_RUN");
+    const parsed = JSON.parse(stdout);
+    expect(parsed.unsigned).toBe(true);
+    expect(parsed.estimatedFees).toBeNull();
+    expect(stderr).toContain("DOT_DRY_RUN is set");
+  });
+
+  test("explicit --no-dry-run overrides DOT_DRY_RUN (hint suppressed)", async () => {
+    // With an explicit flag the env-driven hint must be suppressed. We use
+    // --encode (a non-connecting path) so the assertion stays offline-safe;
+    // the dry-run override semantics themselves are unit-tested in
+    // src/core/dry-run.test.ts.
+    const { stderr } = await runCli(
+      ["tx.System.remark", "0xdeadbeef", "--encode", "--no-dry-run"],
+      { env: { DOT_DRY_RUN: "1" } },
+    );
+    expect(stderr).not.toContain("DOT_DRY_RUN is set");
+  });
+
+  test("DOT_DRY_RUN does not break decode-only --encode", async () => {
+    const { stdout, stderr, exitCode } = await runCli(
+      ["tx.System.remark", "0xdeadbeef", "--encode"],
+      { env: { DOT_DRY_RUN: "1" } },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/^0x[0-9a-f]+$/);
+    // Decode-only paths never submit, so the env var must not force dry-run
+    // (which would trip the "--encode and --dry-run are mutually exclusive" guard)
+    // and the hint is not shown.
+    expect(stderr).not.toContain("mutually exclusive");
+    expect(stderr).not.toContain("DOT_DRY_RUN is set");
+  });
+});

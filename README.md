@@ -1200,6 +1200,13 @@ dot polkadot.tx.Balances.transfer_keep_alive bob 1000000000000 --from alice --dr
 # Submit (omit --dry-run)
 dot polkadot.tx.System.remark 0xdeadbeef --from alice
 
+# Force every tx to dry-run via the global DOT_DRY_RUN env var — a safety net
+# for scripts and demos. A hint is printed to stderr; the command behaves
+# exactly as if --dry-run had been passed.
+DOT_DRY_RUN=1 dot polkadot.tx.System.remark 0xdeadbeef --from alice
+# stderr: ⚠ DOT_DRY_RUN is set — extrinsics will be simulated, not submitted.
+# stdout: (the dry-run output above — no broadcast)
+
 # Submit a raw SCALE-encoded call (e.g. from a multisig proposal or another tool)
 dot polkadot.tx 0x000010deadbeef --from alice --dry-run
 
@@ -2191,6 +2198,24 @@ cd - && rm -rf "$tmp"        # nothing ever touched ~/.polkadot
 ```
 
 For secrets that should never hit disk at all, combine workspaces with `--env` secret sources (see [Manage accounts](#manage-accounts)).
+
+### `DOT_DRY_RUN` — force every extrinsic to dry-run
+
+Set `DOT_DRY_RUN` to a truthy value (`1`, `true`, `yes`, or `on`, case-insensitive) to make **every** extrinsic-submitting command behave as if `--dry-run` had been passed: the transaction is simulated (call decoded, fees estimated) and **never broadcast**. This is a global safety net for scripts, demos, and CI dry-runs where you want to be sure nothing lands on-chain.
+
+When active, the CLI prints a one-line hint to **stderr** (so it never corrupts `--json` or piped stdout):
+
+```bash
+DOT_DRY_RUN=1 dot polkadot.tx.Balances.transfer_keep_alive bob 1000000000000 --from alice
+# stderr: ⚠ DOT_DRY_RUN is set — extrinsics will be simulated, not submitted.
+# stdout: the usual dry-run report (Chain / From / Call / Decode / Estimated fees)
+
+# Set it for a whole shell session as a safety net:
+export DOT_DRY_RUN=1
+dot polkadot.tx.System.remark 0xdeadbeef --from alice   # simulated, not submitted
+```
+
+**Precedence:** an explicit per-command flag always wins. `--dry-run` forces a dry-run; `--no-dry-run` forces a real submission even when `DOT_DRY_RUN` is set. The env var only supplies the default when no flag is given. Decode-only paths (`--encode`, `--to-yaml`, `--to-json`) never submit anything, so `DOT_DRY_RUN` leaves them untouched.
 
 ### `DOT_TRUST_CACHED_METADATA` — skip the staleness check
 
