@@ -113,4 +113,37 @@ describe("global CLI", () => {
     const { stdout } = await runCli(["--help"]);
     expect(stdout).toContain("--json");
   });
+
+  // Regression for #238: `--help` must reach the matched command for ALL nested
+  // command levels, printing usage and exiting 0 — never running the action and
+  // failing on a missing positional argument.
+  describe("nested command --help (issue #238)", () => {
+    const cases: { args: string[]; expect: string }[] = [
+      { args: ["account", "add", "--help"], expect: "dot account add" },
+      { args: ["account", "inspect", "--help"], expect: "dot account inspect" },
+      { args: ["chain", "add", "--help"], expect: "dot chain add" },
+      { args: ["chain", "remove", "--help"], expect: "dot chain remove" },
+      { args: ["hash", "blake2b256", "--help"], expect: "dot hash" },
+      { args: ["sign", "hello", "--help"], expect: "dot sign" },
+      { args: ["verifiable", "prove", "--help"], expect: "dot verifiable" },
+      { args: ["parachain", "1000", "--help"], expect: "dot parachain" },
+    ];
+    for (const { args, expect: needle } of cases) {
+      test(`${args.join(" ")} prints usage and exits 0`, async () => {
+        const { stdout, stderr, exitCode } = await runCli(args, { noDefaultChain: true });
+        expect(exitCode).toBe(0);
+        expect(stdout + stderr).toContain(needle);
+      });
+    }
+
+    test("metadata --help exits 0 despite required <chain> arg", async () => {
+      const { exitCode } = await runCli(["metadata", "--help"], { noDefaultChain: true });
+      expect(exitCode).toBe(0);
+    });
+
+    test("completions --help exits 0 despite required <shell> arg", async () => {
+      const { exitCode } = await runCli(["completions", "--help"], { noDefaultChain: true });
+      expect(exitCode).toBe(0);
+    });
+  });
 });
