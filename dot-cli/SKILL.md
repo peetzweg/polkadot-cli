@@ -444,6 +444,14 @@ dot account create new-key
 #   Mnemonic:      defy ginger general follow use try ...
 #
 #   Save this mnemonic phrase! It is the only way to recover this account.
+
+# Remove one or more stored accounts (delete and rm are aliases for remove)
+dot account remove new-key
+dot account delete stale-key-1 stale-key-2
+dot account rm stale-key-1 stale-key-2
+# Output:
+# Account "stale-key-1" removed.
+# Account "stale-key-2" removed.
 ```
 
 Built-in dev accounts: `alice`, `bob`, `charlie`, `dave`, `eve`, `ferdie`

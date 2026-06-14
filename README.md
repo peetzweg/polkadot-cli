@@ -297,9 +297,10 @@ dot account derive treasury treasury-staking --path //staking
 # Use it — the env var is read at signing time
 MY_SECRET="word1 word2 ..." dot polkadot.tx.System.remark 0xdead --from ci-signer
 
-# Remove one or more accounts
+# Remove one or more accounts (delete and rm are aliases for remove)
 dot account remove my-validator
 dot account delete my-validator stale-key
+dot account rm my-validator stale-key
 
 # Export accounts (secrets redacted by default)
 dot account export
