@@ -421,6 +421,29 @@ if (process.argv[2] === "__complete") {
   }
 
   async function handleError(err: unknown): Promise<never> {
+    // A command invoked without its required positional input prints the full
+    // help block to stderr (exit 1), instead of a terse one-liner. Both our own
+    // UsageError and cac's "missing required args" error reach here; treat them
+    // the same so e.g. `dot account add`, `dot metadata`, `dot completions` all
+    // show usage. Explicit `--help` is handled earlier and exits 0 on stdout.
+    //
+    // Detect UsageError by `name`, not `instanceof`: `bun build` can duplicate
+    // utils/errors.ts in the bundle (it is imported very widely), and an
+    // `instanceof` against one copy fails for an error thrown from another —
+    // the `.name` string survives duplication. (Same hazard that split the help
+    // registry; see platform/cli.ts.)
+    const isUsageError = err instanceof Error && err.name === "UsageError";
+    const isCacMissingArgs =
+      err instanceof Error && /missing required args? for command/i.test(err.message);
+    if (isUsageError || isCacMissingArgs) {
+      if (isUsageError) console.error(`${(err as Error).message}\n`);
+      if (!printMatchedCommandHelp(cli, { stream: "stderr" })) {
+        // No registered help (shouldn't happen for these commands) — fall back
+        // to the original message so the user still gets something actionable.
+        console.error(`Error: ${formatRuntimeError(err as Error)}`);
+      }
+      return showUpdateAndExit(1);
+    }
     if (err instanceof CliError) {
       console.error(`Error: ${err.message}`);
     } else if (err instanceof Error) {

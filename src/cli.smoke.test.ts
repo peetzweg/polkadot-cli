@@ -99,4 +99,30 @@ describe("built bundle: nested --help (issue #238)", { timeout: 60_000 }, () => 
     const completions = await runBuilt(["completions", "--help"]);
     expect(completions.exitCode).toBe(0);
   });
+
+  // Incomplete invocation → full help on stderr, exit 1. This MUST be checked
+  // against the built bundle: the UsageError path is detected by `.name` rather
+  // than `instanceof` precisely because `bun build` duplicates utils/errors.ts,
+  // and an in-process source test can't see that duplication. `account add`
+  // exercises our UsageError path; `metadata` exercises cac's missing-args path.
+  const incompleteCases: { args: string[]; reason: string; needle: string }[] = [
+    { args: ["account", "add"], reason: "Account name is required", needle: "dot account add" },
+    { args: ["chain", "add"], reason: "Chain name is required", needle: "dot chain add" },
+  ];
+  for (const { args, reason, needle } of incompleteCases) {
+    test(`${args.join(" ")} → full help on stderr, exit 1`, async () => {
+      const { stdout, stderr, exitCode } = await runBuilt(args);
+      expect(exitCode).toBe(1);
+      expect(stderr).toContain(reason); // leading one-line reason
+      expect(stderr).toContain(needle); // ...followed by the full usage block
+      expect(stdout).toBe("");
+    });
+  }
+
+  test("metadata (no chain) → full help on stderr, exit 1", async () => {
+    const { stdout, stderr, exitCode } = await runBuilt(["metadata"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("metadata");
+    expect(stdout).toBe("");
+  });
 });

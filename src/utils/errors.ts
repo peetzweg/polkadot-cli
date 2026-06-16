@@ -5,6 +5,20 @@ export class CliError extends Error {
   }
 }
 
+/**
+ * A command was invoked without a required positional argument (e.g.
+ * `dot account add` with no name). The top-level error handler prints the
+ * command's full help block to stderr and exits 1, rather than a terse one-line
+ * usage hint. Missing/invalid *options* keep their own targeted errors — full
+ * help there is noise — so this is reserved for missing primary input.
+ */
+export class UsageError extends CliError {
+  constructor(message: string) {
+    super(message);
+    this.name = "UsageError";
+  }
+}
+
 export class ConnectionError extends CliError {
   constructor(message: string) {
     super(message);
