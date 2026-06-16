@@ -24,7 +24,7 @@ export { resolveDataInput } from "../core/input.ts";
 export { BOLD, formatJson, isJsonOutput, printHeading, RESET } from "../core/output.ts";
 export { CliError } from "../utils/errors.ts";
 export { findClosest } from "../utils/fuzzy-match.ts";
-export { readRawOptionValue } from "./cli.ts";
+export { readRawOptionValue, withHelp } from "./cli.ts";
 
 // Entry-point bootstrap (registerGlobalOptions) lives in ./cli.ts and is
 // imported directly by entry points (src/cli.ts) — not re-exported here, since

@@ -3,6 +3,7 @@ import { resolveAccountKeypair } from "../core/accounts.ts";
 import { toHex } from "../core/hash.ts";
 import { resolveDataInput } from "../core/input.ts";
 import { BOLD, CYAN, DIM, isJsonOutput, printResult, RESET } from "../core/output.ts";
+import { withHelp } from "../platform/cli.ts";
 import { CliError } from "../utils/errors.ts";
 
 const SUPPORTED_TYPES = ["sr25519"] as const;
@@ -40,7 +41,7 @@ function printSignHelp(): void {
 }
 
 export function registerSignCommand(cli: CAC) {
-  cli
+  const command = cli
     .command("sign [message]", "Sign a message with an account keypair")
     .option("--from <name>", "Account to sign with")
     .option("--type <algo>", "Signature type (default: sr25519)")
@@ -99,4 +100,5 @@ export function registerSignCommand(cli: CAC) {
         }
       },
     );
+  withHelp(command, printSignHelp);
 }

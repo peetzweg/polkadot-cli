@@ -29,7 +29,11 @@ import {
   waitForPendingCheck,
 } from "./core/update-notifier.ts";
 import { registerVerifiableCommands } from "./features/verifiable/register.ts";
-import { readRawOptionValue, registerGlobalOptions } from "./platform/cli.ts";
+import {
+  printMatchedCommandHelp,
+  readRawOptionValue,
+  registerGlobalOptions,
+} from "./platform/cli.ts";
 import { CliError, formatRuntimeError, isPapiCleanupError } from "./utils/errors.ts";
 import { parseDotPath } from "./utils/parse-dot-path.ts";
 
@@ -444,8 +448,15 @@ if (process.argv[2] === "__complete") {
       if (cli.options.version) {
         await showUpdateAndExit(0);
       } else if (cli.options.help) {
-        if ((cli as any).matchedCommand) {
-          // A named command matched — let it show its own help
+        // A named command with registered help (account, chain, sign, …) prints
+        // its own usage block — even when an action positional is present, e.g.
+        // `dot account add --help`. Without this, the action would run and fail
+        // on the missing argument instead of showing help (issue #238).
+        if (printMatchedCommandHelp(cli)) {
+          await showUpdateAndExit(0);
+        } else if ((cli as any).matchedCommand) {
+          // The default dot-path command handles item-level help inside its
+          // action (e.g. `dot polkadot.query.System.Account --help`).
           const result = (cli as any).runMatchedCommand();
           if (result && typeof result.then === "function") {
             await result.then(() => showUpdateAndExit(0), handleError);

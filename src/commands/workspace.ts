@@ -5,6 +5,7 @@ import type { CAC } from "cac";
 import { type ResolvedConfigDir, resolveConfigDir } from "../config/store.ts";
 import { canonicalPath, findWorkspace, WORKSPACE_DIR_NAME } from "../config/workspace.ts";
 import { isJsonOutput, writeStdout } from "../core/output.ts";
+import { withHelp } from "../platform/cli.ts";
 import { CliError } from "../utils/errors.ts";
 
 export interface InitResult {
@@ -85,11 +86,13 @@ export async function handleWhich(
 }
 
 export function registerWorkspaceCommands(cli: CAC) {
-  cli
+  const initCommand = cli
     .command("init", "Initialize a local .polkadot workspace in the current directory")
     .action(() => handleInit());
+  withHelp(initCommand);
 
-  cli
+  const whichCommand = cli
     .command("which", "Show the active config root (workspace, DOT_HOME, or global)")
     .action((opts: { json?: boolean; output?: string }) => handleWhich(opts));
+  withHelp(whichCommand);
 }

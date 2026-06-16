@@ -1,5 +1,5 @@
 import type { CAC } from "cac";
-import { BOLD, RESET, readRawOptionValue } from "../../platform/index.ts";
+import { BOLD, RESET, readRawOptionValue, withHelp } from "../../platform/index.ts";
 
 /**
  * Command registration for `dot verifiable`, kept free of heavy imports: the
@@ -96,7 +96,7 @@ const RAW_STRING_FLAGS: Array<[string, keyof VerifiableOpts]> = [
 ];
 
 export function registerVerifiableCommands(cli: CAC) {
-  cli
+  const command = cli
     .command(
       "verifiable [action] [...rest]",
       "Bandersnatch member keys, ring-VRF proofs, signing and verification",
@@ -129,4 +129,5 @@ export function registerVerifiableCommands(cli: CAC) {
       const { runVerifiable } = await import("./commands.ts");
       return runVerifiable(action, rest, opts);
     });
+  withHelp(command, () => console.log(VERIFIABLE_HELP));
 }

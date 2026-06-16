@@ -26,11 +26,12 @@ import {
   RESET,
 } from "../core/output.ts";
 import { prettyCallArgs, prettyEventFields, prettyTypeById } from "../core/pretty-type.ts";
+import { withHelp } from "../platform/cli.ts";
 import { suggestMessage } from "../utils/fuzzy-match.ts";
 import { parseTarget, resolveTargetChain } from "../utils/parse-target.ts";
 
 export function registerInspectCommand(cli: CAC) {
-  cli
+  const command = cli
     .command(
       "inspect [target]",
       "Inspect chain metadata (pallets, storage, constants, calls, events, errors)",
@@ -464,4 +465,5 @@ export function registerInspectCommand(cli: CAC) {
         throw new Error(suggestMessage(`item in ${pallet.name}`, itemName, allItems));
       },
     );
+  withHelp(command);
 }

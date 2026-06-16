@@ -15,6 +15,7 @@ import {
   parseMetadata,
 } from "../core/metadata.ts";
 import { formatJson, writeStdout } from "../core/output.ts";
+import { withHelp } from "../platform/cli.ts";
 import { CliError } from "../utils/errors.ts";
 import type { RuntimeFingerprint } from "../utils/runtime-fingerprint.ts";
 
@@ -84,10 +85,11 @@ export async function handleMetadata(chain: string, opts: MetadataCommandOpts): 
 }
 
 export function registerMetadataCommand(cli: CAC) {
-  cli
+  const command = cli
     .command("metadata <chain>", "Fetch chain metadata (decoded JSON; --raw for SCALE hex)")
     .option("--raw", "Print SCALE-encoded metadata bytes as hex instead of decoded JSON")
     .option("--cached", "Use cached metadata instead of fetching fresh from the chain")
     .option("--rpc <url>", "Override RPC endpoint(s)")
     .action((chain: string, opts: MetadataCommandOpts) => handleMetadata(chain, opts));
+  withHelp(command);
 }

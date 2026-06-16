@@ -40,6 +40,32 @@ describe("dot account", { timeout: 15_000 }, () => {
     expect(help.stdout).toBe(bare.stdout);
   });
 
+  // Regression for #238: `--help` must not be dropped for nested subcommands.
+  // Previously `dot account add --help` ran the action and exited 1 with
+  // "Account name is required" instead of printing usage.
+  for (const sub of ["add", "inspect", "create", "import", "export", "derive", "remove", "list"]) {
+    test(`account ${sub} --help prints usage and exits 0`, async () => {
+      const { stdout, exitCode } = await runCli(["account", sub, "--help"]);
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("dot account add");
+      expect(stdout).toContain("dot account list");
+    });
+  }
+
+  test("account add --help is identical to bare account help", async () => {
+    const bare = await runCli(["account"]);
+    const sub = await runCli(["account", "add", "--help"]);
+    expect(sub.exitCode).toBe(0);
+    expect(sub.stdout).toBe(bare.stdout);
+  });
+
+  test("account add still adds a watch-only account (help not triggered without flag)", async () => {
+    const { stdout, exitCode } = await runCli(["account", "add", "treasury", ALICE_SS58]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("watch-only");
+    expect(stdout).toContain("treasury");
+  });
+
   test("accounts shorthand lists accounts", async () => {
     const { stdout, exitCode } = await runCli(["accounts"]);
     expect(exitCode).toBe(0);

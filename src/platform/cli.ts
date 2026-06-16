@@ -1,4 +1,45 @@
-import type { CAC } from "cac";
+import type { CAC, Command } from "cac";
+
+/**
+ * Per-command `--help` text printers, keyed by the command's first name token
+ * (e.g. `account`, `chain`, `sign`). Commands register their rich usage block
+ * here so `--help` prints proper usage for nested subcommands
+ * (`dot account add --help`, `dot chain add --help`, …) instead of running the
+ * action and failing on the missing positional argument.
+ */
+const commandHelpPrinters = new Map<string, () => void>();
+
+/** Extract the leading command-name token (e.g. `account` from `account [action] [...names]`). */
+function commandKey(command: Command): string {
+  return command.name.split(/\s+/)[0] ?? command.name;
+}
+
+/**
+ * Associate a help printer with a `cac` command so `--help` prints proper usage
+ * even when an action positional is present (the bug behind #238). Pass a custom
+ * printer for commands with a rich usage block; omit it to fall back to `cac`'s
+ * auto-generated per-command help. Returns the command for chaining.
+ */
+export function withHelp(command: Command, printHelp?: () => void): Command {
+  commandHelpPrinters.set(commandKey(command), printHelp ?? (() => command.outputHelp()));
+  return command;
+}
+
+/**
+ * Print the registered help for the matched command. Returns true if the
+ * matched command had a registered help printer (and it was printed). Commands
+ * without a registered printer — notably the default dot-path command, which
+ * handles item-level help inside its own action — return false so the caller
+ * can fall through to running them.
+ */
+export function printMatchedCommandHelp(cli: CAC): boolean {
+  const matched = (cli as unknown as { matchedCommand?: Command }).matchedCommand;
+  if (!matched) return false;
+  const printer = commandHelpPrinters.get(commandKey(matched));
+  if (!printer) return false;
+  printer();
+  return true;
+}
 
 /**
  * Register the shared global options on a `cac` instance. Kept in one place so

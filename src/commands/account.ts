@@ -49,6 +49,7 @@ import {
   isValidParaId,
   type SovereignAccountType,
 } from "../core/parachain.ts";
+import { withHelp } from "../platform/cli.ts";
 
 const ACCOUNT_HELP = `
 ${BOLD}Usage:${RESET}
@@ -105,7 +106,7 @@ ${YELLOW}Note: Secrets are stored unencrypted in ~/.polkadot/accounts.json.
 `.trimStart();
 
 export function registerAccountCommands(cli: CAC) {
-  cli
+  const command = cli
     .command(
       "account [action] [...names]",
       "Manage local accounts (create, import, list, remove, export)",
@@ -200,6 +201,7 @@ export function registerAccountCommands(cli: CAC) {
         }
       },
     );
+  withHelp(command, () => console.log(ACCOUNT_HELP));
 }
 
 async function accountCreate(

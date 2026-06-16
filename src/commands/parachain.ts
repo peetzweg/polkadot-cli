@@ -11,6 +11,7 @@ import {
   SOVEREIGN_ACCOUNT_TYPES,
   type SovereignAccountType,
 } from "../core/parachain.ts";
+import { withHelp } from "../platform/cli.ts";
 import { CliError } from "../utils/errors.ts";
 
 function printParachainHelp(): void {
@@ -39,7 +40,7 @@ function validateType(type: string): SovereignAccountType {
 }
 
 export function registerParachainCommand(cli: CAC) {
-  cli
+  const command = cli
     .command("parachain [paraId]", "Derive parachain sovereign accounts")
     .option("--type <type>", "Account type: child, sibling (default: both)")
     .option("--prefix <number>", "SS58 prefix for address encoding (default: 42)")
@@ -100,4 +101,5 @@ export function registerParachainCommand(cli: CAC) {
         }
       },
     );
+  withHelp(command, printParachainHelp);
 }
