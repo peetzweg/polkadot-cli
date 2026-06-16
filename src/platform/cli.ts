@@ -1,18 +1,20 @@
 import type { CAC, Command } from "cac";
 
 /**
- * Per-command `--help` text printers, keyed by the command's first name token
- * (e.g. `account`, `chain`, `sign`). Commands register their rich usage block
- * here so `--help` prints proper usage for nested subcommands
- * (`dot account add --help`, `dot chain add --help`, …) instead of running the
- * action and failing on the missing positional argument.
+ * Symbol under which a command's `--help` printer is stashed directly on the
+ * `cac` Command object. We attach the printer to the command instance rather
+ * than keeping a module-level Map: `bun build` can duplicate this module in the
+ * bundle (it is imported both directly and re-exported via `platform/index.ts`),
+ * and a module-level Map would then split — `withHelp` writing to one copy while
+ * `printMatchedCommandHelp` reads an empty other copy, silently dropping all
+ * help. Issue #238 regressed exactly this way in the published bundle even
+ * though the source and tests were correct. A `Symbol.for` lives in the global
+ * registry, so duplicated module copies still resolve to the same key, and the
+ * state lives on the single command instance.
  */
-const commandHelpPrinters = new Map<string, () => void>();
+const HELP_PRINTER = Symbol.for("polkadot-cli.helpPrinter");
 
-/** Extract the leading command-name token (e.g. `account` from `account [action] [...names]`). */
-function commandKey(command: Command): string {
-  return command.name.split(/\s+/)[0] ?? command.name;
-}
+type WithHelpPrinter = Command & { [HELP_PRINTER]?: () => void };
 
 /**
  * Associate a help printer with a `cac` command so `--help` prints proper usage
@@ -21,7 +23,7 @@ function commandKey(command: Command): string {
  * auto-generated per-command help. Returns the command for chaining.
  */
 export function withHelp(command: Command, printHelp?: () => void): Command {
-  commandHelpPrinters.set(commandKey(command), printHelp ?? (() => command.outputHelp()));
+  (command as WithHelpPrinter)[HELP_PRINTER] = printHelp ?? (() => command.outputHelp());
   return command;
 }
 
@@ -33,9 +35,8 @@ export function withHelp(command: Command, printHelp?: () => void): Command {
  * can fall through to running them.
  */
 export function printMatchedCommandHelp(cli: CAC): boolean {
-  const matched = (cli as unknown as { matchedCommand?: Command }).matchedCommand;
-  if (!matched) return false;
-  const printer = commandHelpPrinters.get(commandKey(matched));
+  const matched = (cli as unknown as { matchedCommand?: WithHelpPrinter }).matchedCommand;
+  const printer = matched?.[HELP_PRINTER];
   if (!printer) return false;
   printer();
   return true;

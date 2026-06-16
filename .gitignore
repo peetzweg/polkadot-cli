@@ -5,6 +5,7 @@ node_modules
 out
 dist
 *.tgz
+.smoke-cli.*.mjs
 
 # code coverage
 coverage
