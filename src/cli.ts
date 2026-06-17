@@ -22,6 +22,7 @@ import { registerSignCommand } from "./commands/sign.ts";
 import { handleTx } from "./commands/tx.ts";
 import { registerWorkspaceCommands } from "./commands/workspace.ts";
 import { loadConfig } from "./config/store.ts";
+import { isGlobalDryRun, printGlobalDryRunHint, resolveDryRun } from "./core/dry-run.ts";
 import { isFilePath, loadCommandFile, parseVarFlags } from "./core/file-loader.ts";
 import {
   getUpdateNotification,
@@ -154,12 +155,17 @@ if (process.argv[2] === "__complete") {
           const target = `${cmd.pallet}.${cmd.item}`;
 
           switch (cmd.category) {
-            case "tx":
+            case "tx": {
+              const fileDecodeOnly = Boolean(opts.encode || opts.toYaml || opts.toJson);
+              const fileDryRun = resolveDryRun(opts.dryRun, fileDecodeOnly);
+              if (fileDryRun && isGlobalDryRun() && opts.dryRun === undefined) {
+                printGlobalDryRunHint();
+              }
               await handleTx(target, args, {
                 ...handlerOpts,
                 from: opts.from,
                 unsigned: opts.unsigned ?? cmd.unsigned,
-                dryRun: opts.dryRun,
+                dryRun: fileDryRun,
                 encode: opts.encode,
                 toYaml: opts.toYaml,
                 toJson: opts.toJson,
@@ -173,6 +179,7 @@ if (process.argv[2] === "__complete") {
                 parsedArgs: cmd.args,
               });
               break;
+            }
             case "query":
               await handleQuery(target, args, {
                 ...handlerOpts,
@@ -253,12 +260,17 @@ if (process.argv[2] === "__complete") {
             await handleQuery(target, args, { ...handlerOpts, dump: opts.dump, at: atRaw });
             break;
           case "tx": {
+            const decodeOnly = Boolean(opts.encode || opts.toYaml || opts.toJson);
+            const dryRun = resolveDryRun(opts.dryRun, decodeOnly);
+            if (dryRun && isGlobalDryRun() && opts.dryRun === undefined) {
+              printGlobalDryRunHint();
+            }
             // Handle raw hex: if pallet starts with 0x, it's a raw call hex
             const txOpts = {
               ...handlerOpts,
               from: opts.from,
               unsigned: opts.unsigned,
-              dryRun: opts.dryRun,
+              dryRun,
               encode: opts.encode,
               toYaml: opts.toYaml,
               toJson: opts.toJson,

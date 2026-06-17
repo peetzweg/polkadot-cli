@@ -24,7 +24,7 @@ Categories: `query`, `tx`, `apis`, `const`, `events`, `errors`, `extensions`, `r
 
 Top-level commands: `dot inspect`, `dot metadata`, `dot chain`, `dot account`, `dot sign`, `dot hash`, `dot verifiable`, `dot init`, `dot which`.
 
-State (accounts, custom chains, metadata cache) lives in a config root resolved per run: `DOT_HOME` env var → a local `.polkadot/` workspace discovered from cwd → global `~/.polkadot`. Run `dot which` to see which one is active, and see [Local Workspaces](#local-workspaces) for isolated per-directory setups.
+State (accounts, custom chains, metadata cache) lives in a config root resolved per run: `DOT_HOME` env var → a local `.polkadot/` workspace discovered from cwd → global `~/.polkadot`. Run `dot which` to see which one is active, and see [Local Workspaces](#local-workspaces) for isolated per-directory setups. Set `DOT_DRY_RUN=1` to force every extrinsic to dry-run instead of submitting (see [Submitting Transactions](#submitting-transactions)).
 
 Omit deeper levels to discover what's available. Always include the chain prefix:
 
@@ -190,6 +190,16 @@ dot polkadot.tx.Balances.transfer_keep_alive 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZ
 # Submit (omit --dry-run). Method names are snake_case as defined in the runtime.
 dot polkadot.tx.Balances.transfer_keep_alive bob 1000000000 --from alice
 ```
+
+**Global dry-run safety net.** Set the `DOT_DRY_RUN` env var (truthy: `1`/`true`/`yes`/`on`) to force EVERY tx to dry-run instead of submitting — handy when scripting or demoing so nothing accidentally lands on-chain. A hint is printed to stderr (stdout stays clean for `--json`):
+
+```bash
+DOT_DRY_RUN=1 dot polkadot.tx.System.remark 0xdeadbeef --from alice
+# stderr: ⚠ DOT_DRY_RUN is set — extrinsics will be simulated, not submitted.
+# stdout: the dry-run report (no broadcast)
+```
+
+Precedence: an explicit flag wins — `--dry-run` forces dry-run, `--no-dry-run` forces a real submission even with `DOT_DRY_RUN=1`. Decode-only paths (`--encode`, `--to-yaml`, `--to-json`) are unaffected.
 
 ### Encoding Calls (for Sudo, XCM, Batch)
 
@@ -683,7 +693,7 @@ dot verifiable verify --proof 0x<proof> --context dotns \
 | `--json` | all | JSON output (but `undefined` and errors may not be JSON) |
 | `--from <name>` | tx | Account to sign with |
 | `--encode` | tx | Encode to hex, don't sign or submit |
-| `--dry-run` | tx | Estimate fees without submitting |
+| `--dry-run` / `--no-dry-run` | tx | Force / forbid dry-run (overrides `DOT_DRY_RUN`) |
 | `--dump` | query | Dump all entries of a storage map |
 | `--ext <json>` | tx | Custom signed extension values |
 | `--at <block>` | tx, query, apis | Block hash, `"best"`, or `"finalized"` to read/validate against. Defaults to finalized. Tx submission rejects `"best"`. |
