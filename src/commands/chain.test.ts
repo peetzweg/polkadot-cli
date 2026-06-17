@@ -177,10 +177,14 @@ describe("dot chain", () => {
     expect(stderr).toContain('Unknown action "default"');
   });
 
-  test("update (no name, no --all) errors with usage", async () => {
-    const { stderr, exitCode } = await runCli(["chain", "update"]);
+  test("update (no name, no --all) prints full help to stderr and exits 1", async () => {
+    const { stdout, stderr, exitCode } = await runCli(["chain", "update"]);
     expect(exitCode).toBe(1);
-    expect(stderr).toContain("Usage: dot chain update");
+    expect(stderr).toContain("Chain name is required");
+    // Full help (not a terse one-liner) — every chain subcommand is listed.
+    expect(stderr).toContain("dot chain update <name>");
+    expect(stderr).toContain("dot chain add");
+    expect(stdout).toBe("");
   });
 
   test("remove kusama succeeds", async () => {
@@ -975,10 +979,12 @@ describe("dot chain", () => {
     expect(stderr).toContain("nonexistent-chain");
   });
 
-  test("info (no name) errors with usage", async () => {
-    const { stderr, exitCode } = await runCli(["chain", "info"]);
+  test("info (no name) prints full help to stderr and exits 1", async () => {
+    const { stdout, stderr, exitCode } = await runCli(["chain", "info"]);
     expect(exitCode).toBe(1);
-    expect(stderr).toContain("Usage: dot chain info");
+    expect(stderr).toContain("Chain name is required");
+    expect(stderr).toContain("dot chain info <name>");
+    expect(stdout).toBe("");
   });
 
   test("info case-insensitive name resolution", async () => {

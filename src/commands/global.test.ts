@@ -146,4 +146,29 @@ describe("global CLI", () => {
       expect(exitCode).toBe(0);
     });
   });
+
+  // An incomplete invocation (a required positional missing) prints the FULL
+  // help block to stderr and exits 1 — not a terse one-liner, and not exit 0.
+  // Explicit `--help` (tested above) prints to stdout and exits 0. Covers both
+  // our own UsageError path (account/chain) and cac's missing-required-args
+  // path (metadata/completions).
+  describe("incomplete command prints full help (stderr, exit 1)", () => {
+    const cases: { args: string[]; reason: RegExp; needle: string }[] = [
+      { args: ["account", "add"], reason: /Account name is required/, needle: "dot account add" },
+      { args: ["account", "inspect"], reason: /Input is required/, needle: "dot account inspect" },
+      { args: ["chain", "add"], reason: /Chain name is required/, needle: "dot chain add" },
+      { args: ["metadata"], reason: /missing required|Usage/i, needle: "metadata" },
+      { args: ["completions"], reason: /missing required|Usage/i, needle: "completions" },
+    ];
+    for (const { args, reason, needle } of cases) {
+      test(`${args.join(" ")} → full help on stderr, exit 1`, async () => {
+        const { stdout, stderr, exitCode } = await runCli(args, { noDefaultChain: true });
+        expect(exitCode).toBe(1);
+        expect(stderr).toMatch(reason);
+        expect(stderr).toContain(needle);
+        // Help is a diagnostic here — stdout stays clean for piping.
+        expect(stdout).toBe("");
+      });
+    }
+  });
 });

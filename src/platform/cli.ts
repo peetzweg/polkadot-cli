@@ -33,12 +33,30 @@ export function withHelp(command: Command, printHelp?: () => void): Command {
  * without a registered printer — notably the default dot-path command, which
  * handles item-level help inside its own action — return false so the caller
  * can fall through to running them.
+ *
+ * `stream: "stderr"` routes the help to stderr (used when a command was invoked
+ * incompletely — the help is a diagnostic, not the requested output). Printers
+ * and `cac`'s own `outputHelp()` write via `console.log`, so we temporarily
+ * redirect it; this is the one place that needs to retarget their output.
  */
-export function printMatchedCommandHelp(cli: CAC): boolean {
+export function printMatchedCommandHelp(
+  cli: CAC,
+  options?: { stream?: "stdout" | "stderr" },
+): boolean {
   const matched = (cli as unknown as { matchedCommand?: WithHelpPrinter }).matchedCommand;
   const printer = matched?.[HELP_PRINTER];
   if (!printer) return false;
-  printer();
+  if (options?.stream === "stderr") {
+    const original = console.log;
+    console.log = (...args: unknown[]) => console.error(...args);
+    try {
+      printer();
+    } finally {
+      console.log = original;
+    }
+  } else {
+    printer();
+  }
   return true;
 }
 

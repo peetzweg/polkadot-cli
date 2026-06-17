@@ -35,6 +35,7 @@ import {
 import { fetchRpcMethods } from "../core/rpc.ts";
 import { inferFamily, RPC_REGISTRY } from "../data/rpc-registry.ts";
 import { withHelp } from "../platform/cli.ts";
+import { UsageError } from "../utils/errors.ts";
 
 const CHAIN_HELP = `
 ${BOLD}Usage:${RESET}
@@ -168,9 +169,7 @@ async function chainAdd(
   },
 ) {
   if (!name) {
-    console.error("Chain name is required.\n");
-    console.error("Usage: dot chain add <name> --rpc <url>");
-    process.exit(1);
+    throw new UsageError("Chain name is required.");
   }
   if (!opts.rpc) {
     console.error("Must provide --rpc <url>.\n");
@@ -245,8 +244,7 @@ async function chainRemove(
   opts: { output?: string; json?: boolean } = {},
 ) {
   if (!name) {
-    console.error("Usage: dot chain remove <name>");
-    process.exit(1);
+    throw new UsageError("Chain name is required.");
   }
 
   const config = await loadConfig();
@@ -363,8 +361,7 @@ function printChainLine(
 
 async function chainInfo(name: string | undefined, opts: { output?: string; json?: boolean } = {}) {
   if (!name) {
-    console.error("Usage: dot chain info <name>");
-    process.exit(1);
+    throw new UsageError("Chain name is required.");
   }
 
   const config = await loadConfig();
@@ -470,8 +467,7 @@ async function chainUpdate(
   }
 
   if (!name) {
-    console.error("Usage: dot chain update <name> | --all");
-    process.exit(1);
+    throw new UsageError("Chain name is required (or use --all).");
   }
 
   const { name: chainName, chain: chainConfig } = resolveChain(config, name);
