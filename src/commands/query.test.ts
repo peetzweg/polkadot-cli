@@ -202,14 +202,12 @@ describe("dot query", { timeout: 15_000 }, () => {
     expect(account.keyType).toBeDefined();
   });
 
-  test("--json flag works same as --output json for value queries", async () => {
+  test("--json flag produces valid JSON for value queries", async () => {
     const jsonFlag = await runCli(["query.System.Number", "--json"]);
-    const outputJson = await runCli(["query.System.Number", "--output", "json"]);
     expect(jsonFlag.exitCode).toBe(0);
-    expect(outputJson.exitCode).toBe(0);
-    // Both should produce valid JSON (values may differ due to live chain)
+    // The shared isJsonOutput unit tests cover equivalence with --output json;
+    // keep this subprocess test to one live RPC query so it stays reliable in CI.
     expect(() => JSON.parse(jsonFlag.stdout)).not.toThrow();
-    expect(() => JSON.parse(outputJson.stdout)).not.toThrow();
   }, 15_000);
 
   test("--at best is accepted and threads through to papi", async () => {
