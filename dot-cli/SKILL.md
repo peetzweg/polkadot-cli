@@ -47,6 +47,14 @@ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 # ✓ kusama
 ```
 
+**Naming convention:** name relay chains `{relay}` and parachains `{relay}-{parachain}` (e.g. `kusama-asset-hub`, `polkadot-bridge-hub`) — the same pattern the preconfigured chains use. Use `--relay` to attach a parachain to its relay; the parachain ID is auto-detected from `ParachainInfo` (override with `--parachain-id`). The relay prefix keeps chains distinct (parachain IDs collide across relays — Asset Hub is `1000` on both Polkadot and Paseo) and makes the `dot chain list` tree match the names. Use lowercase, hyphen-separated names (they resolve case-insensitively):
+
+```bash
+dot chain add kusama-asset-hub --rpc wss://asset-hub-kusama-rpc.polkadot.io --relay kusama --parachain-id 1000
+# Then select it by name:
+dot kusama-asset-hub.query.System.Number
+```
+
 List configured chains; the default output is a compact tree with relay/parachain structure only. Pass `-v` to also print RPC endpoints, or use `dot chain info <name>` for full per-chain detail:
 
 ```bash
