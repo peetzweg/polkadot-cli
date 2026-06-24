@@ -117,16 +117,38 @@ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
 ```
 
+#### Naming convention
+
+Name chains as `{relay}-{parachain}`: the parent relay's name, a hyphen, then the parachain's role. This is the pattern every preconfigured chain already follows — `polkadot-asset-hub`, `polkadot-bridge-hub`, `paseo-coretime`, and so on — and the one to reuse for chains you add.
+
+| Chain kind | Recommended name | Examples |
+|------------|------------------|----------|
+| Relay chain | `{relay}` | `polkadot`, `kusama`, `paseo` |
+| Parachain | `{relay}-{parachain}` | `polkadot-asset-hub`, `kusama-bridge-hub`, `paseo-people` |
+
+Why it matters for the relay/parachain topology:
+
+- **The tree reads cleanly.** `dot chain list` groups parachains under their relay (see [Chain topology](#chain-topology)). When names share the relay prefix, the tree mirrors the names and the whole config is scannable at a glance.
+- **Names disambiguate, IDs don't.** Several relays reuse the same parachain ID — Asset Hub is `1000` on both Polkadot and Paseo. The relay prefix is what keeps `polkadot-asset-hub` and `paseo-asset-hub` distinct as chain names (the `relay` + `parachainId` fields carry the topology; the name is how *you* select the chain in `dot polkadot-asset-hub.query…`).
+- **It composes.** A consistent prefix makes chains easy to filter, tab-complete, and reason about across a multi-chain setup.
+
+Use lowercase, hyphen-separated names (chain names resolve case-insensitively). Following the same example as below, a Kusama Asset Hub would be `kusama-asset-hub`:
+
+```
+# Recommended — relay-prefixed name
+dot chain add kusama-asset-hub --rpc wss://asset-hub-kusama-rpc.polkadot.io --relay kusama --parachain-id 1000
+```
+
 #### Adding parachains
 
-Use `--relay` to declare a chain's parent relay chain. The CLI auto-detects the parachain ID from on-chain `ParachainInfo` storage. Use `--parachain-id` to set it explicitly:
+Use `--relay` to declare a chain's parent relay chain. The CLI auto-detects the parachain ID from on-chain `ParachainInfo` storage. Use `--parachain-id` to set it explicitly. Name the chain `{relay}-{parachain}` (see [Naming convention](#naming-convention)):
 
 ```
 # Add a relay chain (e.g. local zombienet)
 dot chain add local-relay --rpc ws://localhost:9944
 
-# Add a parachain under it (auto-detects parachain ID)
-dot chain add local-asset-hub --rpc ws://localhost:9945 --relay local-relay
+# Add a parachain under it — `{relay}-{parachain}` name, auto-detects parachain ID
+dot chain add local-relay-asset-hub --rpc ws://localhost:9945 --relay local-relay
 
 # Explicit parachain ID
 dot chain add my-para --rpc wss://rpc.example.com --relay polkadot --parachain-id 2000

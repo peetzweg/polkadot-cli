@@ -97,7 +97,8 @@ dot chain add kusama --rpc wss://kusama-rpc.polkadot.io
 dot chain add kusama --rpc wss://kusama-rpc.polkadot.io --rpc wss://kusama-rpc.dwellir.com
 
 # Add a parachain under a relay (auto-detects parachain ID)
-dot chain add local-asset-hub --rpc ws://localhost:9945 --relay local-relay
+# Name parachains `{relay}-{parachain}` — see "Naming convention" below
+dot chain add local-relay-asset-hub --rpc ws://localhost:9945 --relay local-relay
 
 # Add a parachain with explicit parachain ID
 dot chain add my-para --rpc wss://rpc.example.com --relay polkadot --parachain-id 2000
@@ -118,6 +119,24 @@ dot chain update --all      # updates all configured chains in parallel
 # Remove a chain (only user-added chains can be removed)
 dot chain remove kusama
 ```
+
+#### Naming convention
+
+Name chains `{relay}-{parachain}`: the parent relay's name, a hyphen, then the parachain's role. Every preconfigured chain already follows this pattern (`polkadot-asset-hub`, `polkadot-bridge-hub`, `paseo-people`, …), and reusing it for chains you add keeps the relay/parachain topology readable.
+
+| Chain kind | Recommended name | Examples |
+|------------|------------------|----------|
+| Relay chain | `{relay}` | `polkadot`, `kusama`, `paseo` |
+| Parachain | `{relay}-{parachain}` | `polkadot-asset-hub`, `kusama-bridge-hub`, `paseo-people` |
+
+The relay prefix is what keeps chains distinct: parachain IDs collide across relays (Asset Hub is `1000` on both Polkadot and Paseo), so the name — not the ID — is how you select a chain (`dot polkadot-asset-hub.query…`). A relay-prefixed name also mirrors the `dot chain list` tree, which groups parachains under their relay.
+
+```bash
+# Recommended — relay-prefixed name
+dot chain add kusama-asset-hub --rpc wss://asset-hub-kusama-rpc.polkadot.io --relay kusama --parachain-id 1000
+```
+
+Use lowercase, hyphen-separated names (chain names resolve case-insensitively).
 
 #### Chain topology
 
