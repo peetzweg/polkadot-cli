@@ -132,7 +132,7 @@ Why it matters for the relay/parachain topology:
 - **Names disambiguate, IDs don't.** Several relays reuse the same parachain ID — Asset Hub is `1000` on both Polkadot and Paseo. The relay prefix is what keeps `polkadot-asset-hub` and `paseo-asset-hub` distinct as chain names (the `relay` + `parachainId` fields carry the topology; the name is how *you* select the chain in `dot polkadot-asset-hub.query…`).
 - **It composes.** A consistent prefix makes chains easy to filter, tab-complete, and reason about across a multi-chain setup.
 
-Use lowercase, hyphen-separated names (chain names resolve case-insensitively). Following the same example as below, a Kusama Asset Hub would be `kusama-asset-hub`:
+Use lowercase, hyphen-separated names (chain names resolve case-insensitively). For example, a Kusama Asset Hub would be `kusama-asset-hub`:
 
 ```
 # Recommended — relay-prefixed name
