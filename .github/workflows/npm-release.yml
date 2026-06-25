@@ -1,0 +1,71 @@
+name: NPM Release
+
+# Builds and packs the package, then hands the actual `npm publish` to
+# paritytech/npm_publish_automation, which publishes as the org-wide
+# `paritytech` npm account. This repo never runs `npm publish` itself.
+#
+# Triggered by release.yml (which creates the GitHub Release and dispatches
+# this workflow) or manually via workflow_dispatch with a tag input — handy to
+# re-run a publish after a transient failure without cutting a new tag.
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v1.2.3)"
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set version from release tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          VERSION="${TAG#v}"
+          echo "Publishing version: $VERSION"
+          npm pkg set version="$VERSION"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Test
+        run: bun test --timeout 15000
+
+      - name: Pack
+        run: |
+          npm pack --ignore-scripts
+          mkdir -p packs
+          mv *.tgz packs/
+          ls -ltr packs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ github.sha }}
+          path: packs
+
+      - name: Trigger npm_publish_automation
+        uses: octokit/request-action@v2.x
+        with:
+          route: POST /repos/paritytech/npm_publish_automation/actions/workflows/publish.yml/dispatches
+          ref: main
+          inputs: '${{ format(''{{ "repo": "{0}", "run_id": "{1}" }}'', github.repository, github.run_id) }}'
+        env:
+          GITHUB_TOKEN: ${{ secrets.NPM_PUBLISH_AUTOMATION_TOKEN }}

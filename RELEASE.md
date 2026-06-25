@@ -1,6 +1,11 @@
 # Releasing
 
-This project uses [Changesets](https://github.com/changesets/changesets) to manage versioning and publishing to npm.
+This project uses [Changesets](https://github.com/changesets/changesets) for
+versioning, and the org-wide [`paritytech/npm_publish_automation`](https://github.com/paritytech/npm_publish_automation)
+for the actual `npm publish`. The package is **never** published from a personal
+account or directly from this repo's CI — the publish always runs as the
+`paritytech` npm account inside the automation repo. This gives us a single,
+auditable publishing identity for all Parity packages.
 
 ## Adding a changeset
 
@@ -10,63 +15,58 @@ Before merging a PR that should result in a version bump, add a changeset:
 bun changeset
 ```
 
-Follow the prompts to select the bump type (`patch`, `minor`, `major`) and describe the change. This creates a markdown file in `.changeset/` that should be committed with your PR.
+Follow the prompts to pick the bump type (`patch`/`minor`/`major`) and describe
+the change. Commit the generated `.changeset/*.md` file with your PR.
 
-## Production release
+## How a release happens
 
-Production releases happen automatically when changes are pushed to `main`.
+Two workflows drive it:
 
-The [Release workflow](.github/workflows/release.yml) runs on every push to `main` and does the following:
+1. **`.github/workflows/release.yml`** runs on every push to `main`. Via
+   [`changesets/action`](https://github.com/changesets/action) it:
+   - opens (or updates) a **"chore: version packages"** PR that consumes the
+     pending changesets, bumps `package.json` and updates `CHANGELOG.md`;
+   - once that PR is merged and no changesets remain, creates a **GitHub
+     Release** for the new `vX.Y.Z` tag and dispatches `npm-release.yml`.
 
-1. If there are pending changesets, it opens (or updates) a **"Version Packages"** PR that bumps `package.json` and updates the changelog.
-2. When that PR is merged, the workflow detects there are no remaining changesets, builds the project, publishes to npm under the `latest` tag, and creates a GitHub Release with auto-generated release notes.
+2. **`.github/workflows/npm-release.yml`** runs on the release event. It builds,
+   `npm pack`s the tarball, uploads it as an artifact, and dispatches
+   `paritytech/npm_publish_automation`'s `publish.yml`, passing this repo and the
+   run id. That automation downloads the tarball and runs the real `npm publish`
+   as the `paritytech` account, under the `latest` dist-tag.
 
-This is handled by the [`changesets/action`](https://github.com/changesets/action) GitHub Action.
+### Normal flow
 
-### Steps
+1. Open PRs with changesets attached.
+2. Merge them into `main`.
+3. Review and merge the auto-created **"chore: version packages"** PR.
+4. The GitHub Release and npm publish happen automatically. Watch both:
+   - <https://github.com/paritytech/polkadot-cli/actions/workflows/npm-release.yml>
+   - <https://github.com/paritytech/npm_publish_automation/actions/workflows/publish.yml>
+5. Verify: `npm view polkadot-cli dist-tags` should show the new `latest`.
 
-1. Add changesets to your PRs as described above.
-2. Merge your PRs into `main`.
-3. Review and merge the auto-created "Version Packages" PR.
-4. The release is published automatically.
+### Re-running a publish without a new tag
 
-## Snapshot release
+If `npm-release.yml` failed transiently after the release was created, re-run it
+via **Actions → NPM Release → Run workflow** with `tag: vX.Y.Z`. The automation
+skips versions already on the registry, so this is safe.
 
-Snapshot releases publish a pre-release version from any branch, useful for testing changes before they land on `main`.
+## Pre-releases (betas)
 
-The [Snapshot Release workflow](.github/workflows/snapshot-release.yml) is triggered manually via `workflow_dispatch`.
+There is no automated snapshot/beta job — pre-releases are cut manually, the same
+way the `paritytech/verifiablejs` repo does it: bump to a `-beta.N` version on a
+release branch and `npm publish --tag beta` locally (requires npm publish rights
+on the package). Never publish a beta as `latest`.
 
-### Via GitHub UI
+## Prerequisites (one-time org setup)
 
-1. Go to **Actions** > **Snapshot Release**.
-2. Click **Run workflow**.
-3. Select the branch you want to publish from.
-4. Optionally change the dist-tag (defaults to `beta`; other useful values: `next`, `canary`).
-5. Click **Run workflow**.
+For the automated flow to work, these must be in place (see the PR that
+introduced this flow for the checklist):
 
-### Via GitHub CLI
-
-```sh
-gh workflow run snapshot-release.yml --ref <branch> --field tag=beta
-```
-
-### What it does
-
-1. Checks out the selected branch.
-2. Installs dependencies and builds.
-3. Runs `npx changeset version --snapshot <tag>` to generate a snapshot version (e.g. `1.2.0-beta-20260316120000`).
-4. Publishes to npm under the specified dist-tag.
-5. Reports the published version in the workflow summary.
-
-### Installing a snapshot
-
-```sh
-npx polkadot-cli@beta
-# or whatever tag you used:
-npx polkadot-cli@next
-npx polkadot-cli@canary
-```
-
-## Prerequisites
-
-- The `NPM_TOKEN` secret must be configured in the repository settings with publish access to the `polkadot-cli` package on npm.
+- `paritytech/polkadot-cli` is mapped to the `polkadot-cli` npm package in
+  `paritytech/npm_publish_automation`'s `packages.ts`.
+- The `paritytech` npm publishing account is an **owner** of the `polkadot-cli`
+  npm package.
+- The org-level `NPM_PUBLISH_AUTOMATION_TOKEN` secret is available to this repo.
+- GitHub Actions is allowed to create pull requests (Settings → Actions →
+  General → Workflow permissions).
