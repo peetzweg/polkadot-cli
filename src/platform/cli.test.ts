@@ -50,16 +50,23 @@ describe("platform/cli help registry", () => {
     withHelp(command); // no custom printer → cac auto-help
     cli.option("--help, -h", "help");
 
-    const original = console.log;
+    // cac v7's auto-generated help (Command.outputHelp) writes via
+    // console.info; capture both console.info and console.log so the assertion
+    // is robust regardless of which cac uses.
+    const originalInfo = console.info;
+    const originalLog = console.log;
     const lines: string[] = [];
-    console.log = (...args: unknown[]) => {
+    const capture = (...args: unknown[]) => {
       lines.push(args.join(" "));
     };
+    console.info = capture;
+    console.log = capture;
     try {
       cli.parse(["bun", "dot", "gadget", "--help"], { run: false });
       expect(printMatchedCommandHelp(cli)).toBe(true);
     } finally {
-      console.log = original;
+      console.info = originalInfo;
+      console.log = originalLog;
     }
     expect(lines.join("\n")).toContain("gadget");
   });
