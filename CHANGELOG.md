@@ -1,5 +1,21 @@
 # polkadot-cli
 
+## 1.22.0
+
+### Minor Changes
+
+- 09ef0ad: Add a global `DOT_DRY_RUN` environment variable. When set to a truthy value (`1`, `true`, `yes`, or `on`), every extrinsic-submitting command behaves as if `--dry-run` had been passed — the transaction is simulated and never broadcast. A one-line hint is printed to stderr (keeping `--json`/piped stdout clean). An explicit `--dry-run` / `--no-dry-run` flag always wins, and decode-only paths (`--encode`, `--to-yaml`, `--to-json`) are unaffected.
+
+### Patch Changes
+
+- b388a70: Upgrade `cac` from `6.7.14` to `7.0.0` (major version bump of an internal dependency). cac v7 is ESM-only (the CLI is already ESM) and its auto-generated help/version output now writes via `console.info` instead of `console.log`. No user-visible CLI behavior changes: the same commands, flags, help text, version string, and exit codes are preserved.
+- 09de89a: Fix nested `--help` being dropped in the published bundle. The per-command help registry from the previous fix relied on a module-level `Map`, which `bun build` duplicated (the module is imported both directly and via the `platform/index.ts` barrel) — `withHelp` populated one copy while `printMatchedCommandHelp` read an empty other copy, so `dot account add --help` still ran the action and errored in `dist/cli.mjs` even though the source and tests were green. The help printer is now stored on the `cac` command instance under a `Symbol.for` key, which is immune to module duplication. A post-build smoke test (`src/cli.smoke.test.ts`) now exercises the built bundle under `node` so this class of bundler-only regression is caught.
+- a7890ea: Fix `--help` being dropped for nested subcommands. Previously `dot account add --help` (and other nested commands like `dot chain add --help`, `dot account inspect --help`, `dot hash <algo> --help`, `dot verifiable <action> --help`) ran the command's action and exited with an error about the missing positional argument instead of printing usage. Now `--help` reliably prints the command's usage block and exits 0 at every nested command level. Commands with a required positional (`dot metadata --help`, `dot completions --help`) also print help instead of erroring.
+- 742e65d: Upgrade `polkadot-api` from `2.1.4` to `2.1.7`.
+- 7ad4bd1: Document the recommended `{relay}-{parachain}` chain-naming convention for `dot chain add` and the relay/parachain topology feature. The docs site, README, and `dot-cli` skill now explain why relay-prefixed names (`polkadot-asset-hub`, `kusama-bridge-hub`, …) keep the `dot chain list` tree readable and disambiguate parachains whose IDs collide across relays. Docs-only — no behavior change.
+- b2593ea: Add `rm` as an alias for `dot account delete`/`dot account remove`. `dot account rm <name> [name2] ...` behaves identically to `delete`/`remove`, removing one or more stored accounts.
+- 4d34a83: Upgrade `verifiablejs` from `1.3.0` to `1.4.0`.
+
 ## 1.21.0
 
 ### Minor Changes
