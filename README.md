@@ -2014,8 +2014,10 @@ whichever is convenient:
 - loose 32-byte member keys concatenated as one hex string (`0x<key1><key2>…`),
 - a comma-separated list of 0x-hex keys (`0x<key1>,0x<key2>`).
 
-A path to a file containing any of those also works. The keys must each be
-exactly 32 bytes; anything else fails with a message pointing back here.
+A path to a file containing the concatenated or SCALE-encoded form also works
+(the comma-separated form is for typing keys directly on the command line). The
+keys must each be exactly 32 bytes; anything else fails with a message pointing
+back here.
 
 > **Members need not be recognised "persons".** `--entropy-key` selects a
 > personhood derivation mode (omit = lite/unkeyed, `candidate` = full), but a
