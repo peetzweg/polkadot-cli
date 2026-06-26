@@ -21,8 +21,7 @@
     "test:coverage": "bun test --concurrent --coverage --coverage-reporter=lcov --coverage-dir=coverage",
     "prepare": "husky",
     "changeset": "changeset",
-    "version": "changeset version",
-    "release": "changeset publish"
+    "version": "changeset version"
   },
   "license": "MIT",
   "keywords": [
@@ -34,7 +33,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/peetzweg/polkadot-cli.git"
+    "url": "git+https://github.com/paritytech/polkadot-cli.git"
   },
   "dependencies": {
     "@noble/hashes": "^2.0.1",
