@@ -1,0 +1,69 @@
+name: Beta Release
+
+# Manually publish a pre-release of any branch under a dist-tag (default: beta),
+# so a feature can be tested in the wild before a real `main` release.
+#
+# Same company publishing path as npm-release.yml: the actual `npm publish` runs
+# in paritytech/npm_publish_automation as the org `paritytech-ci` account. The
+# only difference is `npm_tag` — snapshot versions go out under `--tag beta`
+# (never `latest`), so normal installs are unaffected.
+#
+# Run it against the branch you want to ship:
+#   gh workflow run beta-release.yml --ref my-feature-branch
+# The branch needs at least one changeset — `changeset version --snapshot`
+# only bumps packages that have a pending changeset, producing a version like
+# 0.0.0-beta-<timestamp>. Install with `npm i polkadot-cli@beta`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "npm dist-tag to publish under"
+        required: true
+        default: beta
+
+jobs:
+  beta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: bun install --frozen-lockfile
+
+      - name: Snapshot version
+        run: |
+          bunx changeset version --snapshot ${{ inputs.tag }}
+          echo "Publishing $(node -p "require('./package.json').version")"
+
+      - name: Build
+        run: bun run build
+
+      - name: Test
+        run: bun test --timeout 15000
+
+      - name: Pack
+        run: |
+          npm pack --ignore-scripts
+          mkdir -p packs
+          mv *.tgz packs/
+          ls -ltr packs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ github.sha }}
+          path: packs
+
+      - name: Trigger npm_publish_automation
+        uses: octokit/request-action@v2.x
+        with:
+          route: POST /repos/paritytech/npm_publish_automation/actions/workflows/publish.yml/dispatches
+          ref: main
+          inputs: '${{ format(''{{ "repo": "{0}", "run_id": "{1}", "npm_tag": "{2}" }}'', github.repository, github.run_id, inputs.tag) }}'
+        env:
+          GITHUB_TOKEN: ${{ secrets.NPM_PUBLISH_AUTOMATION_TOKEN }}

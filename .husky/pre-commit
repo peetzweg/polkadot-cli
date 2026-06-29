@@ -1,3 +1,4 @@
 bun run lint
 bun run typecheck
-bun test --concurrent
+# Match CI's timeout: CLI-spawning + live-RPC tests exceed bun's 5s default.
+bun test --concurrent --timeout 15000

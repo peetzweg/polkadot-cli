@@ -53,10 +53,33 @@ skips versions already on the registry, so this is safe.
 
 ## Pre-releases (betas)
 
-There is no automated snapshot/beta job — pre-releases are cut manually, the same
-way the `paritytech/verifiablejs` repo does it: bump to a `-beta.N` version on a
-release branch and `npm publish --tag beta` locally (requires npm publish rights
-on the package). Never publish a beta as `latest`.
+To test a feature in the wild before a real `main` release, publish a beta from
+its branch with **`.github/workflows/beta-release.yml`**. It uses the same
+company publishing path as `npm-release.yml` (the publish runs as `paritytech-ci`
+inside the automation repo) — the only difference is the `beta` dist-tag, so
+`latest` and normal installs are never touched.
+
+1. Make sure the branch has at least one changeset (`bun changeset`).
+   `changeset version --snapshot` only bumps packages that have a pending
+   changeset.
+2. Run it against the branch:
+
+   ```sh
+   gh workflow run beta-release.yml --ref my-feature-branch
+   ```
+
+   (or **Actions → Beta Release → Run workflow**, then pick the branch).
+3. The snapshot version looks like `0.0.0-beta-<timestamp>`. Because it sorts
+   below every real version, no `@latest` or semver-range install picks it up by
+   accident. Install it explicitly:
+
+   ```sh
+   npm i polkadot-cli@beta        # newest beta
+   npm i polkadot-cli@0.0.0-beta-<timestamp>   # a specific one
+   ```
+
+Nothing is committed back to the branch — the version bump only lives inside the
+CI run.
 
 ## Prerequisites (one-time org setup)
 
